@@ -271,25 +271,41 @@ the same repo, so no extra hosting steps are needed:
 
 | File | Description |
 |---|---|
-| `groups.html` | Page shell — loads the CSS and the three scripts |
+| `groups.html` | Page shell of the grouped-view widget — loads the shared CSS/scripts and its per-widget scripts |
 | `widget_groupes.html` | Redirect stub for the old URL (points to `groups.html`) |
-| `widget.css` | All styles |
-| `widget-core.js` | English UI strings, constants, state, date helpers |
-| `widget-app.js` | Settings panel, automatic sums, diagnostics, Grist wiring, grouping, rendering, row actions |
-| `widget-actions.js` | Unified grip selection, cross-group dragging, action bar, and bulk actions |
+| `index.html` | Widget gallery — one card per widget in the repo |
+| `shared/base.css` | Design system (styles) shared by every widget |
+| `shared/core.js` | English UI strings, constants, state, date helpers, and Grist helpers shared by every widget |
+| `widgets/groups/app.js` | Settings panel, automatic sums, diagnostics, Grist wiring, grouping, rendering, row actions |
+| `widgets/groups/actions.js` | Unified grip selection, cross-group dragging, action bar, and bulk actions |
+| `tests/groups.test.js` | Test suite for the groups widget (Node + jsdom, no test framework) |
 | `ARCHITECTURE.md` | GitHub Pages/Grist responsibilities, persistence lifecycle, data access, and backend boundaries |
 | `ROADMAP.md` | Deferred drag semantics for dates, Choice Lists, references, and other types |
+
+## Repo layout (widget family)
+
+This repo hosts a family of Grist custom widgets, not just one. Conventions:
+
+- **Entry pages** are English nouns at the repo root — `<name>.html` gives a
+  clean GitHub Pages URL (`…/groups.html`). `index.html` is a small gallery
+  linking to every widget.
+- **`shared/`** holds code every widget reuses: `core.js` (UI strings, state,
+  date helpers, Grist helpers) and `base.css` (the design system).
+- **`widgets/<name>/`** holds per-widget code (e.g. `widgets/groups/app.js`
+  and `widgets/groups/actions.js`).
+- **`tests/`** has one suite per widget (`tests/<name>.test.js`); all suites
+  run in CI on every push and pull request to `main`.
 
 ## Development / Testing
 
 The widget itself needs no build step, but the repo carries a committed
-automated test suite (`tests/widget.test.js`, Node + jsdom, no test framework)
+automated test suite (`tests/groups.test.js`, Node + jsdom, no test framework)
 and a GitHub Actions workflow (`.github/workflows/test.yml`) that runs it on
 every push and pull request to `main`.
 
 ```sh
 npm install   # installs jsdom (dev only; no lockfile is committed)
-npm test      # node tests/widget.test.js
+npm test      # node tests/groups.test.js
 ```
 
 The suite builds a JSDOM from `groups.html`, mocks the `grist` plugin API
@@ -302,7 +318,7 @@ payload, two-step delete), automatic group sums, and the diagnostics panel.
 One implementation detail worth knowing: the widget is made of classic scripts
 that share the global lexical scope, and top-level `const`/`let` do **not**
 leak between separate `window.eval()` calls. The test therefore concatenates
-`widget-core.js`, `widget-app.js`, and `widget-actions.js` into a **single**
+`shared/core.js`, `widgets/groups/app.js`, and `widgets/groups/actions.js` into a **single**
 `window.eval()` so they share scope exactly like the three `<script>` tags do
 in the browser.
 
