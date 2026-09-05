@@ -1,6 +1,18 @@
 # Changelog
 
-All notable changes to the grist-sprints grouped-view widget.
+All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
+
+## v7.01 — 2026-09-05
+
+- The repository is renamed `arkhivar/grist-sprints` → **`arkhivar/grist`**:
+  it now hosts a widget family, and "sprints" is one widget in it.
+- The grouped-view widget's entry page is renamed `groups.html` →
+  **`sprints.html`**; `groups.html` and `widget_groupes.html` both remain as
+  redirect stubs. New Pages URL: `https://arkhivar.github.io/grist/sprints.html`.
+- Per-widget code moves to `widgets/sprints/`; the test suite is
+  `tests/sprints.test.js`; `index.html` links updated (`sprints.html` live,
+  `salaries.html` planned).
+- Version numbers keep two decimal digits from now on (7.01, 7.02, …).
 
 ## v7.0 — 2026-08-15
 
