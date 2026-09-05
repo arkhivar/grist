@@ -2,6 +2,18 @@
 
 All notable changes to the grist-sprints grouped-view widget.
 
+## v7.0 — 2026-08-15
+
+- Restructure the repo into a monorepo for a multi-widget family: shared code
+  moves to `shared/` (`core.js`, `base.css`), per-widget code to
+  `widgets/<name>/` (`widgets/groups/app.js`, `widgets/groups/actions.js`),
+  and each widget gets its own suite under `tests/` (`tests/groups.test.js`).
+- Update asset paths in `groups.html` and bump all cache keys to `?v=7.0`;
+  the live embed URL `groups.html` stays at the repo root, unchanged.
+- Add `index.html`, a lightweight gallery listing every widget in the repo.
+- Zero behavior change: files were moved, not modified (only the
+  `WIDGET_VERSION` constant and asset paths changed).
+
 ## v6.72 — 2026-08-15
 
 - Add a committed jsdom test suite (`tests/widget.test.js`, no test framework)

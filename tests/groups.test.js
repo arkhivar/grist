@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /*
- * widget.test.js — self-contained jsdom test suite for the grist-sprints
- * grouped-view widget (groups.html + widget-core/app/actions.js).
+ * groups.test.js — self-contained jsdom test suite for the grist-sprints
+ * grouped-view widget (groups.html + shared/core.js + widgets/groups/app.js
+ * + widgets/groups/actions.js).
  *
  * No test framework: plain assertions, PASS/FAIL lines, non-zero exit on
- * failure. Run with:  npm test   (or: node tests/widget.test.js)
+ * failure. Run with:  npm test   (or: node tests/groups.test.js)
  *
  * Important: the widget is built as classic scripts that share the global
  * lexical scope. Top-level `const`/`let` do NOT leak between separate
@@ -58,8 +59,8 @@ async function waitFor(cond, what) {
 async function main() {
 
 // ── Syntax check of the widget sources (node --check) ────────
-await test('syntax: node --check widget-core.js / widget-app.js / widget-actions.js', async () => {
-  for (const f of ['widget-core.js', 'widget-app.js', 'widget-actions.js'])
+await test('syntax: node --check shared/core.js / widgets/groups/app.js / widgets/groups/actions.js', async () => {
+  for (const f of ['shared/core.js', 'widgets/groups/app.js', 'widgets/groups/actions.js'])
     execFileSync(process.execPath, ['--check', path.join(ROOT, f)]);
 });
 
@@ -123,9 +124,9 @@ win.grist = {
 
 // ONE eval: the three classic scripts share the global lexical scope.
 win.eval(
-  read('widget-core.js') + '\n;\n' +
-  read('widget-app.js') + '\n;\n' +
-  read('widget-actions.js')
+  read('shared/core.js') + '\n;\n' +
+  read('widgets/groups/app.js') + '\n;\n' +
+  read('widgets/groups/actions.js')
 );
 
 // ── Helpers against the live DOM ─────────────────────────────
@@ -275,7 +276,7 @@ await test('E12: diagnostics lists the date column as date-like: yes', async () 
 
 // ── F. Smoke ─────────────────────────────────────────────────
 await test('F13: groups.html loads all three widget scripts', async () => {
-  for (const f of ['widget-core.js', 'widget-app.js', 'widget-actions.js'])
+  for (const f of ['shared/core.js', 'widgets/groups/app.js', 'widgets/groups/actions.js'])
     assert(html.includes(`<script src="${f}?`), `groups.html missing script tag for ${f}`);
 });
 
