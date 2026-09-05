@@ -2,6 +2,16 @@
 
 All notable changes to the grist-sprints grouped-view widget.
 
+## v6.72 — 2026-08-15
+
+- Add a committed jsdom test suite (`tests/widget.test.js`, no test framework)
+  covering date rendering (ISO strings, object-wrapped values, epoch seconds,
+  invisible-character pollution), grip selection, row actions (duplicate
+  payload, two-step delete), automatic group sums, and the diagnostics panel.
+- Add `package.json` (`npm test`) and a GitHub Actions workflow
+  (`.github/workflows/test.yml`) running the suite on every push and PR to
+  `main`.
+
 ## v6.71 — 2026-08-01
 
 - Adopt the three-digit `6.7x` release sequence so small iterations can advance

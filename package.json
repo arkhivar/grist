@@ -1,0 +1,10 @@
+{
+  "name": "grist-sprints-widget",
+  "private": true,
+  "scripts": {
+    "test": "node tests/widget.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}

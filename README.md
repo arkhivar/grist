@@ -280,6 +280,32 @@ the same repo, so no extra hosting steps are needed:
 | `ARCHITECTURE.md` | GitHub Pages/Grist responsibilities, persistence lifecycle, data access, and backend boundaries |
 | `ROADMAP.md` | Deferred drag semantics for dates, Choice Lists, references, and other types |
 
+## Development / Testing
+
+The widget itself needs no build step, but the repo carries a committed
+automated test suite (`tests/widget.test.js`, Node + jsdom, no test framework)
+and a GitHub Actions workflow (`.github/workflows/test.yml`) that runs it on
+every push and pull request to `main`.
+
+```sh
+npm install   # installs jsdom (dev only; no lockfile is committed)
+npm test      # node tests/widget.test.js
+```
+
+The suite builds a JSDOM from `groups.html`, mocks the `grist` plugin API
+(`ready`, `onRecords`, `onOptions`, `setOption`, `selectedTable`), then drives
+real scenarios and asserts on the rendered DOM: date rendering (ISO strings,
+object-wrapped ISO values, epoch seconds, invisible-character pollution),
+grip-based selection (plain / Ctrl-click / clear), row actions (duplicate
+payload, two-step delete), automatic group sums, and the diagnostics panel.
+
+One implementation detail worth knowing: the widget is made of classic scripts
+that share the global lexical scope, and top-level `const`/`let` do **not**
+leak between separate `window.eval()` calls. The test therefore concatenates
+`widget-core.js`, `widget-app.js`, and `widget-actions.js` into a **single**
+`window.eval()` so they share scope exactly like the three `<script>` tags do
+in the browser.
+
 ## Credits
 
 Original widget by [Maxime Lacoste](https://github.com/maximelacoste/grist-widget-grouped-view), shared on the [Grist community forum](https://community.getgrist.com/t/collapsible-grouped-view-based-on-column-values-custom-widget/13789).
