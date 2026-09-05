@@ -2,7 +2,10 @@
   "name": "grist-widgets",
   "private": true,
   "scripts": {
-    "test": "node tests/sprints.test.js"
+    "test": "node tests/run.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"

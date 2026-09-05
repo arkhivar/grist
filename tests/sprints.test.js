@@ -280,6 +280,14 @@ await test('F13: sprints.html loads all three widget scripts', async () => {
     assert(html.includes(`<script src="${f}?`), `sprints.html missing script tag for ${f}`);
 });
 
+await test('F14: live badge and every cache key use the same release version', async () => {
+  const versions = [...html.matchAll(/(?:src|href)="(?:shared\/base\.css|shared\/core\.js|widgets\/sprints\/(?:app|actions)\.js)\?v=([^"&]+)/g)]
+    .map(match => match[1]);
+  assertEq(versions.length, 4, 'versioned asset count');
+  assert(versions.every(version => version === versions[0]), 'asset cache keys differ');
+  assertEq(doc.getElementById('version-badge').textContent, `v${versions[0]}`, 'version badge');
+});
+
 // ── Summary ──────────────────────────────────────────────────
 console.log(`===== ${passed} passed, ${failed} failed =====`);
 process.exitCode = failed ? 1 : 0;

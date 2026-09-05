@@ -20,8 +20,8 @@ tests/<name>.test.js     # one jsdom suite per widget, no framework
 ## Commands
 
 ```sh
-npm install   # dev-only: jsdom
-npm test      # node tests/sprints.test.js (add more suites as widgets land)
+npm ci        # exact dev-only dependencies from package-lock.json
+npm test      # discovers and runs every tests/*.test.js suite
 ```
 
 ## Hard rules
@@ -31,7 +31,8 @@ npm test      # node tests/sprints.test.js (add more suites as widgets land)
    and browsers otherwise serve stale files). Two decimal digits: 7.01, 7.02…
 2. **Never break the shared-scope contract**: no IIFEs, no ES modules, no
    redeclared top-level names across the scripts of one widget.
-3. **Run `npm test` before every commit.** A change that can't be tested in
+3. **Run `npm test` before every commit.** The runner discovers every
+   `tests/*.test.js` suite. A change that can't be tested in
    jsdom (layout-dependent drag geometry, etc.) must be called out in the
    commit message.
 4. Write operations require `requiredAccess: 'full'` and must surface the real
@@ -63,9 +64,8 @@ npm test      # node tests/sprints.test.js (add more suites as widgets land)
 
 - GitHub `main` is the source of truth. Direct-to-main pushes are currently
   acceptable to the owner; keep commits small and one-purpose.
-- CI: `.github/workflows/test.yml` runs `npm test` on push/PR (if the file is
-  present — it must be created via the GitHub web UI because OAuth tokens
-  without the `workflow` scope cannot write workflow files).
+- CI: `.github/workflows/test.yml` runs `npm ci` and `npm test` on every push
+  and pull request.
 - When serving from the owner's VPS instead of Pages: the widget files are
   plain static files — point the web server at the checkout and update the
   custom-widget URL in the Grist doc accordingly (fresh widget instance, see
@@ -88,6 +88,6 @@ render as rows inside month groups or only contribute to totals.
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric sums, grip selection + bulk actions, drag between groups, inline
   text/DateTime editing, adjustable columns, diagnostics panel).
-- `index.html` gallery lists the family; `salaries.html` exists as an empty
-  placeholder.
-- Test suite: `tests/sprints.test.js`, 14 checks, green.
+- `index.html` gallery lists the family; `salaries.html` is a clear
+  coming-soon page rather than an empty endpoint.
+- Test suite: `tests/sprints.test.js`, 15 checks, green.

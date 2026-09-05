@@ -9,6 +9,11 @@ All notable changes to the widgets in this repo (formerly the grist-sprints grou
 - Add `AGENTS.md` with repo conventions, hard-won Grist API notes, and the
   roadmap for `salaries.html`, so AI coding agents (and future humans) can
   pick up the project cold — including from a checkout on the owner's VPS.
+- Align the live Sprints widget badge and all asset cache keys to v7.02.
+- Add a real coming-soon page for the planned salary widget instead of serving
+  a blank document.
+- Add a committed dependency lockfile, `node_modules/` ignore rule, and CI;
+  `npm test` now discovers every widget test suite automatically.
 
 ## v7.01 — 2026-09-05
 

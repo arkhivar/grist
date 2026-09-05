@@ -1,5 +1,5 @@
   // ── 15. Unified selection, dragging, and bulk actions ─────
-  // Loaded after widget-app.js: shares its top-level bindings.
+  // Loaded after app.js: shares its top-level bindings.
   const app          = document.getElementById('app');
   const selBar       = document.getElementById('sel-bar');
   const selCountTxt  = document.getElementById('sel-count-txt');
