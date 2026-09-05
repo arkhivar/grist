@@ -7,7 +7,7 @@ architecture without rediscovering how Grist and GitHub Pages divide the work.
 
 The version is a display/cache identifier rather than strict semantic
 versioning. Starting after v6.7, small releases use `6.71`, `6.72`, `6.73`, and
-so on. A release must update both `WIDGET_VERSION` in `widget-core.js` and all
+so on. A release must update both `WIDGET_VERSION` in `shared/core.js` and all
 four `?v=` asset keys in `groups.html`; otherwise GitHub Pages or an embedding
 browser may continue serving an older script or stylesheet.
 
