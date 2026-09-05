@@ -2,6 +2,14 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.02 — 2026-09-05
+
+- Remove the `groups.html` and `widget_groupes.html` redirect stubs: entry
+  pages are purpose-named from now on (`sprints.html`, `salaries.html`, …).
+- Add `AGENTS.md` with repo conventions, hard-won Grist API notes, and the
+  roadmap for `salaries.html`, so AI coding agents (and future humans) can
+  pick up the project cold — including from a checkout on the owner's VPS.
+
 ## v7.01 — 2026-09-05
 
 - The repository is renamed `arkhivar/grist-sprints` → **`arkhivar/grist`**:
