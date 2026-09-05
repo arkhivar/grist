@@ -49,7 +49,6 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
    ```
    https://arkhivar.github.io/grist/sprints.html
    ```
-   (The old `groups.html` / `widget_groupes.html` URLs still work — they redirect to `sprints.html`.)
 3. Select access level **Full access** — required for row actions, field
    editing, and cross-group moves. With a lower level the view still works but
    write actions fail.
@@ -261,7 +260,10 @@ Details:
 The widget is a set of small static files — no npm, no build step.
 
 - **GitHub Pages**: enabled on this repo (source: `main` branch, root). Widget URL: `https://arkhivar.github.io/grist/sprints.html`
-- **Any static HTTP server** works too (Netlify, Scalingo, a public WebDAV share…)
+- **Any static HTTP server** works too — including the VPS that hosts a
+  self-hosted Grist: point the web server at a checkout of this repo and use
+  `https://<your-host>/sprints.html` as the custom-widget URL (that creates a
+  fresh widget instance: re-set Full access and Select By linking).
 
 ## Files
 
@@ -272,8 +274,9 @@ the same repo, so no extra hosting steps are needed:
 | File | Description |
 |---|---|
 | `sprints.html` | Page shell of the grouped-view ("sprints") widget — loads the shared CSS/scripts and its per-widget scripts |
-| `groups.html`, `widget_groupes.html` | Redirect stubs for the old URLs (point to `sprints.html`) |
 | `index.html` | Widget gallery — one card per widget in the repo |
+| `salaries.html` | Placeholder for the next widget (teacher salary counter) |
+| `AGENTS.md` | Guidance for AI coding agents working in this repo |
 | `shared/base.css` | Design system (styles) shared by every widget |
 | `shared/core.js` | English UI strings, constants, state, date helpers, and Grist helpers shared by every widget |
 | `widgets/sprints/app.js` | Settings panel, automatic sums, diagnostics, Grist wiring, grouping, rendering, row actions |
