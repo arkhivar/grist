@@ -1,8 +1,8 @@
 {
-  "name": "grist-sprints-widget",
+  "name": "grist-widgets",
   "private": true,
   "scripts": {
-    "test": "node tests/groups.test.js"
+    "test": "node tests/sprints.test.js"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"
