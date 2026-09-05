@@ -1,4 +1,4 @@
-# grist-sprints — Grist grouped-view widget
+# grist — Grist custom widgets
 
 > Grist custom widget — collapsible grouped view, Airtable/Notion-style. Groups records by any column with fold/unfold, group sorting, automatic numeric sums, large Text-field editing, DateTime picking, and persisted options via `grist.setOption()`.
 
@@ -47,9 +47,9 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 1. In your Grist document, add a widget → **Custom**
 2. Set the custom URL to:
    ```
-   https://arkhivar.github.io/grist-sprints/groups.html
+   https://arkhivar.github.io/grist/sprints.html
    ```
-   (The old `widget_groupes.html` URL still works — it redirects to `groups.html`.)
+   (The old `groups.html` / `widget_groupes.html` URLs still work — they redirect to `sprints.html`.)
 3. Select access level **Full access** — required for row actions, field
    editing, and cross-group moves. With a lower level the view still works but
    write actions fail.
@@ -260,7 +260,7 @@ Details:
 
 The widget is a set of small static files — no npm, no build step.
 
-- **GitHub Pages**: enabled on this repo (source: `main` branch, root). Widget URL: `https://arkhivar.github.io/grist-sprints/groups.html`
+- **GitHub Pages**: enabled on this repo (source: `main` branch, root). Widget URL: `https://arkhivar.github.io/grist/sprints.html`
 - **Any static HTTP server** works too (Netlify, Scalingo, a public WebDAV share…)
 
 ## Files
@@ -271,14 +271,14 @@ the same repo, so no extra hosting steps are needed:
 
 | File | Description |
 |---|---|
-| `groups.html` | Page shell of the grouped-view widget — loads the shared CSS/scripts and its per-widget scripts |
-| `widget_groupes.html` | Redirect stub for the old URL (points to `groups.html`) |
+| `sprints.html` | Page shell of the grouped-view ("sprints") widget — loads the shared CSS/scripts and its per-widget scripts |
+| `groups.html`, `widget_groupes.html` | Redirect stubs for the old URLs (point to `sprints.html`) |
 | `index.html` | Widget gallery — one card per widget in the repo |
 | `shared/base.css` | Design system (styles) shared by every widget |
 | `shared/core.js` | English UI strings, constants, state, date helpers, and Grist helpers shared by every widget |
-| `widgets/groups/app.js` | Settings panel, automatic sums, diagnostics, Grist wiring, grouping, rendering, row actions |
-| `widgets/groups/actions.js` | Unified grip selection, cross-group dragging, action bar, and bulk actions |
-| `tests/groups.test.js` | Test suite for the groups widget (Node + jsdom, no test framework) |
+| `widgets/sprints/app.js` | Settings panel, automatic sums, diagnostics, Grist wiring, grouping, rendering, row actions |
+| `widgets/sprints/actions.js` | Unified grip selection, cross-group dragging, action bar, and bulk actions |
+| `tests/sprints.test.js` | Test suite for the sprints widget (Node + jsdom, no test framework) |
 | `ARCHITECTURE.md` | GitHub Pages/Grist responsibilities, persistence lifecycle, data access, and backend boundaries |
 | `ROADMAP.md` | Deferred drag semantics for dates, Choice Lists, references, and other types |
 
@@ -287,28 +287,28 @@ the same repo, so no extra hosting steps are needed:
 This repo hosts a family of Grist custom widgets, not just one. Conventions:
 
 - **Entry pages** are English nouns at the repo root — `<name>.html` gives a
-  clean GitHub Pages URL (`…/groups.html`). `index.html` is a small gallery
+  clean GitHub Pages URL (`…/sprints.html`). `index.html` is a small gallery
   linking to every widget.
 - **`shared/`** holds code every widget reuses: `core.js` (UI strings, state,
   date helpers, Grist helpers) and `base.css` (the design system).
-- **`widgets/<name>/`** holds per-widget code (e.g. `widgets/groups/app.js`
-  and `widgets/groups/actions.js`).
+- **`widgets/<name>/`** holds per-widget code (e.g. `widgets/sprints/app.js`
+  and `widgets/sprints/actions.js`).
 - **`tests/`** has one suite per widget (`tests/<name>.test.js`); all suites
   run in CI on every push and pull request to `main`.
 
 ## Development / Testing
 
 The widget itself needs no build step, but the repo carries a committed
-automated test suite (`tests/groups.test.js`, Node + jsdom, no test framework)
+automated test suite (`tests/sprints.test.js`, Node + jsdom, no test framework)
 and a GitHub Actions workflow (`.github/workflows/test.yml`) that runs it on
 every push and pull request to `main`.
 
 ```sh
 npm install   # installs jsdom (dev only; no lockfile is committed)
-npm test      # node tests/groups.test.js
+npm test      # node tests/sprints.test.js
 ```
 
-The suite builds a JSDOM from `groups.html`, mocks the `grist` plugin API
+The suite builds a JSDOM from `sprints.html`, mocks the `grist` plugin API
 (`ready`, `onRecords`, `onOptions`, `setOption`, `selectedTable`), then drives
 real scenarios and asserts on the rendered DOM: date rendering (ISO strings,
 object-wrapped ISO values, epoch seconds, invisible-character pollution),
@@ -318,7 +318,7 @@ payload, two-step delete), automatic group sums, and the diagnostics panel.
 One implementation detail worth knowing: the widget is made of classic scripts
 that share the global lexical scope, and top-level `const`/`let` do **not**
 leak between separate `window.eval()` calls. The test therefore concatenates
-`shared/core.js`, `widgets/groups/app.js`, and `widgets/groups/actions.js` into a **single**
+`shared/core.js`, `widgets/sprints/app.js`, and `widgets/sprints/actions.js` into a **single**
 `window.eval()` so they share scope exactly like the three `<script>` tags do
 in the browser.
 
