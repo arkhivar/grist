@@ -1,7 +1,7 @@
 # Drop this file into EACH watched repo at:
 #   .github/workflows/notify.yml
 #
-# It fires a repository_dispatch event at arkhivar/tg-repo-watcher, which
+# It fires a repository_dispatch event at arkhivar/repowatbot, which
 # owns all the secrets. Each watched repo only needs ONE secret of its
 # own: WATCHER_DISPATCH_PAT (a Classic PAT with `repo` scope).
 #
@@ -24,7 +24,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Send dispatch to tg-repo-watcher
+      - name: Send dispatch to repowatbot
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.WATCHER_DISPATCH_PAT }}
@@ -53,7 +53,7 @@ jobs:
             }
             await github.rest.repos.createDispatchEvent({
               owner: 'arkhivar',
-              repo:  'tg-repo-watcher',
+              repo:  'repowatbot',
               event_type: 'repo-update',
               client_payload: payload,
               });
