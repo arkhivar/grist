@@ -1193,15 +1193,11 @@
     const id = esc(String(rec.id));
     const colAttr = esc(col);
     const editLabel = editKind === 'datetime' ? T.editDateTime : T.editCell;
-    const editMarker = editKind === 'datetime'
-      ? ''
-      : `<span class="cell-edit-pencil" aria-hidden="true">✎</span>`;
     const popoverAttrs = ' aria-haspopup="dialog" aria-expanded="false"';
     return `<td class="cell-editable">`
       + `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
       + ` aria-label="${esc(editLabel)}: ${colAttr}"${popoverAttrs}>`
       + `<span class="cell-edit-value">${rendered}</span>`
-      + editMarker
       + `</button></td>`;
   }
 

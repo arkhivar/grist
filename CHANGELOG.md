@@ -2,6 +2,13 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.07 — 2026-09-22
+
+- Prevent the hidden DateTime picker from rendering below the long-text
+  textarea inside the shared popover.
+- Remove the redundant pencil icon from editable Text cells; the full cell
+  remains the edit trigger.
+
 ## v7.06 — 2026-09-22
 
 - Replace the blocking, near-full-window long-text editor with a compact,

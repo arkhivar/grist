@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.06)
+## Current state (v7.07)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric sums, grip selection + bulk actions, drag between groups, inline

@@ -744,6 +744,7 @@
       display: block; padding: 0; overflow: auto;
       background: var(--surface);
     }
+    .cell-editor-overlay.popover-mode .cell-editor-datetime[hidden] { display: none; }
     .cell-editor-overlay.popover-mode .date-picker {
       width: 100%; grid-template-columns: minmax(0, 1fr) 96px;
       border: 0; border-radius: 0; box-shadow: none;

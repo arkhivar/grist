@@ -284,6 +284,8 @@ await test('F13: long-text editor is a compact, anchored, non-blocking popover',
   await flush();
   const editButton = cellEl(1, 'students').querySelector('.cell-edit-btn');
   assert(editButton, 'long-text edit button missing');
+  assert(!editButton.querySelector('.cell-edit-pencil'),
+    'redundant long-text pencil is still present');
   assertEq(editButton.getAttribute('aria-expanded'), 'false', 'initial text popover state');
   click(editButton);
   await flush();
@@ -295,6 +297,10 @@ await test('F13: long-text editor is a compact, anchored, non-blocking popover',
     'long-text popover incorrectly reports itself as modal');
   assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-label'),
     'Edit text: students', 'long-text popover accessible label');
+  const dateTimePanel = doc.getElementById('cell-editor-datetime-panel');
+  assert(dateTimePanel.hidden, 'DateTime panel is not hidden in the long-text editor');
+  assertEq(win.getComputedStyle(dateTimePanel).display, 'none',
+    'hidden DateTime panel is forced visible by popover styles');
   assertEq(editButton.getAttribute('aria-expanded'), 'true', 'open text popover state');
   assert(doc.getElementById('cell-editor-dialog').style.left,
     'long-text popover was not horizontally positioned');
