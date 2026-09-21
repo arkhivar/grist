@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.05">
+  <link rel="stylesheet" href="shared/base.css?v=7.06">
 </head>
 <body>
 <div id="app">
@@ -119,16 +119,7 @@
 </div>
 
 <div class="cell-editor-overlay" id="cell-editor" hidden>
-  <section class="cell-editor-dialog" id="cell-editor-dialog" role="dialog" aria-modal="true"
-           aria-labelledby="cell-editor-title">
-    <header class="cell-editor-header">
-      <div>
-        <h2 id="cell-editor-title">Edit text</h2>
-        <p id="cell-editor-meta"></p>
-      </div>
-      <button type="button" class="cell-editor-close" id="btn-editor-close"
-              aria-label="Cancel">×</button>
-    </header>
+  <section class="cell-editor-dialog" id="cell-editor-dialog" role="dialog">
     <textarea id="cell-editor-text" spellcheck="true" aria-label="Edit text"></textarea>
     <div class="cell-editor-datetime" id="cell-editor-datetime-panel" hidden>
       <input id="cell-editor-datetime" type="hidden">
@@ -154,6 +145,7 @@
         </aside>
       </div>
     </div>
+    <p class="cell-editor-error" id="cell-editor-error" role="alert" hidden></p>
     <footer class="cell-editor-footer">
       <span id="cell-editor-count">0 characters</span>
       <div class="date-picker-footer-actions" id="date-picker-footer-actions" hidden>
@@ -169,8 +161,8 @@
   </section>
 </div>
 
-<script src="shared/core.js?v=7.05"></script>
-  <script src="widgets/sprints/app.js?v=7.05"></script>
-  <script src="widgets/sprints/actions.js?v=7.05"></script>
+<script src="shared/core.js?v=7.06"></script>
+  <script src="widgets/sprints/app.js?v=7.06"></script>
+  <script src="widgets/sprints/actions.js?v=7.06"></script>
 </body>
 </html>

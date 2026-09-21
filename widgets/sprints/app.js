@@ -1196,9 +1196,7 @@
     const editMarker = editKind === 'datetime'
       ? ''
       : `<span class="cell-edit-pencil" aria-hidden="true">✎</span>`;
-    const popoverAttrs = editKind === 'datetime'
-      ? ' aria-haspopup="dialog" aria-expanded="false"'
-      : '';
+    const popoverAttrs = ' aria-haspopup="dialog" aria-expanded="false"';
     return `<td class="cell-editable">`
       + `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
       + ` aria-label="${esc(editLabel)}: ${colAttr}"${popoverAttrs}>`
@@ -1216,7 +1214,6 @@
     cellEditorDateTimePanel.querySelectorAll('button, input').forEach(control => {
       control.disabled = busy;
     });
-    btnEditorClose.disabled = busy;
     btnEditorCancel.disabled = busy;
     btnEditorSave.disabled = busy;
     if (!busy) datePickerClear.disabled = !datePickerSelectedDate;
@@ -1389,8 +1386,8 @@
     datePickerTimeList.scrollTop += direction * (firstOption ? firstOption.offsetHeight || 36 : 36) * 4;
   }
 
-  function positionDateTimePopover() {
-    if (!editingCell || editingCell.kind !== 'datetime') return;
+  function positionFieldEditorPopover() {
+    if (!editingCell) return;
     const anchor = editingCell.anchorEl;
     if (!anchor || !anchor.isConnected) {
       closeFieldEditor();
@@ -1405,8 +1402,10 @@
       return;
     }
     const dialogRect = cellEditorDialog.getBoundingClientRect();
-    const dialogWidth = dialogRect.width || Math.min(456, window.innerWidth - margin * 2);
-    const dialogHeight = dialogRect.height || Math.min(368, window.innerHeight - margin * 2);
+    const fallbackWidth = editingCell.kind === 'datetime' ? 456 : 480;
+    const fallbackHeight = editingCell.kind === 'datetime' ? 330 : 220;
+    const dialogWidth = dialogRect.width || Math.min(fallbackWidth, window.innerWidth - margin * 2);
+    const dialogHeight = dialogRect.height || Math.min(fallbackHeight, window.innerHeight - margin * 2);
     let left = anchorRect.left;
     if (left + dialogWidth > window.innerWidth - margin)
       left = anchorRect.right - dialogWidth;
@@ -1432,27 +1431,19 @@
     const originalValue = isDateTime && value != null
       ? Math.floor(value / 60) * 60
       : value;
-    editingCell = { recordId, col, kind, originalValue, anchorEl: isDateTime ? anchorEl : null };
-    cellEditorTitle.textContent = `${isDateTime ? T.editDateTime : T.editTitle} — ${col}`;
-    cellEditorMeta.textContent = `${T.editRecord} ${recordId} · ${selectedTableId}`
-      + (isDateTime ? ' · UTC' : '');
-    cellEditorText.setAttribute('aria-label', `${T.editTitle} ${col}`);
+    editingCell = { recordId, col, kind, originalValue, anchorEl };
+    const editorLabel = `${isDateTime ? T.editDateTime : T.editCell}: ${col}`;
+    cellEditorText.setAttribute('aria-label', editorLabel);
     datePickerGrid.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
-    cellEditorMeta.classList.remove('error');
+    cellEditorError.hidden = true;
+    cellEditorError.textContent = '';
     cellEditorDialog.classList.toggle('date-mode', isDateTime);
-    cellEditor.classList.toggle('popover-mode', isDateTime);
-    cellEditorHeader.hidden = isDateTime;
+    cellEditor.classList.add('popover-mode');
     datePickerFooterActions.hidden = !isDateTime;
-    if (isDateTime) {
-      cellEditorDialog.removeAttribute('aria-modal');
-      cellEditorDialog.removeAttribute('aria-labelledby');
-      cellEditorDialog.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
-      if (anchorEl) anchorEl.setAttribute('aria-expanded', 'true');
-    } else {
-      cellEditorDialog.setAttribute('aria-modal', 'true');
-      cellEditorDialog.removeAttribute('aria-label');
-      cellEditorDialog.setAttribute('aria-labelledby', 'cell-editor-title');
-    }
+    cellEditorDialog.removeAttribute('aria-modal');
+    cellEditorDialog.removeAttribute('aria-labelledby');
+    cellEditorDialog.setAttribute('aria-label', editorLabel);
+    if (anchorEl) anchorEl.setAttribute('aria-expanded', 'true');
     cellEditorText.hidden = isDateTime;
     cellEditorDateTimePanel.hidden = !isDateTime;
     if (isDateTime) {
@@ -1464,7 +1455,7 @@
     }
     setEditorBusy(false);
     cellEditor.hidden = false;
-    if (isDateTime) positionDateTimePopover();
+    positionFieldEditorPopover();
     requestAnimationFrame(() => {
       if (isDateTime) {
         focusDateTimePicker();
@@ -1482,13 +1473,13 @@
     cellEditor.hidden = true;
     cellEditorDialog.classList.remove('date-mode');
     cellEditor.classList.remove('popover-mode');
-    cellEditorHeader.hidden = false;
     datePickerFooterActions.hidden = true;
+    cellEditorError.hidden = true;
+    cellEditorError.textContent = '';
     cellEditorDialog.style.left = '';
     cellEditorDialog.style.top = '';
-    cellEditorDialog.setAttribute('aria-modal', 'true');
     cellEditorDialog.removeAttribute('aria-label');
-    cellEditorDialog.setAttribute('aria-labelledby', 'cell-editor-title');
+    cellEditorDialog.removeAttribute('aria-labelledby');
     editingCell = null;
     cellEditorText.value = '';
     cellEditorText.hidden = false;
@@ -1509,8 +1500,8 @@
         nextValue = cellEditorText.value;
       }
     } catch (err) {
-      cellEditorMeta.textContent = err.message;
-      cellEditorMeta.classList.add('error');
+      cellEditorError.textContent = err.message;
+      cellEditorError.hidden = false;
       focusDateTimePicker();
       return;
     }
@@ -1519,7 +1510,8 @@
       return;
     }
     setEditorBusy(true);
-    cellEditorMeta.classList.remove('error');
+    cellEditorError.hidden = true;
+    cellEditorError.textContent = '';
     const action = kind === 'datetime' ? 'Edit DateTime' : 'Edit';
     const detail = kind === 'datetime'
       ? `record=${recordId} · column=${col} · value=${nextValue == null ? 'empty' : nextValue} UTC`
@@ -1537,8 +1529,8 @@
       render();
     } catch (err) {
       const message = actionErrorMessage(action, err);
-      cellEditorMeta.textContent = message;
-      cellEditorMeta.classList.add('error');
+      cellEditorError.textContent = message;
+      cellEditorError.hidden = false;
       setEditorBusy(false);
       if (kind === 'datetime') focusDateTimePicker();
       else cellEditorText.focus();
@@ -1799,8 +1791,8 @@
       closeFieldEditor();
     }
   });
-  window.addEventListener('resize', positionDateTimePopover);
-  content.addEventListener('scroll', positionDateTimePopover, { passive: true });
+  window.addEventListener('resize', positionFieldEditorPopover);
+  content.addEventListener('scroll', positionFieldEditorPopover, { passive: true });
 
   cellEditorText.addEventListener('input', updateEditorCharacterCount);
   function onEditorKeydown(e) {
@@ -1886,7 +1878,6 @@
     renderDateTimePicker();
     datePickerToday.focus();
   });
-  btnEditorClose.addEventListener('click', closeFieldEditor);
   btnEditorCancel.addEventListener('click', closeFieldEditor);
   btnEditorSave.addEventListener('click', saveFieldEditor);
 

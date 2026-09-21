@@ -2,6 +2,16 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.06 — 2026-09-22
+
+- Replace the blocking, near-full-window long-text editor with a compact,
+  non-blocking popover anchored to the edited cell.
+- Remove the shared editor title bar and redundant close button entirely.
+  Keep Cancel/Escape behavior and surface real save errors in a slim inline
+  alert instead of the removed header.
+- Keep the table scrollable beneath both editor types and reposition the
+  active popover as its source cell moves.
+
 ## v7.05 — 2026-09-22
 
 - Remove the redundant DateTime popover title bar and close button while

@@ -117,11 +117,13 @@ columns. The `C` column is enabled automatically when it has that type; every
 listed Text column can be enabled or disabled independently. Visible, writable
 DateTime columns are enabled automatically.
 
-Click an enabled cell to open a large editor that fills nearly the entire
-widget. It preserves emoji, whitespace, and line breaks and includes a live
-character count. Save with the button or **Ctrl/Cmd+Enter**; cancel with the
-button or **Escape**. In the grouped table, long Text values always remain on
-one line and are truncated with an ellipsis rather than making the row taller.
+Click an enabled Text cell to open a compact, non-blocking editor beside that
+cell. The table remains interactive and scrollable underneath it, while the
+textarea scrolls independently for longer notes. It preserves emoji,
+whitespace, and line breaks and includes a live character count. Save with the
+button or **Ctrl/Cmd+Enter**; cancel with the button or **Escape**. In the
+grouped table, long Text values remain on one line and are truncated with an
+ellipsis rather than making the row taller.
 
 Click a DateTime cell to open the widget's compact, non-blocking calendar
 popover beside that cell. It chooses an above/below placement automatically,
@@ -133,8 +135,8 @@ Cancel/Save remain together on the right. Arrow keys, Home/End, and Page Up/Page
 Down are also supported. Values are edited, stored, and displayed in UTC,
 so the browser's local timezone does not shift the chosen time. Formula
 columns, unsupported types, hidden columns, and the active grouping column are
-not editable. Saving uses
-`grist.selectedTable.update()` and reports failures in Diagnostics.
+not editable. Saving uses `grist.selectedTable.update()` and reports the real
+failure inline as well as in Diagnostics.
 
 ## Group height
 

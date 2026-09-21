@@ -274,8 +274,41 @@ await test('E12: diagnostics lists the date column as date-like: yes', async () 
     `date column not reported date-like — row: ${dateRow.textContent}`);
 });
 
-// ── F. DateTime editor ───────────────────────────────────────
-await test('F13: DateTime cell has no pencil and opens a Monday-first calendar', async () => {
+// ── F. Field editors ─────────────────────────────────────────
+await test('F13: long-text editor is a compact, anchored, non-blocking popover', async () => {
+  const studentsToggle = [...doc.querySelectorAll('#editable-col-list input[type="checkbox"]')]
+    .find(input => input.value === 'students');
+  assert(studentsToggle, 'students editable-field toggle missing');
+  studentsToggle.checked = true;
+  studentsToggle.dispatchEvent(new win.Event('change', { bubbles: true }));
+  await flush();
+  const editButton = cellEl(1, 'students').querySelector('.cell-edit-btn');
+  assert(editButton, 'long-text edit button missing');
+  assertEq(editButton.getAttribute('aria-expanded'), 'false', 'initial text popover state');
+  click(editButton);
+  await flush();
+  assert(!doc.getElementById('cell-editor').hidden, 'long-text editor did not open');
+  assert(doc.getElementById('cell-editor').classList.contains('popover-mode'),
+    'long-text editor did not use non-blocking popover mode');
+  assert(!doc.querySelector('.cell-editor-header'), 'obsolete editor header is still present');
+  assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-modal'), null,
+    'long-text popover incorrectly reports itself as modal');
+  assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-label'),
+    'Edit text: students', 'long-text popover accessible label');
+  assertEq(editButton.getAttribute('aria-expanded'), 'true', 'open text popover state');
+  assert(doc.getElementById('cell-editor-dialog').style.left,
+    'long-text popover was not horizontally positioned');
+  assert(doc.getElementById('cell-editor-dialog').style.top,
+    'long-text popover was not vertically positioned');
+  doc.getElementById('content').dispatchEvent(new win.Event('scroll'));
+  assert(!doc.getElementById('cell-editor').hidden,
+    'table scrolling incorrectly dismissed the long-text popover');
+  click(doc.getElementById('statsbar'));
+  assert(doc.getElementById('cell-editor').hidden, 'outside click did not dismiss text popover');
+  assertEq(editButton.getAttribute('aria-expanded'), 'false', 'dismissed text popover state');
+});
+
+await test('F14: DateTime cell has no pencil and opens a Monday-first calendar', async () => {
   const editButton = cellEl(1, 'startsAt').querySelector('.cell-edit-btn');
   assert(editButton, 'DateTime edit button missing');
   assertEq(editButton.dataset.editKind, 'datetime', 'DateTime edit kind');
@@ -288,8 +321,8 @@ await test('F13: DateTime cell has no pencil and opens a Monday-first calendar',
     'DateTime editor did not use non-blocking popover mode');
   assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-modal'), null,
     'DateTime popover incorrectly reports itself as modal');
-  assert(doc.querySelector('.cell-editor-header').hidden,
-    'redundant DateTime popover header is still visible');
+  assert(!doc.querySelector('.cell-editor-header'),
+    'obsolete editor header is still present');
   assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-label'),
     'Edit date and time: startsAt', 'DateTime popover accessible label');
   const footerActions = doc.getElementById('date-picker-footer-actions');
@@ -321,7 +354,7 @@ await test('F13: DateTime cell has no pencil and opens a Monday-first calendar',
   await flush();
 });
 
-await test('F14: custom picker saves the selected UTC date and time', async () => {
+await test('F15: custom picker saves the selected UTC date and time', async () => {
   const before = calls.update.length;
   click(doc.querySelector('.date-picker-time-option[data-time="09:30"]'));
   click(doc.querySelector('.date-picker-day[data-date="2026-07-20"]'));
@@ -337,12 +370,12 @@ await test('F14: custom picker saves the selected UTC date and time', async () =
 });
 
 // ── G. Smoke ─────────────────────────────────────────────────
-await test('G15: sprints.html loads all three widget scripts', async () => {
+await test('G16: sprints.html loads all three widget scripts', async () => {
   for (const f of ['shared/core.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
     assert(html.includes(`<script src="${f}?`), `sprints.html missing script tag for ${f}`);
 });
 
-await test('G16: live badge and every cache key use the same release version', async () => {
+await test('G17: live badge and every cache key use the same release version', async () => {
   const versions = [...html.matchAll(/(?:src|href)="(?:shared\/base\.css|shared\/core\.js|widgets\/sprints\/(?:app|actions)\.js)\?v=([^"&]+)/g)]
     .map(match => match[1]);
   assertEq(versions.length, 4, 'versioned asset count');

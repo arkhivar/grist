@@ -575,7 +575,7 @@
     .diag-error { color: #b91c1c; }
     .diag-start { color: #1d4ed8; }
 
-    /* Large text editor: intentionally fills almost the entire widget. */
+    /* Shared editor shell. Both text and DateTime use a cell-anchored popover. */
     .cell-editor-overlay {
       position: fixed; inset: 0; z-index: 100;
       display: grid; place-items: center;
@@ -594,28 +594,6 @@
       box-shadow: 0 24px 70px rgba(0,0,0,.28);
       overflow: hidden;
     }
-    .cell-editor-header {
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
-      padding: 15px 18px 12px; border-bottom: 1px solid var(--border);
-      background: var(--group-stripe);
-    }
-    .cell-editor-header[hidden] { display: none; }
-    .cell-editor-header h2 {
-      margin: 0; font-size: 16px; line-height: 1.3; font-weight: 600;
-    }
-    .cell-editor-header p {
-      margin: 3px 0 0; color: var(--muted); font-size: 11px;
-      font-family: var(--mono);
-    }
-    .cell-editor-header p.error { color: #b91c1c; }
-    .cell-editor-close {
-      width: 30px; height: 30px; flex: 0 0 auto;
-      border: 1px solid var(--border-strong); border-radius: var(--radius);
-      background: var(--surface); color: var(--muted); cursor: pointer;
-      font: 20px/1 var(--font); outline: none;
-    }
-    .cell-editor-close:hover { color: var(--text); border-color: var(--muted); }
-    .cell-editor-close:focus-visible { box-shadow: var(--focus-ring); }
     #cell-editor-text {
       flex: 1; width: 100%; min-height: 0; resize: none;
       padding: 22px 24px;
@@ -738,21 +716,29 @@
       height: auto; min-height: 0;
     }
     .cell-editor-dialog.date-mode #cell-editor-count { display: none; }
-    /* DateTime uses a non-blocking, cell-anchored popover. Text editing keeps
-       the full modal treatment above. Top/left are assigned from the cell. */
+    /* Top/left are assigned from the active cell. */
     .cell-editor-overlay.popover-mode {
       display: block; padding: 0;
       background: transparent; backdrop-filter: none;
       pointer-events: none;
     }
-    .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
+    .cell-editor-overlay.popover-mode .cell-editor-dialog {
       position: fixed;
-      width: min(456px, calc(100vw - 16px));
+      width: min(480px, calc(100vw - 16px));
       max-height: calc(100vh - 16px);
       height: auto; min-height: 0;
       pointer-events: auto;
       border-radius: 8px;
       box-shadow: 0 12px 36px rgba(24,24,27,.22), 0 2px 8px rgba(24,24,27,.10);
+    }
+    .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
+      width: min(456px, calc(100vw - 16px));
+    }
+    .cell-editor-overlay.popover-mode #cell-editor-text {
+      flex: 0 1 auto; height: 168px; min-height: 112px;
+      max-height: min(320px, calc(100vh - 80px));
+      padding: 12px 14px; resize: vertical;
+      font-size: 13px; line-height: 1.5;
     }
     .cell-editor-overlay.popover-mode .cell-editor-datetime {
       display: block; padding: 0; overflow: auto;
@@ -783,6 +769,13 @@
     .cell-editor-overlay.popover-mode .cell-editor-shortcut { display: none; }
     .cell-editor-overlay.popover-mode .cell-editor-actions { margin-left: auto; }
     .cell-editor-overlay.popover-mode .editor-btn { padding: 4px 10px; font-size: 11px; }
+    .cell-editor-error {
+      margin: 0; padding: 7px 10px;
+      border-top: 1px solid #fecaca;
+      background: #fef2f2; color: #b91c1c;
+      font-size: 11px; line-height: 1.35;
+    }
+    .cell-editor-error[hidden] { display: none; }
     .cell-editor-footer {
       display: flex; align-items: center; gap: 12px;
       padding: 11px 16px; border-top: 1px solid var(--border);
@@ -797,7 +790,7 @@
       background: var(--accent); border-color: var(--accent); color: #fff;
     }
     .editor-save:hover { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
-    .editor-btn:disabled, .cell-editor-close:disabled {
+    .editor-btn:disabled {
       opacity: .45; cursor: default;
     }
 
@@ -818,10 +811,13 @@
       .cell-editor-footer { flex-wrap: wrap; }
       .cell-editor-shortcut { order: 3; width: 100%; margin-left: 0; }
       .cell-editor-actions { margin-left: auto; }
-      .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
-        width: min(456px, calc(100vw - 12px));
+      .cell-editor-overlay.popover-mode .cell-editor-dialog {
+        width: min(480px, calc(100vw - 12px));
         height: auto; min-height: 0;
         border: 1px solid var(--border-strong); border-radius: 8px;
+      }
+      .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
+        width: min(456px, calc(100vw - 12px));
       }
       .cell-editor-overlay.popover-mode .cell-editor-datetime { padding: 0; }
       .cell-editor-overlay.popover-mode .date-picker {
