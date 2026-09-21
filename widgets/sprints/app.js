@@ -1193,11 +1193,14 @@
     const id = esc(String(rec.id));
     const colAttr = esc(col);
     const editLabel = editKind === 'datetime' ? T.editDateTime : T.editCell;
+    const editMarker = editKind === 'datetime'
+      ? ''
+      : `<span class="cell-edit-pencil" aria-hidden="true">✎</span>`;
     return `<td class="cell-editable">`
       + `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
       + ` aria-label="${esc(editLabel)}: ${colAttr}">`
       + `<span class="cell-edit-value">${rendered}</span>`
-      + `<span class="cell-edit-pencil" aria-hidden="true">✎</span>`
+      + editMarker
       + `</button></td>`;
   }
 
@@ -1207,17 +1210,14 @@
 
   function setEditorBusy(busy) {
     cellEditorText.disabled = busy;
-    cellEditorDateTime.disabled = busy;
+    cellEditorDateTimePanel.querySelectorAll('button, input').forEach(control => {
+      control.disabled = busy;
+    });
     btnEditorClose.disabled = busy;
     btnEditorCancel.disabled = busy;
     btnEditorSave.disabled = busy;
+    if (!busy) datePickerClear.disabled = !datePickerSelectedDate;
     btnEditorSave.textContent = busy ? 'Saving…' : T.editSave;
-  }
-
-  function formatDateTimeInput(sec) {
-    const date = new Date(Number(sec) * 1000);
-    if (!Number.isFinite(Number(sec)) || Number.isNaN(date.getTime())) return '';
-    return date.toISOString().slice(0, 19);
   }
 
   function dateTimeInputSec(value) {
@@ -1226,6 +1226,162 @@
     if (!Number.isFinite(milliseconds))
       throw new Error('Choose a valid date and time');
     return milliseconds / 1000;
+  }
+
+  let datePickerViewYear = 1970;
+  let datePickerViewMonth = 0;
+  let datePickerSelectedDate = '';
+  let datePickerSelectedTime = '00:00';
+  const datePickerMonthFormatter = new Intl.DateTimeFormat(LOCALE, {
+    month: 'long', year: 'numeric', timeZone: 'UTC',
+  });
+  const datePickerDayFormatter = new Intl.DateTimeFormat(LOCALE, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
+  });
+
+  function utcDateKey(date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  function dateFromKey(key) {
+    const parts = String(key || '').split('-').map(Number);
+    if (parts.length !== 3 || parts.some(part => !Number.isInteger(part))) return null;
+    const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function syncDateTimePickerValue() {
+    cellEditorDateTime.value = datePickerSelectedDate
+      ? `${datePickerSelectedDate}T${datePickerSelectedTime}`
+      : '';
+    datePickerClear.disabled = !datePickerSelectedDate || btnEditorSave.disabled;
+  }
+
+  function renderDatePickerTimes() {
+    const values = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (const minute of [0, 30])
+        values.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+    }
+    if (!values.includes(datePickerSelectedTime)) {
+      values.push(datePickerSelectedTime);
+      values.sort();
+    }
+    datePickerTimeList.innerHTML = values.map(value => {
+      const selected = value === datePickerSelectedTime;
+      return `<button type="button" class="date-picker-time-option${selected ? ' selected' : ''}"`
+        + ` data-time="${value}" role="option" aria-selected="${selected ? 'true' : 'false'}"`
+        + ` tabindex="${selected ? '0' : '-1'}">${value}</button>`;
+    }).join('');
+    const selected = datePickerTimeList.querySelector('.date-picker-time-option.selected');
+    if (selected) {
+      const selectedIndex = values.indexOf(datePickerSelectedTime);
+      datePickerTimeList.scrollTop = Math.max(0, selectedIndex * 36 - 108);
+    }
+  }
+
+  function renderDateTimePicker() {
+    const monthStart = new Date(Date.UTC(datePickerViewYear, datePickerViewMonth, 1));
+    datePickerMonth.textContent = datePickerMonthFormatter.format(monthStart);
+    const mondayOffset = (monthStart.getUTCDay() + 6) % 7;
+    const gridStart = new Date(Date.UTC(
+      datePickerViewYear, datePickerViewMonth, 1 - mondayOffset));
+    const todayKey = utcDateKey(new Date());
+    const selectedVisible = datePickerSelectedDate &&
+      datePickerSelectedDate >= utcDateKey(gridStart) &&
+      datePickerSelectedDate <= utcDateKey(new Date(gridStart.getTime() + 41 * 86400000));
+    let firstCurrentMonthKey = '';
+    const buttons = [];
+    for (let index = 0; index < 42; index++) {
+      const date = new Date(gridStart.getTime() + index * 86400000);
+      const key = utcDateKey(date);
+      const outside = date.getUTCMonth() !== datePickerViewMonth;
+      if (!outside && !firstCurrentMonthKey) firstCurrentMonthKey = key;
+      const selected = key === datePickerSelectedDate;
+      const today = key === todayKey;
+      const tabStop = selectedVisible ? selected : key === firstCurrentMonthKey;
+      const classes = ['date-picker-day'];
+      if (outside) classes.push('outside');
+      if (today) classes.push('today');
+      if (selected) classes.push('selected');
+      buttons.push(`<button type="button" role="gridcell" class="${classes.join(' ')}"`
+        + ` data-date="${key}" aria-label="${esc(datePickerDayFormatter.format(date))}"`
+        + ` aria-selected="${selected ? 'true' : 'false'}" tabindex="${tabStop ? '0' : '-1'}">`
+        + `${date.getUTCDate()}</button>`);
+    }
+    datePickerGrid.innerHTML = buttons.join('');
+    renderDatePickerTimes();
+    syncDateTimePickerValue();
+  }
+
+  function focusDateTimePicker() {
+    const target = datePickerGrid.querySelector('.date-picker-day.selected')
+      || datePickerGrid.querySelector('.date-picker-day:not(.outside)');
+    if (target) target.focus();
+  }
+
+  function selectDatePickerDate(key, focusAfter = true) {
+    const date = dateFromKey(key);
+    if (!date) return;
+    datePickerSelectedDate = utcDateKey(date);
+    datePickerViewYear = date.getUTCFullYear();
+    datePickerViewMonth = date.getUTCMonth();
+    renderDateTimePicker();
+    if (focusAfter) focusDateTimePicker();
+  }
+
+  function setDateTimePickerValue(sec) {
+    const value = Number(sec);
+    const date = Number.isFinite(value) ? new Date(value * 1000) : null;
+    if (date && !Number.isNaN(date.getTime())) {
+      datePickerSelectedDate = utcDateKey(date);
+      datePickerViewYear = date.getUTCFullYear();
+      datePickerViewMonth = date.getUTCMonth();
+      datePickerSelectedTime = date.toISOString().slice(11, 16);
+    } else {
+      const now = new Date();
+      datePickerSelectedDate = '';
+      datePickerViewYear = now.getUTCFullYear();
+      datePickerViewMonth = now.getUTCMonth();
+      datePickerSelectedTime = '00:00';
+    }
+    renderDateTimePicker();
+  }
+
+  function shiftDatePickerMonth(delta) {
+    const next = new Date(Date.UTC(datePickerViewYear, datePickerViewMonth + delta, 1));
+    datePickerViewYear = next.getUTCFullYear();
+    datePickerViewMonth = next.getUTCMonth();
+    renderDateTimePicker();
+    const target = datePickerGrid.querySelector('.date-picker-day:not(.outside)');
+    if (target) target.focus();
+  }
+
+  function moveDatePickerSelection(key, dayDelta) {
+    const date = dateFromKey(key);
+    if (!date) return;
+    date.setUTCDate(date.getUTCDate() + dayDelta);
+    selectDatePickerDate(utcDateKey(date));
+  }
+
+  function selectDatePickerTime(value, focusAfter = true) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value || '')) return;
+    datePickerSelectedTime = value;
+    if (!datePickerSelectedDate) {
+      const now = new Date();
+      datePickerSelectedDate = utcDateKey(now);
+      datePickerViewYear = now.getUTCFullYear();
+      datePickerViewMonth = now.getUTCMonth();
+    }
+    renderDateTimePicker();
+    if (focusAfter) {
+      const selected = datePickerTimeList.querySelector('.date-picker-time-option.selected');
+      if (selected) selected.focus();
+    }
+  }
+
+  function scrollDatePickerTimes(direction) {
+    datePickerTimeList.scrollTop += direction * 144;
   }
 
   function openFieldEditor(idStr, col) {
@@ -1238,18 +1394,21 @@
     const value = isDateTime
       ? parseDateValueSec(rec[col])
       : (rec[col] == null ? '' : String(rec[col]));
-    editingCell = { recordId, col, kind, originalValue: value };
+    const originalValue = isDateTime && value != null
+      ? Math.floor(value / 60) * 60
+      : value;
+    editingCell = { recordId, col, kind, originalValue };
     cellEditorTitle.textContent = `${isDateTime ? T.editDateTime : T.editTitle} — ${col}`;
     cellEditorMeta.textContent = `${T.editRecord} ${recordId} · ${selectedTableId}`
       + (isDateTime ? ' · UTC' : '');
     cellEditorText.setAttribute('aria-label', `${T.editTitle} ${col}`);
-    cellEditorDateTime.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
+    datePickerGrid.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
     cellEditorMeta.classList.remove('error');
     cellEditorDialog.classList.toggle('date-mode', isDateTime);
     cellEditorText.hidden = isDateTime;
     cellEditorDateTimePanel.hidden = !isDateTime;
     if (isDateTime) {
-      cellEditorDateTime.value = value == null ? '' : formatDateTimeInput(value);
+      setDateTimePickerValue(value);
       cellEditorCount.textContent = '';
     } else {
       cellEditorText.value = value;
@@ -1259,10 +1418,7 @@
     cellEditor.hidden = false;
     requestAnimationFrame(() => {
       if (isDateTime) {
-        cellEditorDateTime.focus();
-        if (typeof cellEditorDateTime.showPicker === 'function') {
-          try { cellEditorDateTime.showPicker(); } catch (_) { /* user can open it normally */ }
-        }
+        focusDateTimePicker();
       } else {
         cellEditorText.focus();
         cellEditorText.setSelectionRange(value.length, value.length);
@@ -1278,6 +1434,8 @@
     cellEditorText.value = '';
     cellEditorText.hidden = false;
     cellEditorDateTime.value = '';
+    datePickerSelectedDate = '';
+    datePickerSelectedTime = '00:00';
     cellEditorDateTimePanel.hidden = true;
   }
 
@@ -1287,10 +1445,6 @@
     let nextValue;
     try {
       if (kind === 'datetime') {
-        if (!cellEditorDateTime.checkValidity()) {
-          cellEditorDateTime.reportValidity();
-          return;
-        }
         nextValue = dateTimeInputSec(cellEditorDateTime.value);
       } else {
         nextValue = cellEditorText.value;
@@ -1298,7 +1452,7 @@
     } catch (err) {
       cellEditorMeta.textContent = err.message;
       cellEditorMeta.classList.add('error');
-      cellEditorDateTime.focus();
+      focusDateTimePicker();
       return;
     }
     if (nextValue === originalValue) {
@@ -1327,7 +1481,8 @@
       cellEditorMeta.textContent = message;
       cellEditorMeta.classList.add('error');
       setEditorBusy(false);
-      (kind === 'datetime' ? cellEditorDateTime : cellEditorText).focus();
+      if (kind === 'datetime') focusDateTimePicker();
+      else cellEditorText.focus();
     }
   }
 
@@ -1584,7 +1739,79 @@
     }
   }
   cellEditorText.addEventListener('keydown', onEditorKeydown);
-  cellEditorDateTime.addEventListener('keydown', onEditorKeydown);
+  cellEditorDateTimePanel.addEventListener('keydown', onEditorKeydown);
+  datePickerPrev.addEventListener('click', () => shiftDatePickerMonth(-1));
+  datePickerNext.addEventListener('click', () => shiftDatePickerMonth(1));
+  datePickerPrevYear.addEventListener('click', () => shiftDatePickerMonth(-12));
+  datePickerNextYear.addEventListener('click', () => shiftDatePickerMonth(12));
+  datePickerGrid.addEventListener('click', (e) => {
+    const day = e.target.closest('.date-picker-day[data-date]');
+    if (day && datePickerGrid.contains(day)) selectDatePickerDate(day.dataset.date);
+  });
+  datePickerGrid.addEventListener('keydown', (e) => {
+    const day = e.target.closest('.date-picker-day[data-date]');
+    if (!day) return;
+    const key = day.dataset.date;
+    let handled = true;
+    if (e.key === 'ArrowLeft') moveDatePickerSelection(key, -1);
+    else if (e.key === 'ArrowRight') moveDatePickerSelection(key, 1);
+    else if (e.key === 'ArrowUp') moveDatePickerSelection(key, -7);
+    else if (e.key === 'ArrowDown') moveDatePickerSelection(key, 7);
+    else if (e.key === 'Home') {
+      const date = dateFromKey(key);
+      moveDatePickerSelection(key, -((date.getUTCDay() + 6) % 7));
+    } else if (e.key === 'End') {
+      const date = dateFromKey(key);
+      moveDatePickerSelection(key, 6 - ((date.getUTCDay() + 6) % 7));
+    } else if (e.key === 'PageUp' || e.key === 'PageDown') {
+      const date = dateFromKey(key);
+      const dayOfMonth = date.getUTCDate();
+      const direction = e.key === 'PageUp' ? -1 : 1;
+      const targetMonth = new Date(Date.UTC(
+        date.getUTCFullYear(), date.getUTCMonth() + direction, 1));
+      const lastDay = new Date(Date.UTC(
+        targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0)).getUTCDate();
+      targetMonth.setUTCDate(Math.min(dayOfMonth, lastDay));
+      selectDatePickerDate(utcDateKey(targetMonth));
+    } else {
+      handled = false;
+    }
+    if (handled) e.preventDefault();
+  });
+  datePickerTimeList.addEventListener('click', (e) => {
+    const option = e.target.closest('.date-picker-time-option[data-time]');
+    if (option && datePickerTimeList.contains(option))
+      selectDatePickerTime(option.dataset.time);
+  });
+  datePickerTimeList.addEventListener('keydown', (e) => {
+    const option = e.target.closest('.date-picker-time-option[data-time]');
+    if (!option) return;
+    const options = [...datePickerTimeList.querySelectorAll('.date-picker-time-option')];
+    const current = options.indexOf(option);
+    let next = current;
+    if (e.key === 'ArrowUp') next = Math.max(0, current - 1);
+    else if (e.key === 'ArrowDown') next = Math.min(options.length - 1, current + 1);
+    else if (e.key === 'PageUp') next = Math.max(0, current - 4);
+    else if (e.key === 'PageDown') next = Math.min(options.length - 1, current + 4);
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = options.length - 1;
+    else return;
+    e.preventDefault();
+    selectDatePickerTime(options[next].dataset.time);
+  });
+  datePickerTimeUp.addEventListener('click', () => scrollDatePickerTimes(-1));
+  datePickerTimeDown.addEventListener('click', () => scrollDatePickerTimes(1));
+  datePickerToday.addEventListener('click', () => {
+    const now = new Date();
+    datePickerSelectedTime = `${String(now.getUTCHours()).padStart(2, '0')}`
+      + `:${now.getUTCMinutes() < 30 ? '00' : '30'}`;
+    selectDatePickerDate(utcDateKey(now));
+  });
+  datePickerClear.addEventListener('click', () => {
+    datePickerSelectedDate = '';
+    renderDateTimePicker();
+    datePickerToday.focus();
+  });
   btnEditorClose.addEventListener('click', closeFieldEditor);
   btnEditorCancel.addEventListener('click', closeFieldEditor);
   btnEditorSave.addEventListener('click', saveFieldEditor);

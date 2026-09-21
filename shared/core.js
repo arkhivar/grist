@@ -27,7 +27,16 @@
       editTitle:       'Edit',
       editRecord:      'Record',
       dateTimeLabel:   'UTC date and time',
-      dateTimeHint:    'Stored and displayed in UTC.',
+      dateTimeToday:   'Today',
+      dateTimeClear:   'Clear',
+      dateTimePreviousMonth: 'Previous month',
+      dateTimeNextMonth: 'Next month',
+      dateTimePreviousYear: 'Previous year',
+      dateTimeNextYear: 'Next year',
+      dateTimeChooseDate: 'Choose a date',
+      dateTimeChooseTime: 'Choose a UTC time',
+      dateTimeEarlier: 'Earlier times',
+      dateTimeLater: 'Later times',
       editCancel:      'Cancel',
       editSave:        'Save changes',
       editShortcut:    'Ctrl/Cmd+Enter to save · Esc to cancel',
@@ -75,7 +84,7 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.02';
+  const WIDGET_VERSION = '7.03';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -153,6 +162,18 @@
   const cellEditorText  = document.getElementById('cell-editor-text');
   const cellEditorDateTimePanel = document.getElementById('cell-editor-datetime-panel');
   const cellEditorDateTime = document.getElementById('cell-editor-datetime');
+  const datePicker          = document.getElementById('date-picker');
+  const datePickerMonth    = document.getElementById('date-picker-month');
+  const datePickerGrid     = document.getElementById('date-picker-grid');
+  const datePickerPrev     = document.getElementById('date-picker-prev');
+  const datePickerNext     = document.getElementById('date-picker-next');
+  const datePickerPrevYear = document.getElementById('date-picker-prev-year');
+  const datePickerNextYear = document.getElementById('date-picker-next-year');
+  const datePickerTimeList = document.getElementById('date-picker-time-list');
+  const datePickerTimeUp   = document.getElementById('date-picker-time-up');
+  const datePickerTimeDown = document.getElementById('date-picker-time-down');
+  const datePickerToday    = document.getElementById('date-picker-today');
+  const datePickerClear    = document.getElementById('date-picker-clear');
   const cellEditorCount = document.getElementById('cell-editor-count');
   const btnEditorClose  = document.getElementById('btn-editor-close');
   const btnEditorCancel = document.getElementById('btn-editor-cancel');
@@ -204,8 +225,17 @@
     document.getElementById('btn-editor-cancel').textContent = T.editCancel;
     document.getElementById('btn-editor-save').textContent = T.editSave;
     document.getElementById('cell-editor-shortcut').textContent = T.editShortcut;
-    document.querySelector('label[for="cell-editor-datetime"]').textContent = T.dateTimeLabel;
-    document.getElementById('cell-editor-datetime-hint').textContent = T.dateTimeHint;
+    document.getElementById('date-picker').setAttribute('aria-label', T.dateTimeLabel);
+    document.getElementById('date-picker-today').textContent = T.dateTimeToday;
+    document.getElementById('date-picker-clear').textContent = T.dateTimeClear;
+    document.getElementById('date-picker-prev').setAttribute('aria-label', T.dateTimePreviousMonth);
+    document.getElementById('date-picker-next').setAttribute('aria-label', T.dateTimeNextMonth);
+    document.getElementById('date-picker-prev-year').setAttribute('aria-label', T.dateTimePreviousYear);
+    document.getElementById('date-picker-next-year').setAttribute('aria-label', T.dateTimeNextYear);
+    document.getElementById('date-picker-grid').setAttribute('aria-label', T.dateTimeChooseDate);
+    document.getElementById('date-picker-time-list').setAttribute('aria-label', T.dateTimeChooseTime);
+    document.getElementById('date-picker-time-up').setAttribute('aria-label', T.dateTimeEarlier);
+    document.getElementById('date-picker-time-down').setAttribute('aria-label', T.dateTimeLater);
   }
   applyI18nToDOM();
   statGroups  = document.getElementById('stat-groups');

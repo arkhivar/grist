@@ -123,10 +123,14 @@ character count. Save with the button or **Ctrl/Cmd+Enter**; cancel with the
 button or **Escape**. In the grouped table, long Text values always remain on
 one line and are truncated with an ellipsis rather than making the row taller.
 
-Click a DateTime cell to open a native date-and-time picker. Values are edited,
-stored, and displayed in UTC, so the browser's local timezone does not shift
-the chosen time. Formula columns, unsupported types, hidden columns, and the
-active grouping column are not editable. Saving uses
+Click a DateTime cell to open the widget's Monday-first calendar and time
+picker. Use the arrow buttons to change months, choose a day from the calendar,
+choose a half-hour slot from the scrollable time rail, or use Today/Clear;
+arrow keys, Home/End, and Page Up/Page Down are also supported. Values are
+edited, stored, and displayed in UTC,
+so the browser's local timezone does not shift the chosen time. Formula
+columns, unsupported types, hidden columns, and the active grouping column are
+not editable. Saving uses
 `grist.selectedTable.update()` and reports failures in Diagnostics.
 
 ## Group height

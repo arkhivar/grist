@@ -63,7 +63,8 @@ npm test      # discovers and runs every tests/*.test.js suite
 ## Workflow
 
 - GitHub `main` is the source of truth. Direct-to-main pushes are currently
-  acceptable to the owner; keep commits small and one-purpose.
+  expected by the owner after completed changes pass tests; keep commits small
+  and one-purpose, then push immediately so the live widget can be tested.
 - CI: `.github/workflows/test.yml` runs `npm ci` and `npm test` on every push
   and pull request.
 - When serving from the owner's VPS instead of Pages: the widget files are
@@ -83,11 +84,11 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.02)
+## Current state (v7.03)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric sums, grip selection + bulk actions, drag between groups, inline
   text/DateTime editing, adjustable columns, diagnostics panel).
 - `index.html` gallery lists the family; `salaries.html` is a clear
   coming-soon page rather than an empty endpoint.
-- Test suite: `tests/sprints.test.js`, 15 checks, green.
+- Test suite: `tests/sprints.test.js`, 17 checks, green.

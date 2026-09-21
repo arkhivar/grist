@@ -2,6 +2,16 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.03 — 2026-09-21
+
+- Replace the browser-native DateTime control with a compact SeaTable-inspired
+  calendar and time picker: Monday-first weeks, month/year navigation,
+  adjacent-month days, Today/Clear actions, a scrollable half-hour UTC time
+  rail (no seconds), and keyboard navigation.
+- Remove the redundant pencil icon from DateTime cells while preserving the
+  full-cell click target and accessible edit label.
+- Add DateTime editor coverage for the calendar layout and saved UTC value.
+
 ## v7.02 — 2026-09-05
 
 - Remove the `groups.html` and `widget_groupes.html` redirect stubs: entry
