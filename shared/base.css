@@ -745,6 +745,62 @@
       height: auto; min-height: 0;
     }
     .cell-editor-dialog.date-mode #cell-editor-count { visibility: hidden; }
+    /* DateTime uses a non-blocking, cell-anchored popover. Text editing keeps
+       the full modal treatment above. Top/left are assigned from the cell. */
+    .cell-editor-overlay.popover-mode {
+      display: block; padding: 0;
+      background: transparent; backdrop-filter: none;
+      pointer-events: none;
+    }
+    .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
+      position: fixed;
+      width: min(456px, calc(100vw - 16px));
+      max-height: calc(100vh - 16px);
+      height: auto; min-height: 0;
+      pointer-events: auto;
+      border-radius: 8px;
+      box-shadow: 0 12px 36px rgba(24,24,27,.22), 0 2px 8px rgba(24,24,27,.10);
+    }
+    .cell-editor-overlay.popover-mode .cell-editor-header {
+      align-items: center; padding: 8px 10px 7px;
+    }
+    .cell-editor-overlay.popover-mode .cell-editor-header h2 { font-size: 13px; }
+    .cell-editor-overlay.popover-mode .cell-editor-header p { margin-top: 1px; font-size: 9px; }
+    .cell-editor-overlay.popover-mode .cell-editor-close {
+      width: 25px; height: 25px; font-size: 17px;
+    }
+    .cell-editor-overlay.popover-mode .cell-editor-datetime {
+      display: block; padding: 0; overflow: auto;
+      background: var(--surface);
+    }
+    .cell-editor-overlay.popover-mode .date-picker {
+      width: 100%; grid-template-columns: minmax(0, 1fr) 96px;
+      border: 0; border-radius: 0; box-shadow: none;
+    }
+    .cell-editor-overlay.popover-mode .date-picker-nav {
+      grid-template-columns: 27px 27px 1fr 27px 27px;
+      padding: 7px 10px 5px;
+    }
+    .cell-editor-overlay.popover-mode .date-picker-nav-btn { width: 25px; height: 25px; }
+    .cell-editor-overlay.popover-mode .date-picker-month { font-size: 12px; }
+    .cell-editor-overlay.popover-mode .date-picker-weekdays { padding: 5px 10px 2px; }
+    .cell-editor-overlay.popover-mode .date-picker-grid { gap: 0; padding: 0 10px 6px; }
+    .cell-editor-overlay.popover-mode .date-picker-day {
+      width: 28px; height: 28px; font-size: 11px;
+    }
+    .cell-editor-overlay.popover-mode .date-picker-day.today::after { bottom: 3px; }
+    .cell-editor-overlay.popover-mode .date-picker-quick-actions {
+      min-height: 38px; padding: 5px 9px;
+    }
+    .cell-editor-overlay.popover-mode .date-picker-time-scroll { height: 30px; }
+    .cell-editor-overlay.popover-mode .date-picker-time-list { height: 207px; }
+    .cell-editor-overlay.popover-mode .date-picker-time-option {
+      height: 32px; padding-inline: 4px; font-size: 11px;
+    }
+    .cell-editor-overlay.popover-mode .cell-editor-footer { padding: 7px 9px; }
+    .cell-editor-overlay.popover-mode .cell-editor-shortcut { display: none; }
+    .cell-editor-overlay.popover-mode .cell-editor-actions { margin-left: auto; }
+    .cell-editor-overlay.popover-mode .editor-btn { padding: 4px 10px; font-size: 11px; }
     .cell-editor-footer {
       display: flex; align-items: center; gap: 12px;
       padding: 11px 16px; border-top: 1px solid var(--border);
@@ -778,4 +834,13 @@
       .cell-editor-footer { flex-wrap: wrap; }
       .cell-editor-shortcut { order: 3; width: 100%; margin-left: 0; }
       .cell-editor-actions { margin-left: auto; }
+      .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
+        width: min(456px, calc(100vw - 12px));
+        height: auto; min-height: 0;
+        border: 1px solid var(--border-strong); border-radius: 8px;
+      }
+      .cell-editor-overlay.popover-mode .cell-editor-datetime { padding: 0; }
+      .cell-editor-overlay.popover-mode .date-picker {
+        grid-template-columns: minmax(0, 1fr) 82px;
+      }
     }

@@ -2,6 +2,16 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.04 — 2026-09-21
+
+- Turn the DateTime editor into a compact, non-blocking popover anchored to
+  the clicked cell. It automatically opens below or above the cell according
+  to available space, stays inside the viewport, and dismisses on outside
+  click without swallowing the underlying widget interaction.
+- Keep the large blocking modal exclusively for long-text editing. Preserve
+  all calendar/time keyboard controls and expose the DateTime trigger's
+  expanded state to assistive technology.
+
 ## v7.03 — 2026-09-21
 
 - Replace the browser-native DateTime control with a compact SeaTable-inspired

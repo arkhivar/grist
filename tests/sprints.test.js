@@ -280,9 +280,19 @@ await test('F13: DateTime cell has no pencil and opens a Monday-first calendar',
   assert(editButton, 'DateTime edit button missing');
   assertEq(editButton.dataset.editKind, 'datetime', 'DateTime edit kind');
   assert(!editButton.querySelector('.cell-edit-pencil'), 'redundant DateTime pencil is still present');
+  assertEq(editButton.getAttribute('aria-expanded'), 'false', 'initial popover state');
   click(editButton);
   await flush();
   assert(!doc.getElementById('cell-editor').hidden, 'DateTime editor did not open');
+  assert(doc.getElementById('cell-editor').classList.contains('popover-mode'),
+    'DateTime editor did not use non-blocking popover mode');
+  assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-modal'), null,
+    'DateTime popover incorrectly reports itself as modal');
+  assertEq(editButton.getAttribute('aria-expanded'), 'true', 'open popover state');
+  assert(doc.getElementById('cell-editor-dialog').style.left,
+    'DateTime popover was not horizontally positioned');
+  assert(doc.getElementById('cell-editor-dialog').style.top,
+    'DateTime popover was not vertically positioned');
   assertEq(doc.getElementById('date-picker-month').textContent, 'July 2026', 'visible month');
   const weekdays = [...doc.querySelectorAll('.date-picker-weekdays span')]
     .map(span => span.textContent).join(',');
@@ -294,6 +304,11 @@ await test('F13: DateTime cell has no pencil and opens a Monday-first calendar',
     .map(option => option.dataset.time);
   assert(timeValues.includes('09:00') && timeValues.includes('09:30'), 'half-hour time options missing');
   assert(timeValues.every(value => /^\d{2}:\d{2}$/.test(value)), 'time option contains seconds');
+  click(doc.getElementById('statsbar'));
+  assert(doc.getElementById('cell-editor').hidden, 'outside click did not dismiss the popover');
+  assertEq(editButton.getAttribute('aria-expanded'), 'false', 'dismissed popover state');
+  click(editButton);
+  await flush();
 });
 
 await test('F14: custom picker saves the selected UTC date and time', async () => {
