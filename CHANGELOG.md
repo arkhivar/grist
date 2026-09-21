@@ -2,6 +2,13 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.05 — 2026-09-22
+
+- Remove the redundant DateTime popover title bar and close button while
+  retaining an accessible label for assistive technology.
+- Move Today/Clear into the main footer, left-aligned opposite Cancel/Save,
+  and shorten the time rail so the complete popover uses less space.
+
 ## v7.04 — 2026-09-21
 
 - Turn the DateTime editor into a compact, non-blocking popover anchored to

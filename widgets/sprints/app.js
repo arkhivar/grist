@@ -1279,7 +1279,8 @@
     const selected = datePickerTimeList.querySelector('.date-picker-time-option.selected');
     if (selected) {
       const selectedIndex = values.indexOf(datePickerSelectedTime);
-      datePickerTimeList.scrollTop = Math.max(0, selectedIndex * 36 - 108);
+      const optionHeight = selected.offsetHeight || 36;
+      datePickerTimeList.scrollTop = Math.max(0, (selectedIndex - 3) * optionHeight);
     }
   }
 
@@ -1384,7 +1385,8 @@
   }
 
   function scrollDatePickerTimes(direction) {
-    datePickerTimeList.scrollTop += direction * 144;
+    const firstOption = datePickerTimeList.querySelector('.date-picker-time-option');
+    datePickerTimeList.scrollTop += direction * (firstOption ? firstOption.offsetHeight || 36 : 36) * 4;
   }
 
   function positionDateTimePopover() {
@@ -1439,11 +1441,17 @@
     cellEditorMeta.classList.remove('error');
     cellEditorDialog.classList.toggle('date-mode', isDateTime);
     cellEditor.classList.toggle('popover-mode', isDateTime);
+    cellEditorHeader.hidden = isDateTime;
+    datePickerFooterActions.hidden = !isDateTime;
     if (isDateTime) {
       cellEditorDialog.removeAttribute('aria-modal');
+      cellEditorDialog.removeAttribute('aria-labelledby');
+      cellEditorDialog.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
       if (anchorEl) anchorEl.setAttribute('aria-expanded', 'true');
     } else {
       cellEditorDialog.setAttribute('aria-modal', 'true');
+      cellEditorDialog.removeAttribute('aria-label');
+      cellEditorDialog.setAttribute('aria-labelledby', 'cell-editor-title');
     }
     cellEditorText.hidden = isDateTime;
     cellEditorDateTimePanel.hidden = !isDateTime;
@@ -1474,9 +1482,13 @@
     cellEditor.hidden = true;
     cellEditorDialog.classList.remove('date-mode');
     cellEditor.classList.remove('popover-mode');
+    cellEditorHeader.hidden = false;
+    datePickerFooterActions.hidden = true;
     cellEditorDialog.style.left = '';
     cellEditorDialog.style.top = '';
     cellEditorDialog.setAttribute('aria-modal', 'true');
+    cellEditorDialog.removeAttribute('aria-label');
+    cellEditorDialog.setAttribute('aria-labelledby', 'cell-editor-title');
     editingCell = null;
     cellEditorText.value = '';
     cellEditorText.hidden = false;

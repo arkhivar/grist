@@ -288,6 +288,16 @@ await test('F13: DateTime cell has no pencil and opens a Monday-first calendar',
     'DateTime editor did not use non-blocking popover mode');
   assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-modal'), null,
     'DateTime popover incorrectly reports itself as modal');
+  assert(doc.querySelector('.cell-editor-header').hidden,
+    'redundant DateTime popover header is still visible');
+  assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-label'),
+    'Edit date and time: startsAt', 'DateTime popover accessible label');
+  const footerActions = doc.getElementById('date-picker-footer-actions');
+  assert(!footerActions.hidden, 'DateTime quick actions are hidden');
+  assert(footerActions.closest('.cell-editor-footer'),
+    'Today/Clear actions are not in the shared editor footer');
+  assert(!doc.querySelector('.date-picker-quick-actions'),
+    'obsolete dedicated quick-action row is still present');
   assertEq(editButton.getAttribute('aria-expanded'), 'true', 'open popover state');
   assert(doc.getElementById('cell-editor-dialog').style.left,
     'DateTime popover was not horizontally positioned');

@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.04">
+  <link rel="stylesheet" href="shared/base.css?v=7.05">
 </head>
 <body>
 <div id="app">
@@ -146,10 +146,6 @@
             <span>Fri</span><span>Sat</span><span>Sun</span>
           </div>
           <div class="date-picker-grid" id="date-picker-grid" role="grid" aria-label="Choose a date"></div>
-          <div class="date-picker-quick-actions">
-            <button type="button" class="date-picker-link" id="date-picker-today">Today</button>
-            <button type="button" class="date-picker-link date-picker-clear" id="date-picker-clear">Clear</button>
-          </div>
         </div>
         <aside class="date-picker-time-panel" aria-label="Choose a UTC time">
           <button type="button" class="date-picker-time-scroll" id="date-picker-time-up" aria-label="Earlier times">⌃</button>
@@ -160,6 +156,10 @@
     </div>
     <footer class="cell-editor-footer">
       <span id="cell-editor-count">0 characters</span>
+      <div class="date-picker-footer-actions" id="date-picker-footer-actions" hidden>
+        <button type="button" class="date-picker-link" id="date-picker-today">Today</button>
+        <button type="button" class="date-picker-link date-picker-clear" id="date-picker-clear">Clear</button>
+      </div>
       <span class="cell-editor-shortcut" id="cell-editor-shortcut"></span>
       <div class="cell-editor-actions">
         <button type="button" class="btn editor-btn" id="btn-editor-cancel">Cancel</button>
@@ -169,8 +169,8 @@
   </section>
 </div>
 
-<script src="shared/core.js?v=7.04"></script>
-  <script src="widgets/sprints/app.js?v=7.04"></script>
-  <script src="widgets/sprints/actions.js?v=7.04"></script>
+<script src="shared/core.js?v=7.05"></script>
+  <script src="widgets/sprints/app.js?v=7.05"></script>
+  <script src="widgets/sprints/actions.js?v=7.05"></script>
 </body>
 </html>

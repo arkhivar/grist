@@ -84,7 +84,7 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.04';
+  const WIDGET_VERSION = '7.05';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -157,6 +157,7 @@
   const btnResetColumns = document.getElementById('btn-reset-columns');
   const cellEditor      = document.getElementById('cell-editor');
   const cellEditorDialog = document.getElementById('cell-editor-dialog');
+  const cellEditorHeader = document.querySelector('.cell-editor-header');
   const cellEditorTitle = document.getElementById('cell-editor-title');
   const cellEditorMeta  = document.getElementById('cell-editor-meta');
   const cellEditorText  = document.getElementById('cell-editor-text');
@@ -174,6 +175,7 @@
   const datePickerTimeDown = document.getElementById('date-picker-time-down');
   const datePickerToday    = document.getElementById('date-picker-today');
   const datePickerClear    = document.getElementById('date-picker-clear');
+  const datePickerFooterActions = document.getElementById('date-picker-footer-actions');
   const cellEditorCount = document.getElementById('cell-editor-count');
   const btnEditorClose  = document.getElementById('btn-editor-close');
   const btnEditorCancel = document.getElementById('btn-editor-cancel');

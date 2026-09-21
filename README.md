@@ -128,7 +128,8 @@ popover beside that cell. It chooses an above/below placement automatically,
 stays inside the viewport, and closes on an outside click while leaving the
 rest of the widget interactive. Use the arrow buttons to change months, choose
 a day from the Monday-first calendar, choose a half-hour slot from the
-scrollable time rail, or use Today/Clear; arrow keys, Home/End, and Page Up/Page
+scrollable time rail, or use the left-aligned Today/Clear footer actions;
+Cancel/Save remain together on the right. Arrow keys, Home/End, and Page Up/Page
 Down are also supported. Values are edited, stored, and displayed in UTC,
 so the browser's local timezone does not shift the chosen time. Formula
 columns, unsupported types, hidden columns, and the active grouping column are
