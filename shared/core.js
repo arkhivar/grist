@@ -18,7 +18,7 @@
       sectionBool:     'True / false display',
       sectionEditable: 'Editable fields',
       sectionColumns:  'Column layout',
-      columnLayoutHint: 'Drag headers to reorder. Drag a header edge to resize; double-click the edge to reset that column.',
+      columnLayoutHint: 'Drag footer columns to reorder. Drag a footer edge to resize; double-click the edge to reset that column.',
       resetColumns:    'Reset widths & order',
       resizeColumn:    'Resize column',
       reorderColumn:   'Drag to reorder column',
@@ -46,6 +46,9 @@
       editShortcut:    'Ctrl/Cmd+Enter to save · Esc to cancel',
       editCharacters:  'characters',
       fillCells:       'Drag to fill cells',
+      addRow:          'Add row',
+      addRowToGroup:   'Add row to',
+      addRowUnavailable: 'Cannot add row',
       reset:           'Reset',
       noGroups:        'No groups — choose a grouping column.',
       emptyTitle:      'No column selected',
@@ -57,7 +60,6 @@
       groups:          'groups',
       records:         'records',
       record:          'record',
-      noOtherCol:      'No other column to display.',
       groupCaption:    'Group:',
       emptyGroup:      '(empty)',
       resetMaxH:       'Reset maximum height',
@@ -79,17 +81,15 @@
       selDup:          'Duplicate selected',
       selDel:          'Delete selected',
       selClear:        'Clear',
-      selAll:          'Select all',
       rowGrip:         'Select or drag record',
       rowSelect:       'Select record',
-      selectGroup:     'Select all records in this group',
       moveRecords:     'Move records',
       confirmDelSel:   'Confirm deleting the selection?',
       boolTrue:  ['✓ true',  'Yes',   'True',  'true',  '1'],
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.10';
+  const WIDGET_VERSION = '7.11';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──

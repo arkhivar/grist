@@ -15,6 +15,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Fold / unfold** each group by clicking its header; **expand all / collapse all** in one click
 - **Group sort**: Z→A by default, or A→Z / record count ascending or descending
 - **Row actions** — duplicate ⧉ and delete ✕ any record inline, always visible (two-step delete, requires **Full access**, see below)
+- **Group-footer row creation** — click **+** below any group to create a
+  blank record already assigned to that group
 - **Large text editor** — enable writable Text columns in Settings, then click
   a cell to edit long, multi-line notes and emoji content without leaving the widget
 - **DateTime editor** — click any visible, writable DateTime cell to choose its
@@ -30,13 +32,14 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Multi-select bulk actions** — use the grip controls to select records, then
   duplicate / delete the whole selection from the bottom action bar
 - **Automatic sums** — every Grist Numeric/Int column shows its group total
-  in the always-visible group header, aligned above its table column, including
-  numeric formula columns
+  in the table footer, aligned with its column, including numeric formula
+  columns
 - **Shared adjustable columns** — every group uses the same widths; drag a
-  header edge to resize a column everywhere
-- **Column reordering** — drag headers left/right to change the order globally
-- **Purposeful motion** — duplicated rows enter with a brief highlight, and
-  sorted groups visibly move into their new positions
+  footer column edge to resize a column everywhere
+- **Column reordering** — drag footer columns left/right to change the order
+  globally
+- **Purposeful motion** — added and duplicated rows enter with a brief
+  highlight, and sorted groups visibly move into their new positions
 - **Row count beside every group name**
 - **Null values** collected in an *(empty)* group, sorted last
 - **Cell formatting**: booleans ✓/✗ (several display styles), plain numbers (no thousand separators — `-1425`, not `-1,425`), ISO dates, arrays
@@ -69,6 +72,10 @@ Every record row has a trailing actions cell with always-visible buttons
 - **✕ Delete** — **two-step**: the first click arms the button (red, `?`,
   auto-disarms after ~4 s); the second click executes
   `grist.selectedTable.destroy([id])`.
+- **+ Add row** — the plus button in a group's footer creates a blank record
+  with that group's value prefilled. It supports writable Text, Choice, Bool,
+  Int, Numeric, Date, and DateTime grouping columns; unsupported or read-only
+  groupings show the button disabled with the reason in its tooltip.
 
 ### Multi-select bulk actions
 
@@ -76,9 +83,8 @@ Each row starts with a six-dot grip. A plain click selects that row and clears
 the previous selection. Use **Ctrl-click** (or **Cmd-click** on macOS) to toggle
 individual rows, and **Shift-click** to select a contiguous range from the last
 selection anchor. **Ctrl/Cmd+Shift-click** adds a range to the current
-selection. The group table header has a matching select-all grip. As soon as at
-least one record is selected, an action bar appears at the bottom of the widget
-showing the selection count and three buttons:
+selection. As soon as at least one record is selected, an action bar appears at
+the bottom of the widget showing the selection count and three buttons:
 
 - **Duplicate selected** — clones every selected record (sequentially).
 - **Delete selected** — same two-step arm/confirm pattern as per-row delete,
@@ -179,11 +185,10 @@ unlimited default (checkbox unticked).
 ## Automatic numeric sums
 
 Every visible Grist **Numeric** or **Int** column automatically shows the sum
-of that group's rows in the always-visible group header, horizontally aligned
-with its table column. Formula columns are included when their declared Grist
-result type is numeric. The totals remain visible when a group is collapsed.
-Each compact total contains only the number—there is no `Σ`, function name, or
-repeated column name.
+of that group's rows in the group table footer, horizontally aligned with its
+column. Formula columns are included when their declared Grist result type is
+numeric. Each compact total contains only the number—there is no `Σ` or
+function name.
 
 Null and empty cells are skipped. Totals are recomputed on every data update
 and rendered without thousands separators (`-14250`, not `-14,250`). The old
@@ -194,14 +199,14 @@ configurable Aggregates settings and saved rules are ignored as of v6.0.
 All groups share one column layout, so a long note in one group cannot shift
 the columns in that group away from the others.
 
-- Drag the right edge of any column header to resize that column in every
+- Drag the right edge of any footer column to resize that column in every
   group. Double-click the edge to restore its automatic width.
-- Drag a column header left or right to reorder it across every group.
-- Keyboard controls are available: focus a header and use
+- Drag a footer column left or right to reorder it across every group.
+- Keyboard controls are available: focus a footer column and use
   **Alt+Left/Right** to reorder; focus its resize edge and use
   **Left/Right** to resize (hold **Shift** for larger steps).
 - Wider layouts scroll horizontally. Scrolling one group synchronizes the
-  others, keeping headers and automatic sums aligned.
+  others, keeping footer labels and automatic sums aligned.
 - Widths and order are saved automatically in this Grist widget section's
   options. Layout writes are serialized and awaited, so rapid adjustments
   cannot silently race each other. If Grist highlights the section-options
@@ -211,9 +216,10 @@ the columns in that group away from the others.
 
 ## Motion and feedback
 
-- A row duplicated from this widget fades/slides into place and receives a
-  short accent highlight after Grist returns it through `onRecords`. The
-  returned record ID ensures unrelated additions do not animate.
+- A row added or duplicated from this widget fades/slides into place and
+  receives a short accent highlight after Grist returns it through
+  `onRecords`. The returned record ID ensures unrelated additions do not
+  animate.
 - Changing the toolbar's **Sort** mode uses a FLIP transition: each group card,
   together with all of its records, visibly moves from its old position to its
   new one.
@@ -322,7 +328,7 @@ the same repo, so no extra hosting steps are needed:
 | `AGENTS.md` | Guidance for AI coding agents working in this repo |
 | `shared/base.css` | Design system (styles) shared by every widget |
 | `shared/core.js` | English UI strings, constants, state, date helpers, and Grist helpers shared by every widget |
-| `widgets/sprints/app.js` | Settings panel, automatic sums, diagnostics, Grist wiring, grouping, rendering, row actions |
+| `widgets/sprints/app.js` | Settings panel, footer sums/add-row actions, diagnostics, Grist wiring, grouping, rendering, row actions |
 | `widgets/sprints/actions.js` | Unified grip selection, cross-group dragging, action bar, and bulk actions |
 | `tests/sprints.test.js` | Test suite for the sprints widget (Node + jsdom, no test framework) |
 | `ARCHITECTURE.md` | GitHub Pages/Grist responsibilities, persistence lifecycle, data access, and backend boundaries |

@@ -84,11 +84,12 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.10)
+## Current state (v7.11)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
-  numeric sums, grip selection + bulk actions, drag between groups, inline
-  text/DateTime editing, adjustable columns, diagnostics panel).
+  numeric footer sums, group-aware footer row creation, grip selection + bulk
+  actions, drag between groups, inline text/DateTime editing, adjustable
+  columns, diagnostics panel).
 - `index.html` gallery lists the family; `salaries.html` is a clear
   coming-soon page rather than an empty endpoint.
-- Test suite: `tests/sprints.test.js`, 24 checks, green.
+- Test suite: `tests/sprints.test.js`, 25 checks, green.

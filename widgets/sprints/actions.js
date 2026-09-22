@@ -26,20 +26,6 @@
       const row = grip.closest('tr');
       if (row) row.classList.toggle('row-selected', selected);
     });
-
-    content.querySelectorAll('.rec-table').forEach(table => {
-      const groupGrip = table.querySelector('.group-select-grip');
-      if (!groupGrip) return;
-      const rowGrips = [...table.querySelectorAll('tbody .row-grip[data-id]')];
-      const selectedCount = rowGrips
-        .filter(grip => selectedIds.has(grip.dataset.id)).length;
-      const state = selectedCount === 0
-        ? 'none'
-        : (selectedCount === rowGrips.length ? 'all' : 'some');
-      groupGrip.dataset.selectionState = state;
-      groupGrip.setAttribute('aria-pressed',
-        state === 'all' ? 'true' : (state === 'some' ? 'mixed' : 'false'));
-    });
   }
 
   function finishSelectionChange() {
@@ -95,31 +81,6 @@
       selectRecordFromClick(id, e);
       return;
     }
-
-    const groupGrip = e.target.closest('.group-select-grip');
-    if (!groupGrip) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const table = groupGrip.closest('table');
-    if (!table) return;
-    const rowGrips = [...table.querySelectorAll('tbody .row-grip[data-id]')];
-    const groupIds = rowGrips.map(grip => grip.dataset.id);
-    const allSelected = groupIds.every(id => selectedIds.has(id));
-    const additive = e.ctrlKey || e.metaKey;
-    if (additive) {
-      groupIds.forEach(id => {
-        if (allSelected) selectedIds.delete(id);
-        else selectedIds.add(id);
-      });
-    } else {
-      const exactlyThisGroup = allSelected && selectedIds.size === groupIds.length;
-      selectedIds.clear();
-      if (!exactlyThisGroup) groupIds.forEach(id => selectedIds.add(id));
-    }
-    selectionAnchorId = groupIds.find(id => selectedIds.has(id))
-      || [...selectedIds][0]
-      || null;
-    finishSelectionChange();
   });
 
   function setSelBarDisabled(disabled) {

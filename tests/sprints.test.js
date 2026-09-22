@@ -156,9 +156,9 @@ function cellEl(rowId, colName) {
   const row = doc.querySelector(`tr[data-record-id="${rowId}"]`);
   assert(row, `row for record ${rowId} not found`);
   const table = row.closest('table');
-  const headers = [...table.querySelectorAll('thead th[data-column]')];
-  const idx = headers.findIndex(th => th.dataset.column === colName);
-  assert(idx >= 0, `column "${colName}" not in table header`);
+  const footers = [...table.querySelectorAll('tfoot th[data-column]')];
+  const idx = footers.findIndex(th => th.dataset.column === colName);
+  assert(idx >= 0, `column "${colName}" not in table footer`);
   return row.querySelectorAll('td')[idx + 1]; // +1: grip cell comes first
 }
 function cellText(rowId, colName) {
@@ -266,17 +266,47 @@ await test('C10: del is a two-step arm → confirm → selectedTable.destroy([id
 });
 
 // ── D. Aggregates ────────────────────────────────────────────
-await test('D11: group header shows the automatic numeric sum (-2850)', async () => {
+await test('D11: footer replaces the header and shows the numeric sum (-2850)', async () => {
   const card = [...doc.querySelectorAll('.group')]
     .find(c => c.dataset.groupLabel === 'Sprint 13');
   assert(card, 'group "Sprint 13" not found');
-  const sum = card.querySelector('.group-header .group-sum[data-column="count"]');
-  assert(sum, 'no .group-sum for column "count" in the group header');
+  assert(!card.querySelector('thead'), 'obsolete table header is still present');
+  assert(!card.querySelector('.group-select-grip'), 'obsolete group select-all grip is still present');
+  const sum = card.querySelector('tfoot .footer-aggregate[data-column="count"]');
+  assert(sum, 'no .footer-aggregate for column "count" in the group footer');
   assertEq(sum.textContent, '-2850', 'sum of -1425 + -1425');
 });
 
+await test('D12: group footer plus creates a row seeded with its group value', async () => {
+  const card = [...doc.querySelectorAll('.group')]
+    .find(c => c.dataset.groupLabel === 'Sprint 13');
+  const addButton = card && card.querySelector('tfoot .group-add-row');
+  assert(addButton, 'group footer add-row button missing');
+  assert(!addButton.disabled, 'group footer add-row button is disabled');
+  assert(addButton.querySelector('.add-row-icon'), 'add-row plus icon missing');
+  const before = calls.create.length;
+  click(addButton);
+  await waitFor(() => calls.create.length === before + 1, 'group footer row create');
+  const [arg, options] = calls.create[calls.create.length - 1];
+  assertEq(JSON.stringify(arg.fields), JSON.stringify({ sprint: 'Sprint 13' }),
+    'new row grouping field');
+  assertEq(options && options.parseStrings, false, 'new row parseStrings option');
+
+  const added = {
+    id: 99, date: null, C: false, students: '', weekday: '', count: null,
+    performance: '', sprint: 'Sprint 13', startsAt: null,
+  };
+  onRecordsCb([...RECORDS, added]);
+  await flush();
+  const row = doc.querySelector('tr[data-record-id="99"]');
+  assert(row, 'newly created row was not rendered');
+  assert(row.classList.contains('row-enter'), 'newly created row lacks its entry animation');
+  onRecordsCb(RECORDS);
+  await flush();
+});
+
 // ── E. Diagnostics ───────────────────────────────────────────
-await test('E12: diagnostics lists the date column as date-like: yes', async () => {
+await test('E13: diagnostics lists the date column as date-like: yes', async () => {
   click(doc.getElementById('btn-settings'));
   assert(doc.getElementById('settings-panel').classList.contains('open'),
     'settings panel did not open');
@@ -288,7 +318,7 @@ await test('E12: diagnostics lists the date column as date-like: yes', async () 
 });
 
 // ── F. Field editors ─────────────────────────────────────────
-await test('F13: long-text editor is a compact, anchored, non-blocking popover', async () => {
+await test('F14: long-text editor is a compact, anchored, non-blocking popover', async () => {
   const studentsToggle = [...doc.querySelectorAll('#editable-col-list input[type="checkbox"]')]
     .find(input => input.value === 'students');
   assert(studentsToggle, 'students editable-field toggle missing');
@@ -331,7 +361,7 @@ await test('F13: long-text editor is a compact, anchored, non-blocking popover',
   assertEq(editButton.getAttribute('aria-expanded'), 'false', 'dismissed text popover state');
 });
 
-await test('F14: DateTime cell has no pencil and opens a Monday-first calendar', async () => {
+await test('F15: DateTime cell has no pencil and opens a Monday-first calendar', async () => {
   const editButton = cellEl(1, 'startsAt').querySelector('.cell-edit-btn');
   assert(editButton, 'DateTime edit button missing');
   assertEq(editButton.dataset.editKind, 'datetime', 'DateTime edit kind');
@@ -381,7 +411,7 @@ await test('F14: DateTime cell has no pencil and opens a Monday-first calendar',
   await flush();
 });
 
-await test('F15: custom picker saves the selected UTC date and time', async () => {
+await test('F16: custom picker saves the selected UTC date and time', async () => {
   const before = calls.update.length;
   click(doc.querySelector('.date-picker-time-option[data-time="09:30"]'));
   click(doc.querySelector('.date-picker-day[data-date="2026-07-20"]'));
@@ -397,12 +427,12 @@ await test('F15: custom picker saves the selected UTC date and time', async () =
 });
 
 // ── G. Smoke ─────────────────────────────────────────────────
-await test('G16: sprints.html loads all three widget scripts', async () => {
+await test('G17: sprints.html loads all three widget scripts', async () => {
   for (const f of ['shared/core.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
     assert(html.includes(`<script src="${f}?`), `sprints.html missing script tag for ${f}`);
 });
 
-await test('G17: live badge and every cache key use the same release version', async () => {
+await test('G18: live badge and every cache key use the same release version', async () => {
   const versions = [...html.matchAll(/(?:src|href)="(?:shared\/base\.css|shared\/core\.js|widgets\/sprints\/(?:app|actions)\.js)\?v=([^"&]+)/g)]
     .map(match => match[1]);
   assertEq(versions.length, 4, 'versioned asset count');
@@ -410,7 +440,7 @@ await test('G17: live badge and every cache key use the same release version', a
   assertEq(doc.getElementById('version-badge').textContent, `v${versions[0]}`, 'version badge');
 });
 
-await test('H18: toolbar history buttons undo and redo a saved cell edit', async () => {
+await test('H19: toolbar history buttons undo and redo a saved cell edit', async () => {
   const undo = doc.getElementById('btn-undo');
   const redo = doc.getElementById('btn-redo');
   assert(undo.querySelector('svg') && redo.querySelector('svg'), 'history arrow icons missing');
@@ -439,7 +469,7 @@ await test('H18: toolbar history buttons undo and redo a saved cell edit', async
 
 const copiedCellData = {};
 
-await test('I19: Ctrl+C / Ctrl+V copies a typed cell value', async () => {
+await test('I20: Ctrl+C / Ctrl+V copies a typed cell value', async () => {
   const source = cellEl(1, 'students');
   click(source.querySelector('.cell-edit-btn'));
   source.dispatchEvent(clipboardEvent('copy', copiedCellData));
@@ -457,7 +487,7 @@ await test('I19: Ctrl+C / Ctrl+V copies a typed cell value', async () => {
   await flush();
 });
 
-await test('I20: paste is blocked between incompatible column types', async () => {
+await test('I21: paste is blocked between incompatible column types', async () => {
   const destination = cellEl(1, 'C');
   click(destination);
   const before = calls.update.length;
@@ -468,7 +498,7 @@ await test('I20: paste is blocked between incompatible column types', async () =
     'incompatible paste did not explain the type mismatch');
 });
 
-await test('I21: fill supports Ctrl/Cmd+Z, Ctrl/Cmd+Y, and Ctrl/Cmd+Shift+Z', async () => {
+await test('I22: fill supports Ctrl/Cmd+Z, Ctrl/Cmd+Y, and Ctrl/Cmd+Shift+Z', async () => {
   const source = cellEl(1, 'students');
   click(source.querySelector('.cell-edit-btn'));
   const handle = source.querySelector('.cell-fill-handle');
@@ -524,7 +554,7 @@ await test('I21: fill supports Ctrl/Cmd+Z, Ctrl/Cmd+Y, and Ctrl/Cmd+Shift+Z', as
   assertEq(cellText(5, 'students'), 'V..Petrichenko', 'Ctrl+Shift+Z did not redo the fill');
 });
 
-await test('I22: arrow keys move the selected cell and Escape clears it', async () => {
+await test('I23: arrow keys move the selected cell and Escape clears it', async () => {
   const start = cellEl(1, 'weekday');
   click(start);
   start.dispatchEvent(new win.KeyboardEvent('keydown', {
@@ -546,7 +576,7 @@ await test('I22: arrow keys move the selected cell and Escape clears it', async 
   assert(!doc.querySelector('.cell-selected'), 'Escape did not clear the cell selection');
 });
 
-await test('J23: resized column width is saved to and restored from Grist options', async () => {
+await test('J24: resized column width is saved to and restored from Grist options', async () => {
   const handle = doc.querySelector('th[data-column="students"] .column-resize-handle');
   assert(handle, 'students resize handle missing');
   const before = calls.setOption.length;

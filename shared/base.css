@@ -247,19 +247,6 @@
       padding: 1px 7px; border-radius: 10px;
       background: var(--bg); border: 1px solid var(--border); color: var(--muted); flex-shrink: 0;
     }
-    .group-sums {
-      position: absolute; inset: 0; overflow: hidden; pointer-events: none;
-    }
-    .group-sum {
-      position: absolute; top: 50%; transform: translate(-50%, -50%);
-      width: max-content; max-width: 160px; padding: 1px 7px;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      border: 1px solid rgba(37,99,235,.28); border-radius: 10px;
-      background: var(--surface); color: var(--accent);
-      font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1.35;
-      font-variant-numeric: tabular-nums; z-index: 1;
-    }
-
     .group-body {
       display: grid; grid-template-rows: 1fr;
       transition: grid-template-rows .22s cubic-bezier(.4,0,.2,1);
@@ -291,11 +278,11 @@
       background: var(--border-strong); border-radius: 4px; border: 2px solid var(--bg);
     }
     .group-body-inner .scroll-inner::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-    /* Bottom rounding on the table's last row — replaces the group's overflow:hidden */
-    .group-body-inner .rec-table tbody tr:last-child td:first-child {
+    /* Bottom rounding belongs to the footer, which closes each group table. */
+    .group-body-inner .rec-table tfoot th:first-child {
       border-radius: 0 0 0 calc(var(--radius) - 1px);
     }
-    .group-body-inner .rec-table tbody tr:last-child td:last-child {
+    .group-body-inner .rec-table tfoot th:last-child {
       border-radius: 0 0 calc(var(--radius) - 1px) 0;
     }
     /* Header rounding depending on state */
@@ -315,26 +302,33 @@
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
-    .rec-table thead th {
+    .rec-table tfoot th {
       font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--muted);
       letter-spacing: .03em; padding: 4px 10px; text-align: left;
-      background: var(--group-stripe); border-bottom: 1px solid var(--border);
+      background: var(--group-stripe); border-top: 1px solid var(--border);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      position: sticky; bottom: 0; z-index: 3;
     }
-    .rec-table thead th.column-header {
-      position: relative; cursor: grab; touch-action: none;
-    }
-    .rec-table thead th.column-header:active { cursor: grabbing; }
-    .rec-table thead th.column-dragging { opacity: .45; }
-    .rec-table thead th.column-drop-before {
+    .rec-table tfoot th.column-header { cursor: grab; touch-action: none; }
+    .rec-table tfoot th.column-header:active { cursor: grabbing; }
+    .rec-table tfoot th.column-dragging { opacity: .45; }
+    .rec-table tfoot th.column-drop-before {
       box-shadow: inset 3px 0 0 var(--accent);
     }
-    .rec-table thead th.column-drop-after {
+    .rec-table tfoot th.column-drop-after {
       box-shadow: inset -3px 0 0 var(--accent);
     }
+    .column-footer-content {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      min-width: 0;
+    }
     .column-name {
-      display: block; overflow: hidden; text-overflow: ellipsis;
+      display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis;
       padding-right: 5px;
+    }
+    .footer-aggregate {
+      flex-shrink: 0; color: var(--accent); font-weight: 600;
+      font-variant-numeric: tabular-nums;
     }
     .column-resize-handle {
       position: absolute; top: 0; right: -3px; bottom: 0; z-index: 2;
@@ -423,8 +417,6 @@
       box-shadow: inset var(--focus-ring);
       background: color-mix(in srgb, var(--accent) 5%, transparent);
     }
-    .only-group-col { padding: 8px 12px; font-size: 11px; color: var(--muted); font-style: italic; }
-
     /* ── Row actions (duplicate / delete) ── */
     .rec-table .col-actions { width: 1%; padding: 4px 6px; }
     .rec-table td.row-actions { padding: 3px 6px; white-space: nowrap; text-align: right; }
@@ -499,7 +491,7 @@
       width: 46px; min-width: 46px; padding: 2px 6px; text-align: center;
     }
     .row-grip,
-    .group-select-grip {
+    .group-add-row {
       display: inline-grid; place-items: center;
       width: 30px; height: 28px; padding: 0;
       border: 0; border-radius: 6px;
@@ -521,21 +513,25 @@
     .row-grip[data-drag-enabled="true"]:active,
     .row-grip.dragging { cursor: grabbing; }
     .row-grip:hover,
-    .group-select-grip:hover {
+    .group-add-row:hover {
       color: var(--text); background: var(--bg);
     }
     .row-grip:focus-visible,
-    .group-select-grip:focus-visible { box-shadow: var(--focus-ring); }
-    .row-grip[aria-pressed="true"],
-    .group-select-grip[aria-pressed="true"] {
+    .group-add-row:focus-visible { box-shadow: var(--focus-ring); }
+    .row-grip[aria-pressed="true"] {
       color: var(--accent);
       background: color-mix(in srgb, var(--accent) 12%, transparent);
     }
-    .group-select-grip[data-selection-state="some"] {
-      color: var(--accent);
-      background: color-mix(in srgb, var(--accent) 7%, transparent);
-      box-shadow: inset 0 -2px 0 var(--accent);
+    .group-add-row { color: var(--accent); }
+    .group-add-row:disabled { color: var(--border-strong); cursor: not-allowed; }
+    .group-add-row.saving .add-row-icon {
+      animation: add-row-saving .55s ease-in-out infinite alternate;
     }
+    @keyframes add-row-saving {
+      from { transform: scale(.82) rotate(-8deg); opacity: .5; }
+      to { transform: scale(1.08) rotate(8deg); opacity: 1; }
+    }
+    .add-row-icon { display: block; width: 15px; height: 15px; }
     .grip-icon {
       display: block; width: 12px; height: 16px; fill: currentColor;
     }
@@ -570,7 +566,8 @@
       .rec-table tbody tr.row-enter,
       .rec-table tbody tr.row-enter td,
       .rec-table tbody tr.row-moved,
-      .rec-table tbody tr.row-moved td {
+      .rec-table tbody tr.row-moved td,
+      .group-add-row.saving .add-row-icon {
         animation: none !important;
         transition: none !important;
       }

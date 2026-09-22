@@ -2,6 +2,15 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.11 — 2026-09-22
+
+- Move column labels, resizing/reordering controls, and automatic numeric
+  aggregates from the top of each group table into a compact footer.
+- Remove the group-wide select-all grip while preserving Ctrl/Cmd-click and
+  Shift-click selection through individual row grips.
+- Add a footer **+** action that creates a blank record prefilled with the
+  current writable group value, with lightweight pending and row-entry motion.
+
 ## v7.10 — 2026-09-22
 
 - Add compact undo/redo arrow buttons to the toolbar with live disabled states

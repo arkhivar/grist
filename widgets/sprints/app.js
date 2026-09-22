@@ -357,7 +357,6 @@
       table.style.width =
         `${SELECT_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + dataWidth}px`;
     });
-    scheduleGroupSumAlignment();
   }
 
   function moveColumn(source, target, after) {
@@ -379,55 +378,22 @@
     return true;
   }
 
-  function buildColumnHeader(col) {
+  function buildColumnFooter(col, records) {
+    const numeric = isNumericColumn(col);
+    const sum = numeric ? sumColumn(records, col) : null;
+    const aggregate = numeric
+      ? `<span class="footer-aggregate" data-column="${esc(col)}"`
+        + ` title="Sum of ${esc(col)}" aria-label="Sum of ${esc(col)}: ${esc(sum == null ? '—' : String(sum))}">`
+        + `${esc(sum == null ? '—' : String(sum))}</span>`
+      : '';
     return `<th scope="col" class="column-header" draggable="true" tabindex="0"`
       + ` title="${esc(col)} — ${esc(T.reorderColumn)}" data-column="${esc(col)}">`
-      + `<span class="column-name">${esc(col)}</span>`
+      + `<span class="column-footer-content"><span class="column-name">${esc(col)}</span>`
+      + `${aggregate}</span>`
       + `<span class="column-resize-handle" draggable="false" tabindex="0"`
       + ` role="separator" aria-orientation="vertical"`
       + ` aria-label="${esc(T.resizeColumn)} ${esc(col)}"></span></th>`;
   }
-
-  function buildGroupSums(records, cols) {
-    const sums = cols.filter(isNumericColumn).map(col => {
-      const sum = sumColumn(records, col);
-      const text = sum == null ? '—' : String(sum);
-      return `<span class="group-sum" data-column="${esc(col)}"`
-        + ` title="Sum of ${esc(col)}" aria-label="Sum of ${esc(col)}: ${esc(text)}"`
-        + `>${esc(text)}</span>`;
-    });
-    return sums.length ? `<span class="group-sums">${sums.join('')}</span>` : '';
-  }
-
-  let groupSumAlignFrame = 0;
-
-  function alignGroupSums() {
-    groupSumAlignFrame = 0;
-    document.querySelectorAll('.group').forEach(card => {
-      const header = card.querySelector('.group-header');
-      if (!header) return;
-      const headerRect = header.getBoundingClientRect();
-      const headerCells = new Map(
-        [...card.querySelectorAll('.rec-table thead th[data-column]')]
-          .map(th => [th.dataset.column, th])
-      );
-      card.querySelectorAll('.group-sum').forEach(sum => {
-        const th = headerCells.get(sum.dataset.column);
-        if (!th) return;
-        const cellRect = th.getBoundingClientRect();
-        sum.style.left = `${cellRect.left + cellRect.width / 2 - headerRect.left}px`;
-      });
-    });
-  }
-
-  function scheduleGroupSumAlignment() {
-    if (groupSumAlignFrame) cancelAnimationFrame(groupSumAlignFrame);
-    groupSumAlignFrame = requestAnimationFrame(alignGroupSums);
-  }
-
-  window.addEventListener('resize', scheduleGroupSumAlignment);
-  if (document.fonts && document.fonts.ready)
-    document.fonts.ready.then(scheduleGroupSumAlignment);
 
   function prefersReducedMotion() {
     return typeof window.matchMedia === 'function'
@@ -918,8 +884,7 @@
         <span class="group-badge"
               aria-label="${group.records.length}\u00a0${group.records.length > 1 ? T.records : T.record}"
         >${group.records.length}</span>
-        <span class="${labelCls}">${labelTxt}</span>
-        ${buildGroupSums(group.records, displayCols)}`;
+        <span class="${labelCls}">${labelTxt}</span>`;
 
       header.addEventListener('click', () => {
         if (collapsed.has(group.key)) {
@@ -941,9 +906,7 @@
 
       const inner = document.createElement('div');
       inner.className = 'group-body-inner';
-      inner.innerHTML = displayCols.length === 0
-        ? `<p class="only-group-col">${T.noOtherCol}</p>`
-        : buildTable(displayCols, group.records, labelTxt);
+      inner.innerHTML = buildTable(displayCols, group);
 
       body.appendChild(inner);
       card.appendChild(header);
@@ -953,7 +916,6 @@
     document.querySelectorAll('.scroll-inner').forEach(scroller => {
       scroller.scrollLeft = sharedTableScrollLeft;
     });
-    scheduleGroupSumAlignment();
     startPendingRowAnimations();
     refreshBoolSection();
   }
@@ -966,22 +928,27 @@
       + `<circle cx="9" cy="13" r="1.25"/></svg>`;
   }
 
-  function buildTable(cols, records, groupLabel) {
-    // Unified selection/drag control first, actions column last.
-    const selectedCount = records.filter(rec => selectedIds.has(String(rec.id))).length;
-    const selectionState = selectedCount === 0
-      ? 'none'
-      : (selectedCount === records.length ? 'all' : 'some');
-    const groupPressed = selectionState === 'all'
-      ? 'true'
-      : (selectionState === 'some' ? 'mixed' : 'false');
-    const thead = '<th class="col-grip">'
-                + `<button type="button" class="group-select-grip"`
-                + ` data-selection-state="${selectionState}" aria-pressed="${groupPressed}"`
-                + ` title="${esc(T.selectGroup)}" aria-label="${esc(T.selectGroup)}">`
-                + `${gripIconHtml()}</button></th>`
-                + cols.map(c => buildColumnHeader(c)).join('')
-                + '<th class="col-actions" aria-hidden="true"></th>';
+  function plusIconHtml() {
+    return `<svg class="add-row-icon" viewBox="0 0 16 16" fill="none"`
+      + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round"`
+      + ` aria-hidden="true" focusable="false"><path d="M8 3v10M3 8h10"/></svg>`;
+  }
+
+  function buildTable(cols, group) {
+    // Per-row selection/drag control first, actions column last. The table's
+    // structural controls and aggregates live in a footer below the records.
+    const records = group.records;
+    const groupLabel = group.key === '\x00__empty__' ? T.emptyGroup : String(group.label);
+    const addContext = getAddRowContext(group);
+    const addLabel = addContext.enabled
+      ? `${T.addRowToGroup} ${groupLabel}`
+      : `${T.addRowUnavailable}: ${addContext.reason}`;
+    const footer = '<th class="col-grip">'
+      + `<button type="button" class="group-add-row" data-group-key="${esc(group.key)}"`
+      + ` title="${esc(addLabel)}" aria-label="${esc(addLabel)}"`
+      + `${addContext.enabled ? '' : ' disabled'}>${plusIconHtml()}</button></th>`
+      + cols.map(col => buildColumnFooter(col, records)).join('')
+      + '<th class="col-actions" aria-hidden="true"></th>';
     const moveContext = getRecordMoveContext();
     const dragEnabled = moveContext.enabled;
     const tbody = records.map(rec => {
@@ -1008,8 +975,8 @@
       + ` style="width:${getTableWidth(cols)}px">`
       + `${buildColGroup(cols)}
       <caption>${T.groupCaption} ${esc(groupLabel)}</caption>
-      <thead><tr>${thead}</tr></thead>
       <tbody>${tbody}</tbody>
+      <tfoot><tr>${footer}</tr></tfoot>
     </table></div>`;
   }
 
@@ -1162,7 +1129,6 @@
       if (other !== scroller) other.scrollLeft = sharedTableScrollLeft;
     });
     syncingTableScroll = false;
-    scheduleGroupSumAlignment();
   }, true);
 
   // Per-row actions cell: duplicate ⧉ / delete ✕
@@ -1978,6 +1944,55 @@
     return { moved: movedIds.length, label };
   }
 
+  function getAddRowContext(group) {
+    const { col } = parseGroupBy(groupBy);
+    const type = columnBaseType(writableColumnTypes[col] || columnTypes[col]);
+    let reason = '';
+    if (!col)
+      reason = 'Choose a grouping column first';
+    else if (!metadataLoaded)
+      reason = 'Writable columns are still loading';
+    else if (!writableColumnIds.includes(col))
+      reason = `The grouping column "${col}" is read-only`;
+    else if (!CELL_COPY_TYPES.has(type))
+      reason = `The grouping column type ${type || 'unknown'} is not supported`;
+
+    let value = null;
+    if (!reason && group && group.key !== '\x00__empty__') {
+      value = normalizeCellValueForWrite(group.writeValue, type);
+      if (value == null && group.writeValue != null && group.writeValue !== '')
+        reason = `The group value cannot be written as ${type}`;
+    }
+    return { enabled: !reason, col, type, value, reason };
+  }
+
+  async function addRecordToGroup(button, groupKey) {
+    await getWritableColumnIds();
+    const group = getGroups().find(candidate => candidate.key === groupKey);
+    if (!group) throw new Error('The destination group is no longer available');
+    const context = getAddRowContext(group);
+    if (!context.enabled) throw new Error(context.reason);
+    const label = group.key === '\x00__empty__' ? T.emptyGroup : String(group.label);
+    const detail = `column=${context.col} · target=${label} · type=${context.type}`;
+    button.disabled = true;
+    button.classList.add('saving');
+    recordActionDiagnostic('Add row', 'start', detail);
+    try {
+      const created = await grist.selectedTable.create({
+        fields: { [context.col]: context.value },
+      }, { parseStrings: false });
+      const createdId = created && created.id != null ? created.id : 'unknown';
+      queueRowAnimation(createdId, 'row-enter', 950);
+      recordActionDiagnostic('Add row', 'ok', `${detail} · created=${createdId}`);
+      showToast(`${T.addRow}: ${label}`, 'success');
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.classList.remove('saving');
+      }
+    }
+  }
+
   async function duplicateRecordById(idStr) {
     const recordId = validRecordId(idStr);
     recordActionDiagnostic('Duplicate', 'start', `record=${recordId}`);
@@ -2131,6 +2146,12 @@
 
   content.addEventListener('click', (e) => {
     if (e.target.closest('.cell-fill-handle')) return;
+    const addButton = e.target.closest('.group-add-row[data-group-key]');
+    if (addButton && content.contains(addButton) && !addButton.disabled) {
+      addRecordToGroup(addButton, addButton.dataset.groupKey)
+        .catch(err => showToast(actionErrorMessage('Add row', err)));
+      return;
+    }
     const btn = e.target.closest('button[data-act]');
     if (btn && content.contains(btn) && !btn.disabled) {
       const idStr = btn.dataset.id;
