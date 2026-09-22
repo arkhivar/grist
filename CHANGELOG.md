@@ -2,6 +2,15 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.13 — 2026-09-22
+
+- Inherit the common student from the current visible records when adding a
+  sprint row, preserving stored reference IDs through a typed source fetch.
+- Verify both student and sprint assignments after creation, and stop before
+  creating if the selected context changes during the source fetch.
+- Refresh all asset cache keys; numeric totals remain in the group header
+  while column names remain in the footer.
+
 ## v7.12 — 2026-09-22
 
 - Restore numeric aggregates to the group header in expanded and collapsed

@@ -77,6 +77,7 @@ const doc = win.document;
 // Grist API mock — records every mutating call.
 const calls = { ready: [], setOption: [], create: [], update: [], destroy: [], actions: [] };
 let createdGroupValue = null;
+let createdFields = {};
 let onRecordsCb = null;
 let onOptionsCb = null;
 
@@ -106,10 +107,12 @@ win.grist = {
       assertEq(actions[0][0], 'AddRecord', 'create action');
       assertEq(actions[0][1], 'Table1', 'destination table');
       createdGroupValue = actions[0][3].sprint;
+      createdFields = actions[0][3];
       return { retValues: [99] };
     },
     fetchTable: async name => {
-      if (name === 'Table1') return { id: [99], sprint: [createdGroupValue] };
+      if (name === 'Table1') return { id: [99], ...Object.fromEntries(
+        Object.entries(createdFields).map(([col, value]) => [col, [value]])) };
       if (name === '_grist_Tables')
         return { id: [1], tableId: ['Table1'] };
       if (name === '_grist_Tables_column')
@@ -343,6 +346,29 @@ await test('D: empty-group creation and failed assignment verification', async (
     assert(!button.disabled, 'failed create left add button disabled');
   } finally {
     win.grist.docApi.fetchTable = originalFetch;
+  }
+});
+
+await test('D: linked student and sprint are both saved, using the raw reference ID', async () => {
+  const originalFetch = win.grist.viewApi.fetchSelectedRecord;
+  try {
+    onRecordsCb(RECORDS.filter(rec => rec.id === 1));
+    win.grist.viewApi.fetchSelectedRecord = async (id, options) => {
+      assertEq(options.expandRefs, false, 'student reference must not be expanded');
+      assertEq(options.cellFormat, 'typed', 'student fetch format');
+      return { ...RECORDS[0], students: ['R', 'Students', 42] };
+    };
+    const button = doc.querySelector('.group-add-row');
+    const before = calls.actions.length;
+    click(button);
+    await waitFor(() => calls.actions.length === before + 1 && !button.disabled, 'linked row creation');
+    assertEq(createdFields.sprint, 'Sprint 13', 'sprint inherited');
+    assertEq(createdFields.students, 42, 'raw student reference inherited');
+    assert(!Object.prototype.hasOwnProperty.call(createdFields, 'count'), 'unrelated fields copied');
+    assert(doc.getElementById('toast').classList.contains('success'), 'verified creation not reported');
+  } finally {
+    win.grist.viewApi.fetchSelectedRecord = originalFetch;
+    onRecordsCb(RECORDS);
   }
 });
 

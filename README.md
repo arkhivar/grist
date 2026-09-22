@@ -78,6 +78,11 @@ Every record row has a trailing actions cell with always-visible buttons
   groupings show the button disabled with the reason in its tooltip.
   Creation sends the grouping value with an explicit Grist `AddRecord` action
   and checks the stored assignment before reporting success.
+  When Grist's outer selection shows records for one student, creation also
+  inherits that student. This recognizes `student`, `students`, `student_name`,
+  or `students_name` (case-insensitive) when exactly one is visible and writable.
+  Reference values are copied as stored IDs. Mixed-student views do not infer
+  a student; other field values are left at their defaults.
 
 ### Multi-select bulk actions
 

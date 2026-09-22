@@ -1994,6 +1994,32 @@
     return { enabled: !reason, col, type, value, reason };
   }
 
+  async function getNewRowFields(context, group) {
+    const fields = { [context.col]: context.value };
+    // The outer student selection is applied by Grist before onRecords.
+    // Inherit only this known parent field, never unrelated common values.
+    const studentCols = allColumns.filter(col => /^(students?|students?_name)$/i.test(col));
+    if (studentCols.length !== 1 || studentCols[0] === context.col) return fields;
+    const studentCol = studentCols[0];
+    const records = allRecords;
+    const sample = group.records[0];
+    const student = sample && sample[studentCol];
+    if (student == null || student === '') return fields;
+    if (!records.every(rec => JSON.stringify(rec[studentCol]) === JSON.stringify(student)))
+      return fields;
+    if (!writableColumnIds.includes(studentCol))
+      throw new Error(`The student field "${studentCol}" is read-only; a new row cannot be assigned to this student.`);
+    const raw = await grist.viewApi.fetchSelectedRecord(Number(sample.id), {
+      cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
+    });
+    if (allRecords !== records || parseGroupBy(groupBy).col !== context.col)
+      throw new Error('The selected student or grouping changed. Please click + again.');
+    if (!raw || !Object.prototype.hasOwnProperty.call(raw, studentCol))
+      throw new Error(`Cannot read the stored student value from "${studentCol}".`);
+    fields[studentCol] = normalizeTypedCell(raw[studentCol]);
+    return fields;
+  }
+
   async function addRecordToGroup(button, groupKey) {
     button.disabled = true;
     button.classList.add('saving');
@@ -2005,21 +2031,26 @@
       if (!context.enabled) throw new Error(context.reason);
       const label = group.key === '\x00__empty__' ? T.emptyGroup : String(group.label);
       const detail = `column=${context.col} · target=${label} · type=${context.type}`;
+      const fields = await getNewRowFields(context, group);
       recordActionDiagnostic('Add row', 'start', detail);
       const tableId = await grist.selectedTable.getTableId();
       const result = await grist.docApi.applyUserActions([
-        ['AddRecord', tableId, null, { [context.col]: context.value }],
+        ['AddRecord', tableId, null, fields],
       ], { parseStrings: false });
       const createdId = validRecordId(result && result.retValues && result.retValues[0]);
       // Verify stored data, rather than treating a returned ID as proof that
       // the group assignment survived host defaults or document triggers.
       const stored = await grist.docApi.fetchTable(tableId);
       const index = stored.id.indexOf(createdId);
-      const savedValue = index < 0 ? undefined : stored[context.col]?.[index];
-      const expected = normalizeCellValueForWrite(context.value, context.type);
-      const actual = normalizeCellValueForWrite(savedValue, context.type);
-      if (index < 0 || !Object.prototype.hasOwnProperty.call(stored, context.col) || actual !== expected)
-        throw new Error(`Record ${createdId} was created, but Grist did not retain its group assignment. Check column defaults, formulas, or triggers before adding another row.`);
+      const matches = Object.entries(fields).every(([col, value]) => {
+        if (!Object.prototype.hasOwnProperty.call(stored, col)) return false;
+        const type = columnBaseType(writableColumnTypes[col]);
+        const normalize = val => CELL_COPY_TYPES.has(type)
+          ? normalizeCellValueForWrite(val, type) : normalizeTypedCell(val);
+        return JSON.stringify(normalize(stored[col][index])) === JSON.stringify(normalize(value));
+      });
+      if (index < 0 || !matches)
+        throw new Error(`Record ${createdId} was created, but Grist did not retain its student or group assignment. Check column defaults, formulas, or triggers before adding another row.`);
       queueRowAnimation(createdId, 'row-enter', 950);
       recordActionDiagnostic('Add row', 'ok', `${detail} · created=${createdId}`);
       showToast(`${T.addRow}: ${label}`, 'success');
