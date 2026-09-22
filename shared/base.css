@@ -395,15 +395,6 @@
       overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .cell-edit-pencil {
-      flex: 0 0 auto; color: var(--muted); opacity: .35;
-      font-size: 12px; line-height: 1.5;
-      transition: opacity .1s, color .1s;
-    }
-    .cell-edit-btn:hover .cell-edit-pencil,
-    .cell-edit-btn:focus-visible .cell-edit-pencil {
-      opacity: 1; color: var(--accent);
-    }
     .cell-edit-btn:focus-visible {
       box-shadow: inset var(--focus-ring);
       background: color-mix(in srgb, var(--accent) 5%, transparent);

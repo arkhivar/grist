@@ -2,6 +2,15 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.08 — 2026-09-22
+
+- Make column width/order persistence reliable by serializing and awaiting
+  Grist widget-option writes instead of firing two concurrent updates.
+- Store layouts as native JSON option values while continuing to restore the
+  older stringified format for backward compatibility.
+- Add regression coverage that resizes a column, captures the Grist option,
+  and restores the same width through a fresh `onOptions` event.
+
 ## v7.07 — 2026-09-22
 
 - Prevent the hidden DateTime picker from rendering below the long-text

@@ -389,6 +389,30 @@ await test('G17: live badge and every cache key use the same release version', a
   assertEq(doc.getElementById('version-badge').textContent, `v${versions[0]}`, 'version badge');
 });
 
+await test('H18: resized column width is saved to and restored from Grist options', async () => {
+  const handle = doc.querySelector('th[data-column="students"] .column-resize-handle');
+  assert(handle, 'students resize handle missing');
+  const before = calls.setOption.length;
+  handle.dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'ArrowRight', bubbles: true, cancelable: true,
+  }));
+  await waitFor(
+    () => calls.setOption.slice(before).some(([key]) => key === 'columnWidths'),
+    'columnWidths option save');
+  const widthSave = calls.setOption.slice(before).find(([key]) => key === 'columnWidths');
+  assert(widthSave && widthSave[1] && typeof widthSave[1] === 'object',
+    'column widths were not saved as a native options object');
+  const savedWidth = widthSave[1].students;
+  assert(Number.isFinite(savedWidth), 'saved students width is not numeric');
+
+  onOptionsCb({ columnWidths: { students: savedWidth } }, { accessLevel: 'full' });
+  await waitFor(
+    () => doc.querySelector('col[data-column="students"]')?.style.width === `${savedWidth}px`,
+    'saved column width restore');
+  assertEq(doc.querySelector('col[data-column="students"]').style.width,
+    `${savedWidth}px`, 'restored students width');
+});
+
 // ── Summary ──────────────────────────────────────────────────
 console.log(`===== ${passed} passed, ${failed} failed =====`);
 process.exitCode = failed ? 1 : 0;

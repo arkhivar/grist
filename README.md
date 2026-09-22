@@ -174,8 +174,12 @@ the columns in that group away from the others.
   **Left/Right** to resize (hold **Shift** for larger steps).
 - Wider layouts scroll horizontally. Scrolling one group synchronizes the
   others, keeping headers and automatic sums aligned.
-- Widths and order are saved automatically. Open settings and use
-  **Reset widths & order** to restore the original layout.
+- Widths and order are saved automatically in this Grist widget section's
+  options. Layout writes are serialized and awaited, so rapid adjustments
+  cannot silently race each other. If Grist highlights the section-options
+  icon in green, click **Save** there once to publish the current layout as the
+  document's shared default. Open settings and use **Reset widths & order** to
+  restore the original layout.
 
 ## Motion and feedback
 

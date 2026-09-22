@@ -323,9 +323,27 @@
       + '</colgroup>';
   }
 
+  let columnLayoutSaveQueue = Promise.resolve();
+
+  function queueColumnLayoutOption(key, value, action) {
+    const snapshot = Array.isArray(value) ? [...value] : { ...value };
+    columnLayoutSaveQueue = columnLayoutSaveQueue
+      .then(() => grist.setOption(key, snapshot))
+      .catch(err => showToast(actionErrorMessage(action, err), 'error'));
+    return columnLayoutSaveQueue;
+  }
+
+  function saveColumnOrder() {
+    return queueColumnLayoutOption('columnOrder', columnOrder, 'Save column order');
+  }
+
+  function saveColumnWidths() {
+    return queueColumnLayoutOption('columnWidths', columnWidths, 'Save column widths');
+  }
+
   function saveColumnLayout() {
-    grist.setOption('columnOrder', JSON.stringify(columnOrder));
-    grist.setOption('columnWidths', JSON.stringify(columnWidths));
+    saveColumnOrder();
+    return saveColumnWidths();
   }
 
   function applyColumnWidthsToDOM() {
@@ -356,7 +374,7 @@
     let displayIndex = 0;
     columnOrder = columnOrder.map(col =>
       displayed.has(col) ? display[displayIndex++] : col);
-    saveColumnLayout();
+    saveColumnOrder();
     render();
     return true;
   }
@@ -1030,7 +1048,7 @@
     activeColumnResize.handle.classList.remove('resizing');
     if (th) th.draggable = true;
     activeColumnResize = null;
-    saveColumnLayout();
+    saveColumnWidths();
     if (settingsPanel.classList.contains('open')) refreshDiag();
   }
 
@@ -1045,7 +1063,7 @@
     const th = handle.closest('th[data-column]');
     if (!th) return;
     delete columnWidths[th.dataset.column];
-    saveColumnLayout();
+    saveColumnWidths();
     render();
   });
 
@@ -1109,7 +1127,7 @@
       const step = e.shiftKey ? 25 : 10;
       columnWidths[col] = clampColumnWidth(
         getColumnWidth(col) + (e.key === 'ArrowRight' ? step : -step));
-      saveColumnLayout();
+      saveColumnWidths();
       applyColumnWidthsToDOM();
       return;
     }
@@ -1118,7 +1136,7 @@
       e.stopPropagation();
       const th = handle.closest('th[data-column]');
       delete columnWidths[th.dataset.column];
-      saveColumnLayout();
+      saveColumnWidths();
       render();
       return;
     }
