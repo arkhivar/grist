@@ -2,6 +2,16 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.15 — 2026-09-22
+
+- Add a lightweight right-click menu for duplicating or deleting rows covered
+  by cell ranges and grip selections, without adding dependencies.
+- Show the whole-row action count and require a second confirmation for delete.
+- Support Shift+F10, menu arrow navigation, Escape, and dismissal on scrolling,
+  outside clicks, or data refresh; preserve right-drag cell selection.
+- Cover menu scope, bulk operations, keyboard behavior, and API errors with six
+  regression checks. Existing duplicate/delete history behavior is unchanged.
+
 ## v7.14 — 2026-09-22
 
 - Add rectangular cell selection with Shift-click, Shift+Arrow keys, and

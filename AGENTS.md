@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.14)
+## Current state (v7.15)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -97,4 +97,6 @@ render as rows inside month groups or only contribute to totals.
   does not automatically supply fields for custom-widget AddRecord actions.
 - Cell ranges support Shift-click, Shift+arrows, drag selection, and rectangular
   clipboard blocks. Session history includes range pastes and footer row creation.
-- Test suite: `tests/sprints.test.js`, 32 checks, green.
+- Right-click menus target whole rows covered by a cell range or grip selection;
+  duplicate/delete reuse existing API helpers (not session-undoable yet).
+- Test suite: `tests/sprints.test.js`, 38 checks, green.

@@ -231,7 +231,7 @@
   content.addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.row-grip[data-id]');
     if (!handle) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.button !== 0) return;
     if (activeRowDrag) cleanupRowDrag();
     clearPendingRowPointer(null);
     pendingRowPointer = {
@@ -374,4 +374,154 @@
     selectionAnchorId = null;
     disarmSelDelete();
     finishSelectionChange();
+  });
+
+  // ── Selection-aware row context menu ──────────────────────
+  const rowContextMenu = document.getElementById('row-context-menu');
+  const rowContextLabel = document.getElementById('row-context-label');
+  const rowContextDuplicate = rowContextMenu.querySelector('[data-row-command="duplicate"]');
+  const rowContextDelete = rowContextMenu.querySelector('[data-row-command="delete"]');
+  let rowContextState = null;
+  let rowContextBusy = false;
+  let rowContextArmTimer = null;
+  let pendingRowContext = null;
+
+  function closeRowContextMenu(restoreFocus = true) {
+    // render() may run before this script has initialized its bindings.
+    if (!document.getElementById('row-context-menu')
+        || document.getElementById('row-context-menu').hidden) return;
+    const anchor = rowContextState && rowContextState.anchor;
+    rowContextMenu.hidden = true;
+    rowContextState = null;
+    clearTimeout(rowContextArmTimer);
+    rowContextDelete.classList.remove('armed');
+    if (restoreFocus && anchor && anchor.isConnected) anchor.focus({ preventScroll: true });
+  }
+
+  function openRowContextMenu(anchor, x, y) {
+    closeRowContextMenu(false);
+    if (rowContextBusy || cellHistoryBusy || btnSelDup.disabled || !anchor.isConnected) return;
+    const row = anchor.closest('tr[data-record-id]');
+    if (!row || row.closest('.collapsed')) return;
+    const id = row.dataset.recordId;
+    const cell = anchor.closest('td.data-cell');
+    const grid = cell ? selectedCellGrid() : [];
+    let ids;
+    if (cell && grid.some(cells => cells.includes(cell))) {
+      ids = [...new Set(grid.map(cells => cells[0].dataset.cellId))];
+    } else if (selectedIds.has(id)) {
+      ids = [...selectedIds];
+    } else {
+      selectedIds.clear();
+      selectionAnchorId = null;
+      finishSelectionChange();
+      if (cell) selectDataCell(cell);
+      else {
+        clearSelectedCell();
+        selectRecordFromClick(id, {});
+      }
+      ids = [id];
+    }
+    const present = new Set(allRecords.map(record => String(record.id)));
+    ids = ids.filter(candidate => present.has(candidate));
+    if (!ids.length) return;
+    rowContextState = { ids, anchor };
+    const noun = ids.length === 1 ? 'row' : 'rows';
+    rowContextLabel.textContent = `${ids.length} whole ${noun}`;
+    rowContextDuplicate.querySelector('.row-command-label').textContent = `Duplicate ${noun}`;
+    rowContextDelete.querySelector('.row-command-label').textContent = `Delete ${noun}`;
+    rowContextMenu.hidden = false;
+    const bounds = rowContextMenu.getBoundingClientRect();
+    rowContextMenu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - bounds.width - 8))}px`;
+    rowContextMenu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - bounds.height - 8))}px`;
+    rowContextDuplicate.focus({ preventScroll: true });
+  }
+
+  content.addEventListener('contextmenu', (e) => {
+    const anchor = e.target.closest('td.data-cell, .row-grip[data-id]');
+    if (!anchor) return;
+    e.preventDefault();
+    if (activeRowDrag || cellSelectionDrag?.moved || Date.now() < suppressCellClickUntil) return;
+    if (cellSelectionDrag) {
+      // Some browsers fire contextmenu on mouse-down. Wait for mouse-up so
+      // right-button dragging can still extend the blue cell range.
+      pendingRowContext = { anchor, x: e.clientX, y: e.clientY, pointerId: cellSelectionDrag.pointerId };
+      return;
+    }
+    openRowContextMenu(anchor, e.clientX, e.clientY);
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!pendingRowContext || pendingRowContext.pointerId !== e.pointerId) return;
+    const pending = pendingRowContext;
+    pendingRowContext = null;
+    if (Date.now() >= suppressCellClickUntil)
+      openRowContextMenu(pending.anchor, pending.x, pending.y);
+  });
+  window.addEventListener('pointercancel', () => { pendingRowContext = null; });
+  document.addEventListener('pointerdown', (e) => {
+    pendingRowContext = null;
+    if (!rowContextMenu.contains(e.target)) closeRowContextMenu(false);
+  }, true);
+  window.addEventListener('resize', () => closeRowContextMenu(false));
+  document.addEventListener('scroll', () => closeRowContextMenu(false), true);
+  content.addEventListener('keydown', (e) => {
+    if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return;
+    const anchor = e.target.closest('td.data-cell, .row-grip[data-id]');
+    if (!anchor) return;
+    e.preventDefault();
+    const rect = anchor.getBoundingClientRect();
+    openRowContextMenu(anchor, rect.left + 12, rect.bottom);
+  });
+  rowContextMenu.addEventListener('keydown', (e) => {
+    const items = [rowContextDuplicate, rowContextDelete];
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault();
+      const index = items.indexOf(document.activeElement);
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? 1
+        : (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next].focus();
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      if (e.key === 'Escape') e.preventDefault();
+      closeRowContextMenu();
+    }
+  });
+  rowContextMenu.addEventListener('click', async (e) => {
+    const button = e.target.closest('[data-row-command]');
+    if (!button || !rowContextState || rowContextBusy || cellHistoryBusy) return;
+    const { ids, anchor } = rowContextState;
+    const deleting = button.dataset.rowCommand === 'delete';
+    if (deleting && !button.classList.contains('armed')) {
+      button.classList.add('armed');
+      button.querySelector('.row-command-label').textContent = `Confirm delete ${ids.length} ${ids.length === 1 ? 'row' : 'rows'}?`;
+      rowContextArmTimer = setTimeout(() => {
+        button.classList.remove('armed');
+        button.querySelector('.row-command-label').textContent = `Delete ${ids.length === 1 ? 'row' : 'rows'}`;
+      }, 4000);
+      return;
+    }
+    closeRowContextMenu(false);
+    rowContextBusy = true;
+    setSelBarDisabled(true);
+    let completed = 0;
+    try {
+      if (deleting) {
+        await deleteRecordsByIds(ids);
+        ids.forEach(id => selectedIds.delete(id));
+        if (selectedCell && ids.includes(selectedCell.recordId)) clearSelectedCell();
+      } else {
+        for (const id of ids) {
+          await duplicateRecordById(id);
+          completed++;
+        }
+      }
+      finishSelectionChange();
+      showToast(`${deleting ? 'Deleted' : 'Duplicated'} ${ids.length} ${ids.length === 1 ? 'row' : 'rows'}`, 'success');
+    } catch (err) {
+      const action = deleting ? 'Delete rows' : `Duplicate rows (${completed}/${ids.length} completed)`;
+      showToast(actionErrorMessage(action, err));
+    } finally {
+      rowContextBusy = false;
+      setSelBarDisabled(false);
+      if (anchor.isConnected) anchor.focus({ preventScroll: true });
+    }
   });

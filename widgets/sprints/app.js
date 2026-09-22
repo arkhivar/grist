@@ -854,6 +854,7 @@
 
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
+    if (typeof closeRowContextMenu === 'function') closeRowContextMenu(false);
     const restoreCellFocus = content.contains(document.activeElement)
       && document.activeElement.closest('td.data-cell');
     Array.from(content.children).forEach(c => {
@@ -2453,9 +2454,6 @@
   }
   window.addEventListener('pointerup', finishCellSelection);
   window.addEventListener('pointercancel', finishCellSelection);
-  content.addEventListener('contextmenu', (e) => {
-    if (cellSelectionDrag || Date.now() < suppressCellClickUntil) e.preventDefault();
-  });
 
   content.addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.cell-fill-handle');

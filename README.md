@@ -31,6 +31,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
   groups when grouped by a writable Text or single Choice field
 - **Multi-select bulk actions** — use the grip controls to select records, then
   duplicate / delete the whole selection from the bottom action bar
+- **Right-click row menu** — duplicate or delete the rows covered by a blue
+  cell range or grip selection, with an explicit row count and delete confirmation
 - **Automatic sums** — every Grist Numeric/Int column shows its group total
   in the group header in both collapsed and expanded states, aligned with its
   column, including numeric formula columns
@@ -85,6 +87,18 @@ Every record row has a trailing actions cell with always-visible buttons
   a student; other field values are left at their defaults.
 
 ### Multi-select bulk actions
+
+Right-click inside a blue cell range or on a selected row grip for **Duplicate
+rows** / **Delete rows**. Each covered row is included once, even when several
+columns are selected. Right-clicking outside either selection targets only that
+row. These actions operate on **whole rows**, not just the selected cells.
+Deletion requires a second confirmation click within four seconds. The menu
+also opens with **Shift+F10**; use arrows to navigate and Escape to close.
+Right-button dragging still selects cells without opening the menu.
+
+The menu reuses the existing row actions: duplication/deletion are not added to
+the widget's session Undo stack in this release. Large duplicate selections
+make sequential Grist requests, so their completion time grows with row count.
 
 Each row starts with a six-dot grip. A plain click selects that row and clears
 the previous selection. Use **Ctrl-click** (or **Cmd-click** on macOS) to toggle

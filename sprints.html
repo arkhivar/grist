@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.14">
+  <link rel="stylesheet" href="shared/base.css?v=7.15">
 </head>
 <body>
 <div id="app">
@@ -184,8 +184,14 @@
   </section>
 </div>
 
-<script src="shared/core.js?v=7.14"></script>
-  <script src="widgets/sprints/app.js?v=7.14"></script>
-  <script src="widgets/sprints/actions.js?v=7.14"></script>
+<div id="row-context-menu" class="row-context-menu" role="menu" aria-labelledby="row-context-label" hidden>
+  <div id="row-context-label" class="row-context-label"></div>
+  <button type="button" role="menuitem" tabindex="-1" data-row-command="duplicate"><span aria-hidden="true">⧉</span><span class="row-command-label">Duplicate rows</span></button>
+  <button type="button" role="menuitem" tabindex="-1" class="row-command-danger" data-row-command="delete"><span aria-hidden="true">×</span><span class="row-command-label">Delete rows</span></button>
+</div>
+
+<script src="shared/core.js?v=7.15"></script>
+  <script src="widgets/sprints/app.js?v=7.15"></script>
+  <script src="widgets/sprints/actions.js?v=7.15"></script>
 </body>
 </html>

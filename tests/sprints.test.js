@@ -729,6 +729,7 @@ await test('K: Shift+arrows and right-button dragging extend selection without e
   const menu = new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true });
   cellEl(5, 'performance').dispatchEvent(menu);
   assert(menu.defaultPrevented, 'drag spawned native context menu');
+  assert(doc.getElementById('row-context-menu').hidden, 'drag opened row actions');
   await new Promise(resolve => setTimeout(resolve, 410));
 });
 
@@ -763,6 +764,120 @@ await test('K: quoted spreadsheet cells preserve tabs and line breaks', async ()
   await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'quoted TSV paste');
   assertEq(cellText(3, 'students'), 'Line one\nLine two', 'multiline text');
   assertEq(cellText(3, 'weekday'), 'Tab\tinside', 'embedded tab');
+});
+
+// ── L. Selection-aware context menu ──────────────────────────
+const rowMenu = doc.getElementById('row-context-menu');
+const menuDuplicate = rowMenu.querySelector('[data-row-command="duplicate"]');
+const menuDelete = rowMenu.querySelector('[data-row-command="delete"]');
+function contextMenu(target) {
+  const event = new win.MouseEvent('contextmenu', {
+    bubbles: true, cancelable: true, clientX: 1000, clientY: 700,
+  });
+  target.dispatchEvent(event);
+  assert(event.defaultPrevented, 'native menu not suppressed');
+}
+
+await test('L: rectangular selection duplicates each covered row exactly once', async () => {
+  click(cellEl(3, 'weekday'));
+  click(cellEl(5, 'performance'), { shiftKey: true });
+  contextMenu(cellEl(4, 'count'));
+  assert(!rowMenu.hidden, 'row menu hidden');
+  assertEq(doc.getElementById('row-context-label').textContent, '3 whole rows', 'scope label');
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 9, 'menu collapsed the range');
+  const before = calls.create.length;
+  click(menuDuplicate);
+  await waitFor(() => calls.create.length === before + 3 && !doc.getElementById('btn-sel-dup').disabled, 'range duplication');
+  assertEq(calls.create.slice(before).map(([record]) => record.fields.students).join(','),
+    RECORDS.slice(2, 5).map(record => record.students).join(','), 'duplicated source rows');
+  assert(rowMenu.hidden, 'menu remained open after duplicate');
+});
+
+await test('L: range deletion requires confirmation and sends one ID array', async () => {
+  contextMenu(cellEl(4, 'count'));
+  const before = calls.destroy.length;
+  click(menuDelete);
+  assertEq(calls.destroy.length, before, 'first click deleted without confirmation');
+  assert(menuDelete.textContent.includes('Confirm delete 3 rows?'), 'missing explicit row confirmation');
+  click(menuDelete);
+  await waitFor(() => calls.destroy.length === before + 1 && !doc.getElementById('btn-sel-dup').disabled, 'range deletion');
+  assertEq(JSON.stringify(calls.destroy[before][0]), '[3,4,5]', 'wrong deletion scope');
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 0, 'deleted range stayed selected');
+});
+
+await test('L: grip multiselection is retained; right-click outside selects only that row', async () => {
+  click(grip(1));
+  click(grip(2), { ctrlKey: true });
+  contextMenu(grip(1));
+  assertEq(doc.getElementById('row-context-label').textContent, '2 whole rows', 'grip selection scope');
+  assertEq(doc.querySelectorAll('.row-grip[aria-pressed="true"]').length, 2, 'grip selection changed');
+  click(menuDelete);
+  contextMenu(cellEl(6, 'weekday'));
+  assertEq(doc.getElementById('row-context-label').textContent, '1 whole row', 'outside selection scope');
+  assert(!menuDelete.classList.contains('armed'), 'delete confirmation leaked to different scope');
+  assertEq(doc.querySelectorAll('.row-grip[aria-pressed="true"]').length, 0, 'unrelated grips remained selected');
+  assert(cellEl(6, 'weekday').classList.contains('cell-selected'), 'right-click did not select target');
+  const before = calls.destroy.length;
+  click(menuDelete);
+  click(menuDelete);
+  await waitFor(() => calls.destroy.length === before + 1 && !doc.getElementById('btn-sel-dup').disabled, 'single deletion');
+  assertEq(JSON.stringify(calls.destroy[before][0]), '[6]', 'outside selection deleted other rows');
+});
+
+await test('L: menu supports keyboard navigation, Escape, and passive dismissal', async () => {
+  const target = cellEl(1, 'weekday');
+  target.focus();
+  target.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+  assert(!rowMenu.hidden, 'Shift+F10 did not open menu');
+  assertEq(doc.activeElement, menuDuplicate, 'initial menu focus');
+  menuDuplicate.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  assertEq(doc.activeElement, menuDelete, 'ArrowDown menu focus');
+  menuDelete.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert(rowMenu.hidden, 'Escape did not close menu');
+  assertEq(doc.activeElement, target, 'Escape did not restore cell focus');
+  contextMenu(target);
+  doc.body.dispatchEvent(pointerEvent('pointerdown', 100));
+  assert(rowMenu.hidden, 'outside click did not close menu');
+  contextMenu(target);
+  target.closest('.group-body').dispatchEvent(new win.Event('scroll'));
+  assert(rowMenu.hidden, 'scroll did not close menu');
+  contextMenu(target);
+  onRecordsCb(RECORDS);
+  assert(rowMenu.hidden, 'Grist refresh left stale row actions visible');
+});
+
+await test('L: mouse-down context menus wait for release without breaking right-drag selection', async () => {
+  const target = cellEl(1, 'weekday');
+  target.dispatchEvent(pointerEvent('pointerdown', 101, { button: 2 }));
+  contextMenu(target);
+  assert(rowMenu.hidden, 'menu opened before right-button release');
+  win.dispatchEvent(pointerEvent('pointerup', 101, { button: 2 }));
+  assert(!rowMenu.hidden, 'plain right-click did not open menu on release');
+  target.dispatchEvent(pointerEvent('pointerdown', 102, { button: 2 }));
+  contextMenu(target);
+  const previousHit = doc.elementFromPoint;
+  doc.elementFromPoint = () => cellEl(2, 'weekday');
+  win.dispatchEvent(pointerEvent('pointermove', 102, { buttons: 2 }));
+  win.dispatchEvent(pointerEvent('pointerup', 102, { button: 2 }));
+  doc.elementFromPoint = previousHit;
+  assert(rowMenu.hidden, 'right drag opened deferred menu');
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 2, 'right drag failed to extend range');
+  await new Promise(resolve => setTimeout(resolve, 410));
+});
+
+await test('L: failed delete preserves selection and displays the real Grist error', async () => {
+  contextMenu(cellEl(1, 'weekday'));
+  const originalDestroy = win.grist.selectedTable.destroy;
+  win.grist.selectedTable.destroy = async () => { throw new Error('Access denied by row rule'); };
+  try {
+    click(menuDelete);
+    click(menuDelete);
+    await waitFor(() => !doc.getElementById('btn-sel-dup').disabled, 'failed delete completion');
+    assert(doc.getElementById('toast').textContent.includes('Access denied by row rule'), 'real error hidden');
+    assertEq(doc.querySelectorAll('td.cell-selected').length, 2, 'failure cleared selection');
+  } finally {
+    win.grist.selectedTable.destroy = originalDestroy;
+  }
 });
 
 // ── Summary ──────────────────────────────────────────────────
