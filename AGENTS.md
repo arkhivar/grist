@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.13)
+## Current state (v7.14)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -95,4 +95,6 @@ render as rows inside month groups or only contribute to totals.
 - Footer creation inherits the common visible student via a typed, unexpanded
   source record, as well as the clicked sprint. Grist's outer Select By filter
   does not automatically supply fields for custom-widget AddRecord actions.
-- Test suite: `tests/sprints.test.js`, 27 checks, green.
+- Cell ranges support Shift-click, Shift+arrows, drag selection, and rectangular
+  clipboard blocks. Session history includes range pastes and footer row creation.
+- Test suite: `tests/sprints.test.js`, 32 checks, green.

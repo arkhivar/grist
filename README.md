@@ -164,6 +164,19 @@ opens the editor when that field supports direct editing. Copy/paste uses the
 underlying typed value rather than the formatted display text when the copy
 originated in this widget.
 
+**Shift-click** extends the selection to a rectangle. **Shift+Arrow keys** or
+dragging across cells (left or right mouse button) also extends the blue border.
+Cell text no longer receives the browser's text-selection highlight; text in
+the editor remains selectable. Copy ranges with **Ctrl/Cmd+C**, then select the
+first destination cell and use **Ctrl/Cmd+V**. A selected destination range must
+match the copied block or be a whole multiple of it; copying one cell can fill
+an entire selected rectangle. Only visible rows participate.
+
+Clipboard blocks use spreadsheet-compatible tabs and line breaks, including
+quoted multiline cells. All destination cells are checked before a block is
+written, and a range paste is one undoable operation. Pasting beyond the current
+visible rows is rejected; add the required rows first.
+
 Pasting is allowed only into writable scalar columns of the same Grist type:
 Text, Choice, Bool, Int, Numeric, Date, or DateTime. Incompatible typed pastes
 are rejected with an explanation. External clipboard text is parsed according
@@ -172,10 +185,12 @@ bottom-right corner vertically to copy its value through the visible range;
 the fill is sent to Grist as one batched update.
 
 The toolbar's back/forward arrow buttons undo and redo cell edits, paste
-operations, and complete fill ranges. The matching shortcuts are
+operations, complete fill ranges, and rows created with the footer **+**.
+Undoing creation removes that row; redoing it restores its ID and saved fields,
+including student and sprint. The matching shortcuts are
 **Ctrl/Cmd+Z** for undo and **Ctrl/Cmd+Y** or **Ctrl/Cmd+Shift+Z** for redo.
 History is deliberately lightweight and session-local: it keeps the latest 50
-widget cell operations in memory and resets when the widget reloads. It does
+widget operations in memory and resets when the widget reloads. It does
 not attempt to replace Grist's document-wide history for external edits,
 record duplication/deletion, or moving rows between groups.
 

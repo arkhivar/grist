@@ -89,7 +89,7 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.13';
+  const WIDGET_VERSION = '7.14';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -146,6 +146,9 @@
   let editableDefaultsApplied = false;
   let editingCell = null;
   let selectedCell = null;
+  let cellRangeEnd = null;
+  let cellSelectionDrag = null;
+  let suppressCellClickUntil = 0;
   let copiedCell = null;
   let activeFillDrag = null;
   const cellUndoStack = [];

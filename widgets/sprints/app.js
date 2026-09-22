@@ -854,6 +854,8 @@
 
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
+    const restoreCellFocus = content.contains(document.activeElement)
+      && document.activeElement.closest('td.data-cell');
     Array.from(content.children).forEach(c => {
       if (c.id !== 'empty-state' && c.id !== 'toast') c.remove();
     });
@@ -922,6 +924,7 @@
           card.classList.add('collapsed');
           header.setAttribute('aria-expanded', 'false');
         }
+        refreshCellRange();
       });
 
       const body = document.createElement('div');
@@ -943,6 +946,8 @@
       scroller.scrollLeft = sharedTableScrollLeft;
     });
     startPendingRowAnimations();
+    refreshCellRange();
+    if (restoreCellFocus) focusSelectedCell();
     scheduleGroupSumAlignment();
     refreshBoolSection();
   }
@@ -1240,7 +1245,11 @@
   function rememberCellHistory(label, col, changes) {
     const meaningful = changes.filter(change => !Object.is(change.before, change.after));
     if (!meaningful.length) return;
-    cellUndoStack.push({ label, col, changes: meaningful });
+    rememberHistoryEntry({ label, col, changes: meaningful });
+  }
+
+  function rememberHistoryEntry(entry) {
+    cellUndoStack.push(entry);
     if (cellUndoStack.length > CELL_HISTORY_LIMIT) cellUndoStack.shift();
     cellRedoStack.length = 0;
     updateCellHistoryControls();
@@ -1261,10 +1270,47 @@
     const destination = isUndo ? cellRedoStack : cellUndoStack;
     const entry = source[source.length - 1];
     if (!entry) return;
+    if (entry.kind === 'create') {
+      cellHistoryBusy = true;
+      updateCellHistoryControls();
+      try {
+        if (isUndo) {
+          const table = await grist.docApi.fetchTable(entry.tableId);
+          const index = table.id.indexOf(entry.id);
+          if (index < 0) throw new Error('The added record no longer exists');
+          entry.fields = Object.fromEntries(writableColumnIds
+            .filter(col => Object.prototype.hasOwnProperty.call(table, col))
+            .map(col => [col, table[col][index]]));
+          if (table.manualSort) entry.fields.manualSort = table.manualSort[index];
+          await grist.docApi.applyUserActions([
+            ['RemoveRecord', entry.tableId, entry.id],
+          ]);
+          allRecords = allRecords.filter(record => Number(record.id) !== entry.id);
+        } else {
+          // Keep the ID so older edit/paste history still points to this row.
+          const table = await grist.docApi.fetchTable(entry.tableId);
+          if (table.id.includes(entry.id))
+            throw new Error('Cannot redo: another record now uses the original row ID');
+          await grist.docApi.applyUserActions([
+            ['AddRecord', entry.tableId, entry.id, entry.fields],
+          ], { parseStrings: false });
+          queueRowAnimation(entry.id, 'row-enter', 950);
+        }
+        source.pop();
+        destination.push(entry);
+        render();
+      } catch (err) {
+        showToast(actionErrorMessage(isUndo ? T.undo : T.redo, err));
+      } finally {
+        cellHistoryBusy = false;
+        updateCellHistoryControls();
+      }
+      return;
+    }
     const side = isUndo ? 'before' : 'after';
     const updates = entry.changes.map(change => ({
       id: change.id,
-      fields: { [entry.col]: change[side] },
+      fields: { [change.col || entry.col]: change[side] },
     }));
     const action = isUndo ? T.undo : T.redo;
     const detail = `action=${entry.label} · records=${entry.changes.map(change => change.id).join(',')}`
@@ -1273,16 +1319,22 @@
     updateCellHistoryControls();
     recordActionDiagnostic(action, 'start', detail);
     try {
-      await grist.selectedTable.update(
-        updates.length === 1 ? updates[0] : updates,
-        { parseStrings: false });
+      if (entry.kind === 'range') {
+        await grist.docApi.applyUserActions(updates.map(update =>
+          ['UpdateRecord', entry.tableId, update.id, update.fields]), { parseStrings: false });
+      } else {
+        await grist.selectedTable.update(
+          updates.length === 1 ? updates[0] : updates,
+          { parseStrings: false });
+      }
       source.pop();
       destination.push(entry);
-      applyCellChangesLocally(entry.col, entry.changes, side);
+      entry.changes.forEach(change => applyCellChangesLocally(change.col || entry.col, [change], side));
       selectedCell = {
         recordId: String(entry.changes[0].id),
-        col: entry.col,
+        col: entry.changes[0].col || entry.col,
       };
+      cellRangeEnd = null;
       recordActionDiagnostic(action, 'ok', detail);
       showToast(`${action} complete: ${entry.label}`, 'success');
       render();
@@ -1366,30 +1418,62 @@
     if (cell) cell.focus({ preventScroll: true });
   }
 
-  function selectDataCell(cell, focus = true) {
-    if (!cell) return false;
-    content.querySelectorAll('td.cell-selected').forEach(current => {
-      if (current !== cell) {
-        current.classList.remove('cell-selected');
-        current.setAttribute('aria-selected', 'false');
-        current.tabIndex = -1;
-      }
+  function visibleCellRows() {
+    return [...content.querySelectorAll('.group:not(.collapsed) tbody tr')]
+      .map(row => [...row.querySelectorAll('td.data-cell')]).filter(row => row.length);
+  }
+
+  function selectedCellGrid() {
+    if (!selectedCell) return [];
+    const rows = visibleCellRows();
+    const endpoint = cellRangeEnd || selectedCell;
+    const r1 = rows.findIndex(row => row[0].dataset.cellId === selectedCell.recordId);
+    const r2 = rows.findIndex(row => row[0].dataset.cellId === endpoint.recordId);
+    if (r1 < 0 || r2 < 0) return [];
+    const c1 = rows[r1].findIndex(cell => cell.dataset.cellCol === selectedCell.col);
+    const c2 = rows[r2].findIndex(cell => cell.dataset.cellCol === endpoint.col);
+    if (c1 < 0 || c2 < 0) return [];
+    return rows.slice(Math.min(r1, r2), Math.max(r1, r2) + 1)
+      .map(row => row.slice(Math.min(c1, c2), Math.max(c1, c2) + 1));
+  }
+
+  function refreshCellRange() {
+    const classes = ['cell-selected', 'cell-range', 'range-top', 'range-bottom', 'range-left', 'range-right'];
+    content.querySelectorAll('td.data-cell').forEach(cell => {
+      cell.classList.remove(...classes);
+      cell.setAttribute('aria-selected', 'false');
+      cell.tabIndex = -1;
     });
-    selectedCell = { recordId: cell.dataset.cellId, col: cell.dataset.cellCol };
-    cell.classList.add('cell-selected');
-    cell.setAttribute('aria-selected', 'true');
-    cell.tabIndex = 0;
-    if (focus) cell.focus({ preventScroll: true });
+    const grid = selectedCellGrid();
+    const multi = grid.length > 1 || (grid[0] && grid[0].length > 1);
+    grid.forEach((row, r) => row.forEach((cell, c) => {
+      cell.classList.add('cell-selected');
+      if (multi) {
+        cell.classList.add('cell-range');
+        if (r === 0) cell.classList.add('range-top');
+        if (r === grid.length - 1) cell.classList.add('range-bottom');
+        if (c === 0) cell.classList.add('range-left');
+        if (c === row.length - 1) cell.classList.add('range-right');
+      }
+      cell.setAttribute('aria-selected', 'true');
+      if (selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol)) cell.tabIndex = 0;
+    }));
+  }
+
+  function selectDataCell(cell, focus = true, extend = false) {
+    if (!cell) return false;
+    const position = { recordId: cell.dataset.cellId, col: cell.dataset.cellCol };
+    if (extend && selectedCell && selectedCellGrid().length) cellRangeEnd = position;
+    else { selectedCell = position; cellRangeEnd = null; }
+    refreshCellRange();
+    if (focus) focusSelectedCell();
     return true;
   }
 
   function clearSelectedCell() {
-    content.querySelectorAll('td.cell-selected').forEach(cell => {
-      cell.classList.remove('cell-selected');
-      cell.setAttribute('aria-selected', 'false');
-      cell.tabIndex = -1;
-    });
     selectedCell = null;
+    cellRangeEnd = null;
+    refreshCellRange();
   }
 
   function isClipboardInput(target) {
@@ -1398,6 +1482,7 @@
   }
 
   async function writeCellValues(action, recordIds, col, value) {
+    if (cellHistoryBusy) return;
     const ids = [...new Set(recordIds.map(id => validRecordId(id)).filter(id => id != null))];
     if (!ids.length) return;
     const type = cellColumnType(col);
@@ -1418,6 +1503,8 @@
     const changedIds = changes.map(change => change.id);
     const detail = `records=${changedIds.join(',')} · column=${col} · type=${type}`;
     recordActionDiagnostic(action, 'start', detail);
+    cellHistoryBusy = true;
+    updateCellHistoryControls();
     try {
       await grist.selectedTable.update(
         updates.length === 1 ? updates[0] : updates,
@@ -1430,53 +1517,136 @@
       requestAnimationFrame(focusSelectedCell);
     } catch (err) {
       showToast(actionErrorMessage(action, err));
+    } finally {
+      cellHistoryBusy = false;
+      updateCellHistoryControls();
     }
   }
 
+  function encodeClipboardGrid(rows) {
+    return rows.map(row => row.map(text => /[\t\r\n"]/.test(text)
+      ? '"' + text.replace(/"/g, '""') + '"' : text).join('\t')).join('\n');
+  }
+
+  function decodeClipboardGrid(text) {
+    const rows = [[]];
+    let value = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"' && (quoted || value === '')) {
+        if (quoted && text[i + 1] === '"') { value += '"'; i++; }
+        else quoted = !quoted;
+      } else if (!quoted && (char === '\t' || char === '\r' || char === '\n')) {
+        rows[rows.length - 1].push(value);
+        value = '';
+        if (char !== '\t') {
+          if (char === '\r' && text[i + 1] === '\n') i++;
+          rows.push([]);
+        }
+      } else value += char;
+    }
+    if (quoted) throw new Error('Clipboard contains an unfinished quoted cell');
+    rows[rows.length - 1].push(value);
+    if (rows.length > 1 && /[\r\n]$/.test(text)) rows.pop();
+    return rows;
+  }
+
   function copySelectedCell(e) {
-    if (!selectedCell || isClipboardInput(e.target)) return;
-    const record = allRecords.find(item => String(item.id) === selectedCell.recordId);
-    const type = cellColumnType(selectedCell.col);
-    if (!record || !CELL_COPY_TYPES.has(type) || !e.clipboardData) return;
-    const value = normalizeCellValueForWrite(record[selectedCell.col], type);
-    const text = cellClipboardText(value, type);
-    copiedCell = { type, value, text };
+    if (!selectedCell || isClipboardInput(e.target) || !e.clipboardData) return;
+    const grid = selectedCellGrid();
+    if (!grid.length) return;
+    const cells = grid.map(row => row.map(cell => {
+      const col = cell.dataset.cellCol;
+      const type = cellColumnType(col);
+      const record = allRecords.find(item => String(item.id) === cell.dataset.cellId);
+      return { type, value: normalizeCellValueForWrite(record[col], type) };
+    }));
+    if (cells.some(row => row.some(cell => !CELL_COPY_TYPES.has(cell.type)))) {
+      e.preventDefault();
+      showToast('Copy blocked: the selection includes an unsupported column type');
+      return;
+    }
+    const text = encodeClipboardGrid(cells.map(row =>
+      row.map(cell => cellClipboardText(cell.value, cell.type))));
+    copiedCell = { cells, text };
     e.clipboardData.setData('text/plain', text);
-    try {
-      e.clipboardData.setData(CELL_CLIPBOARD_MIME, JSON.stringify(copiedCell));
-    } catch (_) {}
+    try { e.clipboardData.setData(CELL_CLIPBOARD_MIME, JSON.stringify(copiedCell)); } catch (_) {}
     e.preventDefault();
-    showToast('Cell copied', 'success');
+    showToast(cells.length * cells[0].length + ' cells copied', 'success');
   }
 
   async function pasteSelectedCell(e) {
     if (!selectedCell || isClipboardInput(e.target) || !e.clipboardData) return;
     e.preventDefault();
-    const col = selectedCell.col;
-    if (!isWritableCellColumn(col)) {
-      showToast(`Paste blocked: "${col}" is read-only or unsupported`);
-      return;
-    }
-    const destinationType = cellColumnType(col);
+    if (cellHistoryBusy) return;
     const text = e.clipboardData.getData('text/plain');
     let packet = null;
     try {
       const encoded = e.clipboardData.getData(CELL_CLIPBOARD_MIME);
       if (encoded) packet = JSON.parse(encoded);
     } catch (_) {}
-    if (!packet && copiedCell && copiedCell.type === destinationType && copiedCell.text === text)
-      packet = copiedCell;
-    if (packet && packet.type !== destinationType) {
-      showToast(`Paste blocked: ${packet.type} cannot be pasted into ${destinationType}`);
-      return;
-    }
+    if (!packet && copiedCell && copiedCell.text === text) packet = copiedCell;
     try {
-      const value = packet
-        ? normalizeCellValueForWrite(packet.value, destinationType)
-        : parsePastedCellText(text, destinationType);
-      await writeCellValues('Paste', [selectedCell.recordId], col, value);
+      const values = packet ? (packet.cells || [[packet]]) : decodeClipboardGrid(text);
+      if (!Array.isArray(values) || !values.length || !Array.isArray(values[0]) ||
+          !values[0].length || values.some(row => !Array.isArray(row) || row.length !== values[0].length))
+        throw new Error('Paste requires a rectangular block of cells');
+      const grid = selectedCellGrid();
+      if (!grid.length) return;
+      const rows = visibleCellRows();
+      const first = grid[0][0];
+      const rowStart = rows.findIndex(row => row[0].dataset.cellId === first.dataset.cellId);
+      const colStart = rows[rowStart].indexOf(first);
+      const singleTarget = grid.length === 1 && grid[0].length === 1;
+      const height = singleTarget ? values.length : grid.length;
+      const width = singleTarget ? values[0].length : grid[0].length;
+      if (height % values.length || width % values[0].length)
+        throw new Error('The selected range must match the copied block or be a whole multiple of it');
+      if (rowStart + height > rows.length || colStart + width > rows[rowStart].length)
+        throw new Error('Not enough visible rows or columns for this paste');
+      const changes = [];
+      for (let r = 0; r < height; r++) {
+        for (let c = 0; c < width; c++) {
+          const target = rows[rowStart + r][colStart + c];
+          const col = target.dataset.cellCol;
+          if (!isWritableCellColumn(col)) throw new Error('Paste blocked: "' + col + '" is read-only or unsupported');
+          const type = cellColumnType(col);
+          const input = values[r % values.length][c % values[0].length];
+          if (packet && (!input || input.type !== type))
+            throw new Error('Paste blocked: ' + (input && input.type) + ' cannot be pasted into ' + type);
+          const after = packet ? normalizeCellValueForWrite(input.value, type) : parsePastedCellText(input, type);
+          const id = validRecordId(target.dataset.cellId);
+          const record = allRecords.find(item => Number(item.id) === id);
+          changes.push({ id, col, before: cellHistoryValue(record[col], type), after });
+        }
+      }
+      // Preserve the existing single-cell path; rectangular writes use one atomic action bundle.
+      if (changes.length === 1) {
+        await writeCellValues('Paste', [changes[0].id], changes[0].col, changes[0].after);
+        return;
+      }
+      const meaningful = changes.filter(change => !Object.is(change.before, change.after));
+      if (!meaningful.length) return;
+      cellHistoryBusy = true;
+      updateCellHistoryControls();
+      try {
+        const tableId = await grist.selectedTable.getTableId();
+        await grist.docApi.applyUserActions(meaningful.map(change =>
+          ['UpdateRecord', tableId, change.id, { [change.col]: change.after }]), { parseStrings: false });
+        meaningful.forEach(change => applyCellChangesLocally(change.col, [change], 'after'));
+        rememberHistoryEntry({ kind: 'range', label: 'Paste range', tableId, changes: meaningful });
+        selectedCell = { recordId: first.dataset.cellId, col: first.dataset.cellCol };
+        const last = rows[rowStart + height - 1][colStart + width - 1];
+        cellRangeEnd = { recordId: last.dataset.cellId, col: last.dataset.cellCol };
+        render();
+        focusSelectedCell();
+        showToast(meaningful.length + ' cells pasted', 'success');
+      } finally {
+        cellHistoryBusy = false;
+        updateCellHistoryControls();
+      }
     } catch (err) {
-      showToast(err && err.message ? err.message : String(err));
+      showToast(actionErrorMessage('Paste', err));
     }
   }
 
@@ -1787,7 +1957,7 @@
   }
 
   async function saveFieldEditor() {
-    if (!editingCell || btnEditorSave.disabled) return;
+    if (!editingCell || btnEditorSave.disabled || cellHistoryBusy) return;
     const { recordId, col, kind, originalValue, historyValue } = editingCell;
     let nextValue;
     try {
@@ -1814,6 +1984,8 @@
       ? `record=${recordId} · column=${col} · value=${nextValue == null ? 'empty' : nextValue} UTC`
       : `record=${recordId} · column=${col} · characters=${nextValue.length}`;
     recordActionDiagnostic(action, 'start', detail);
+    cellHistoryBusy = true;
+    updateCellHistoryControls();
     try {
       await grist.selectedTable.update(
         { id: recordId, fields: { [col]: nextValue } },
@@ -1836,6 +2008,9 @@
       setEditorBusy(false);
       if (kind === 'datetime') focusDateTimePicker();
       else cellEditorText.focus();
+    } finally {
+      cellHistoryBusy = false;
+      updateCellHistoryControls();
     }
   }
 
@@ -2021,6 +2196,9 @@
   }
 
   async function addRecordToGroup(button, groupKey) {
+    if (cellHistoryBusy) return;
+    cellHistoryBusy = true;
+    updateCellHistoryControls();
     button.disabled = true;
     button.classList.add('saving');
     try {
@@ -2038,6 +2216,7 @@
         ['AddRecord', tableId, null, fields],
       ], { parseStrings: false });
       const createdId = validRecordId(result && result.retValues && result.retValues[0]);
+      rememberHistoryEntry({ kind: 'create', label: 'Add row', tableId, id: createdId, fields });
       // Verify stored data, rather than treating a returned ID as proof that
       // the group assignment survived host defaults or document triggers.
       const stored = await grist.docApi.fetchTable(tableId);
@@ -2055,6 +2234,8 @@
       recordActionDiagnostic('Add row', 'ok', `${detail} · created=${createdId}`);
       showToast(`${T.addRow}: ${label}`, 'success');
     } finally {
+      cellHistoryBusy = false;
+      updateCellHistoryControls();
       if (button.isConnected) {
         button.disabled = false;
         button.classList.remove('saving');
@@ -2197,20 +2378,21 @@
       'Fill', drag.targetCells.map(cell => cell.dataset.cellId), drag.col, value);
   }
 
-  function moveSelectedCell(key) {
+  function moveSelectedCell(key, extend = false) {
     if (!selectedCell) return false;
-    const current = findDataCell(selectedCell.recordId, selectedCell.col);
+    const position = extend && cellRangeEnd ? cellRangeEnd : selectedCell;
+    const current = findDataCell(position.recordId, position.col);
     if (!current) return false;
     let cells;
     if (key === 'ArrowUp' || key === 'ArrowDown') {
-      cells = visibleCellsForColumn(selectedCell.col);
+      cells = visibleCellsForColumn(position.col);
     } else {
       cells = [...current.closest('tr').querySelectorAll('td.data-cell')];
     }
     const index = cells.indexOf(current);
     const delta = key === 'ArrowUp' || key === 'ArrowLeft' ? -1 : 1;
     const target = cells[index + delta];
-    return target ? selectDataCell(target) : false;
+    return target ? selectDataCell(target, true, extend) : false;
   }
 
   content.addEventListener('click', (e) => {
@@ -2230,11 +2412,49 @@
     }
     const cell = e.target.closest('td.data-cell');
     if (!cell || !content.contains(cell)) return;
-    const wasSelected = selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol);
-    selectDataCell(cell);
+    if (Date.now() < suppressCellClickUntil) {
+      suppressCellClickUntil = 0;
+      e.preventDefault();
+      return;
+    }
+    const wasSelected = !cellRangeEnd && selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol);
+    selectDataCell(cell, true, e.shiftKey);
     const editBtn = cell.querySelector('button[data-edit-id][data-edit-col]');
-    if (wasSelected && editBtn && !editBtn.disabled)
+    if (wasSelected && !e.shiftKey && editBtn && !editBtn.disabled)
       openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn);
+  });
+
+  content.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.button !== 2) return;
+    if (e.target.closest('.cell-fill-handle')) return;
+    const cell = e.target.closest('td.data-cell');
+    if (!cell) return;
+    e.preventDefault();
+    cellSelectionDrag = { pointerId: e.pointerId, cell, extend: e.shiftKey, moved: false };
+  });
+  window.addEventListener('pointermove', (e) => {
+    const drag = cellSelectionDrag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const hit = document.elementFromPoint && document.elementFromPoint(e.clientX, e.clientY);
+    const target = hit && hit.closest('td.data-cell');
+    if (!target || !content.contains(target) || target.closest('.group.collapsed')) return;
+    if (drag.moved && cellRangeEnd && cellRangeEnd.recordId === target.dataset.cellId
+        && cellRangeEnd.col === target.dataset.cellCol) return;
+    if (!drag.moved && target === drag.cell) return;
+    e.preventDefault();
+    if (!drag.moved) selectDataCell(drag.cell, false, drag.extend);
+    drag.moved = true;
+    selectDataCell(target, true, true);
+  });
+  function finishCellSelection(e) {
+    if (!cellSelectionDrag || cellSelectionDrag.pointerId !== e.pointerId) return;
+    if (cellSelectionDrag.moved) suppressCellClickUntil = Date.now() + 400;
+    cellSelectionDrag = null;
+  }
+  window.addEventListener('pointerup', finishCellSelection);
+  window.addEventListener('pointercancel', finishCellSelection);
+  content.addEventListener('contextmenu', (e) => {
+    if (cellSelectionDrag || Date.now() < suppressCellClickUntil) e.preventDefault();
   });
 
   content.addEventListener('pointerdown', (e) => {
@@ -2280,7 +2500,7 @@
     const cell = e.target.closest('td.data-cell');
     if (!cell || !selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol)) return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-      if (moveSelectedCell(e.key)) e.preventDefault();
+      if (moveSelectedCell(e.key, e.shiftKey)) e.preventDefault();
       return;
     }
     if (e.key === 'Enter' || e.key === 'F2') {

@@ -2,6 +2,17 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.14 — 2026-09-22
+
+- Add rectangular cell selection with Shift-click, Shift+Arrow keys, and
+  left/right mouse dragging, using a continuous blue outer border.
+- Copy and paste typed ranges and spreadsheet TSV, validate whole destination
+  blocks before writing, and undo or redo each paste as one operation.
+- Include footer row creation in undo/redo history; restore the same record ID
+  and student/sprint values on redo.
+- Prevent native text highlighting in table cells and retain cell focus across
+  Grist record refreshes.
+
 ## v7.13 — 2026-09-22
 
 - Inherit the common student from the current visible records when adding a

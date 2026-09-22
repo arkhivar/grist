@@ -78,6 +78,7 @@ const doc = win.document;
 const calls = { ready: [], setOption: [], create: [], update: [], destroy: [], actions: [] };
 let createdGroupValue = null;
 let createdFields = {};
+let createdExists = true;
 let onRecordsCb = null;
 let onOptionsCb = null;
 
@@ -104,13 +105,17 @@ win.grist = {
   docApi: {
     applyUserActions: async (actions, options) => {
       calls.actions.push([actions, options]);
-      assertEq(actions[0][0], 'AddRecord', 'create action');
       assertEq(actions[0][1], 'Table1', 'destination table');
-      createdGroupValue = actions[0][3].sprint;
-      createdFields = actions[0][3];
+      if (actions[0][0] === 'AddRecord') {
+        createdExists = true;
+        createdGroupValue = actions[0][3].sprint;
+        createdFields = actions[0][3];
+      }
+      if (actions[0][0] === 'RemoveRecord') createdExists = false;
       return { retValues: [99] };
     },
     fetchTable: async name => {
+      if (name === 'Table1' && !createdExists) return { id: [] };
       if (name === 'Table1') return { id: [99], ...Object.fromEntries(
         Object.entries(createdFields).map(([col, value]) => [col, [value]])) };
       if (name === '_grist_Tables')
@@ -664,6 +669,100 @@ await test('J24: resized column width is saved to and restored from Grist option
     'saved column width restore');
   assertEq(doc.querySelector('col[data-column="students"]').style.width,
     `${savedWidth}px`, 'restored students width');
+});
+
+await test('K: Shift-click selects, copies and pastes a three-row block with one undo', async () => {
+  click(cellEl(3, 'weekday'));
+  click(cellEl(5, 'weekday'), { shiftKey: true });
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 3, 'three selected cells');
+  assert(cellEl(3, 'weekday').classList.contains('range-top'), 'top border missing');
+  assert(cellEl(5, 'weekday').classList.contains('range-bottom'), 'bottom border missing');
+  const data = {};
+  cellEl(3, 'weekday').dispatchEvent(clipboardEvent('copy', data));
+  assertEq(data['text/plain'], 'Sun\nThu\nThu', 'range clipboard order');
+  const original = [3, 4, 5].map(id => cellText(id, 'performance'));
+  click(cellEl(3, 'performance'));
+  let before = calls.actions.length;
+  cellEl(3, 'performance').dispatchEvent(clipboardEvent('paste', data));
+  await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'range paste');
+  assertEq(calls.actions[before][0].length, 3, 'one bundle of three writes');
+  assertEq([3, 4, 5].map(id => cellText(id, 'performance')).join(','), 'Sun,Thu,Thu', 'pasted block');
+  before = calls.actions.length;
+  click(doc.getElementById('btn-undo'));
+  await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-redo').disabled, 'range undo');
+  assertEq(JSON.stringify([3, 4, 5].map(id => cellText(id, 'performance'))), JSON.stringify(original), 'whole block restored');
+  before = calls.actions.length;
+  click(doc.getElementById('btn-redo'));
+  await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'range redo');
+  assertEq([3, 4, 5].map(id => cellText(id, 'performance')).join(','), 'Sun,Thu,Thu', 'whole block redone');
+});
+
+await test('K: rectangular TSV paste validates all cells before any write', async () => {
+  click(cellEl(3, 'weekday'));
+  const before = calls.actions.length;
+  cellEl(3, 'weekday').dispatchEvent(clipboardEvent('paste', { 'text/plain': 'Monday\t10\nTuesday\tnot-a-number' }));
+  await flush();
+  assertEq(calls.actions.length, before, 'invalid block partially saved');
+  cellEl(3, 'weekday').dispatchEvent(clipboardEvent('paste', { 'text/plain': 'Monday\t10\nTuesday\t20' }));
+  await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'two-column paste');
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 4, '2x2 selection');
+  assertEq(cellText(4, 'count'), '20', 'numeric TSV value');
+  const data = {};
+  cellEl(3, 'weekday').dispatchEvent(clipboardEvent('copy', data));
+  assertEq(data['text/plain'], 'Monday\t10\nTuesday\t20', '2x2 clipboard');
+});
+
+await test('K: Shift+arrows and right-button dragging extend selection without editing', async () => {
+  click(cellEl(3, 'weekday'));
+  cellEl(3, 'weekday').dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'ArrowDown', shiftKey: true, bubbles: true, cancelable: true,
+  }));
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 2, 'keyboard extension');
+  const previousHit = doc.elementFromPoint;
+  doc.elementFromPoint = () => cellEl(5, 'performance');
+  cellEl(3, 'weekday').dispatchEvent(pointerEvent('pointerdown', 80, { button: 2 }));
+  win.dispatchEvent(pointerEvent('pointermove', 80, { button: 2, buttons: 2, clientX: 50, clientY: 50 }));
+  win.dispatchEvent(pointerEvent('pointerup', 80, { button: 2 }));
+  doc.elementFromPoint = previousHit;
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 9, 'dragged 3x3 rectangle');
+  assert(doc.getElementById('cell-editor').hidden, 'drag opened editor');
+  const menu = new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+  cellEl(5, 'performance').dispatchEvent(menu);
+  assert(menu.defaultPrevented, 'drag spawned native context menu');
+  await new Promise(resolve => setTimeout(resolve, 410));
+});
+
+await test('K: created rows can be undone and redone with the same ID and student', async () => {
+  onRecordsCb(RECORDS.filter(record => record.id === 1));
+  let before = calls.actions.length;
+  const button = doc.querySelector('.group-add-row');
+  click(button);
+  await waitFor(() => calls.actions.length === before + 1 && !button.disabled, 'undoable creation');
+  assert(doc.getElementById('btn-undo').title.includes('Add row'), 'creation absent from history');
+  const fields = { ...createdFields };
+  before = calls.actions.length;
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-redo').disabled, 'creation undo');
+  assertEq(JSON.stringify(calls.actions[before][0][0]), JSON.stringify(['RemoveRecord', 'Table1', 99]), 'undo removed created ID');
+  before = calls.actions.length;
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'creation redo');
+  const action = calls.actions[before][0][0];
+  assertEq(action[2], 99, 'redo retained row ID');
+  assertEq(action[3].students, fields.students, 'redo restored student');
+  assertEq(action[3].sprint, fields.sprint, 'redo restored sprint');
+  onRecordsCb(RECORDS);
+});
+
+await test('K: quoted spreadsheet cells preserve tabs and line breaks', async () => {
+  click(cellEl(3, 'students'));
+  const before = calls.actions.length;
+  cellEl(3, 'students').dispatchEvent(clipboardEvent('paste', {
+    'text/plain': '"Line one\nLine two"\t"Tab\tinside"\r\n',
+  }));
+  await waitFor(() => calls.actions.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'quoted TSV paste');
+  assertEq(cellText(3, 'students'), 'Line one\nLine two', 'multiline text');
+  assertEq(cellText(3, 'weekday'), 'Tab\tinside', 'embedded tab');
 });
 
 // ── Summary ──────────────────────────────────────────────────
