@@ -2,6 +2,15 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.12 — 2026-09-22
+
+- Restore numeric aggregates to the group header in expanded and collapsed
+  states, preserving footer labels, column controls, and the add-row button.
+- Use an explicit Grist AddRecord action with the destination grouping value
+  and verify the saved assignment before displaying success.
+- Encode empty-group identifiers safely in add-row buttons and prevent repeat
+  clicks while creation is pending.
+
 ## v7.11 — 2026-09-22
 
 - Move column labels, resizing/reordering controls, and automatic numeric

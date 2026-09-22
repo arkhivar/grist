@@ -32,8 +32,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Multi-select bulk actions** — use the grip controls to select records, then
   duplicate / delete the whole selection from the bottom action bar
 - **Automatic sums** — every Grist Numeric/Int column shows its group total
-  in the table footer, aligned with its column, including numeric formula
-  columns
+  in the group header in both collapsed and expanded states, aligned with its
+  column, including numeric formula columns
 - **Shared adjustable columns** — every group uses the same widths; drag a
   footer column edge to resize a column everywhere
 - **Column reordering** — drag footer columns left/right to change the order
@@ -76,6 +76,8 @@ Every record row has a trailing actions cell with always-visible buttons
   with that group's value prefilled. It supports writable Text, Choice, Bool,
   Int, Numeric, Date, and DateTime grouping columns; unsupported or read-only
   groupings show the button disabled with the reason in its tooltip.
+  Creation sends the grouping value with an explicit Grist `AddRecord` action
+  and checks the stored assignment before reporting success.
 
 ### Multi-select bulk actions
 
@@ -185,8 +187,9 @@ unlimited default (checkbox unticked).
 ## Automatic numeric sums
 
 Every visible Grist **Numeric** or **Int** column automatically shows the sum
-of that group's rows in the group table footer, horizontally aligned with its
-column. Formula columns are included when their declared Grist result type is
+of that group's rows in the group header, visible when collapsed or expanded
+and horizontally aligned with its column. Column names stay in the footer.
+Formula columns are included when their declared Grist result type is
 numeric. Each compact total contains only the number—there is no `Σ` or
 function name.
 

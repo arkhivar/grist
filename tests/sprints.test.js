@@ -75,7 +75,8 @@ const win = dom.window;
 const doc = win.document;
 
 // Grist API mock — records every mutating call.
-const calls = { ready: [], setOption: [], create: [], update: [], destroy: [] };
+const calls = { ready: [], setOption: [], create: [], update: [], destroy: [], actions: [] };
+let createdGroupValue = null;
 let onRecordsCb = null;
 let onOptionsCb = null;
 
@@ -100,7 +101,15 @@ win.grist = {
     destroy: async (...a) => { calls.destroy.push(a); },
   },
   docApi: {
+    applyUserActions: async (actions, options) => {
+      calls.actions.push([actions, options]);
+      assertEq(actions[0][0], 'AddRecord', 'create action');
+      assertEq(actions[0][1], 'Table1', 'destination table');
+      createdGroupValue = actions[0][3].sprint;
+      return { retValues: [99] };
+    },
     fetchTable: async name => {
+      if (name === 'Table1') return { id: [99], sprint: [createdGroupValue] };
       if (name === '_grist_Tables')
         return { id: [1], tableId: ['Table1'] };
       if (name === '_grist_Tables_column')
@@ -266,15 +275,21 @@ await test('C10: del is a two-step arm → confirm → selectedTable.destroy([id
 });
 
 // ── D. Aggregates ────────────────────────────────────────────
-await test('D11: footer replaces the header and shows the numeric sum (-2850)', async () => {
+await test('D11: sums stay in the group header when expanded and collapsed', async () => {
   const card = [...doc.querySelectorAll('.group')]
     .find(c => c.dataset.groupLabel === 'Sprint 13');
   assert(card, 'group "Sprint 13" not found');
   assert(!card.querySelector('thead'), 'obsolete table header is still present');
   assert(!card.querySelector('.group-select-grip'), 'obsolete group select-all grip is still present');
-  const sum = card.querySelector('tfoot .footer-aggregate[data-column="count"]');
-  assert(sum, 'no .footer-aggregate for column "count" in the group footer');
+  const sum = card.querySelector('.group-header .group-sum[data-column="count"]');
+  assert(sum, 'numeric sum missing from group header');
+  assert(!card.querySelector('tfoot .footer-aggregate'), 'sum remains in footer');
+  assert(card.querySelector('tfoot .column-name'), 'footer labels missing');
   assertEq(sum.textContent, '-2850', 'sum of -1425 + -1425');
+  click(card.querySelector('.group-header'));
+  assert(card.classList.contains('collapsed'), 'group did not collapse');
+  assertEq(sum.textContent, '-2850', 'collapsed header sum');
+  click(card.querySelector('.group-header'));
 });
 
 await test('D12: group footer plus creates a row seeded with its group value', async () => {
@@ -284,11 +299,11 @@ await test('D12: group footer plus creates a row seeded with its group value', a
   assert(addButton, 'group footer add-row button missing');
   assert(!addButton.disabled, 'group footer add-row button is disabled');
   assert(addButton.querySelector('.add-row-icon'), 'add-row plus icon missing');
-  const before = calls.create.length;
+  const before = calls.actions.length;
   click(addButton);
-  await waitFor(() => calls.create.length === before + 1, 'group footer row create');
-  const [arg, options] = calls.create[calls.create.length - 1];
-  assertEq(JSON.stringify(arg.fields), JSON.stringify({ sprint: 'Sprint 13' }),
+  await waitFor(() => calls.actions.length === before + 1 && !addButton.disabled, 'verified group footer row create');
+  const [actions, options] = calls.actions[calls.actions.length - 1];
+  assertEq(JSON.stringify(actions[0][3]), JSON.stringify({ sprint: 'Sprint 13' }),
     'new row grouping field');
   assertEq(options && options.parseStrings, false, 'new row parseStrings option');
 
@@ -306,6 +321,31 @@ await test('D12: group footer plus creates a row seeded with its group value', a
 });
 
 // ── E. Diagnostics ───────────────────────────────────────────
+await test('D: empty-group creation and failed assignment verification', async () => {
+  onRecordsCb([...RECORDS, { ...RECORDS[0], id: 98, sprint: null }]);
+  const emptyButton = [...doc.querySelectorAll('.group-add-row')]
+    .find(button => button.getAttribute('aria-label') === 'Add row to (empty)');
+  assert(emptyButton, 'empty group add button missing');
+  const before = calls.actions.length;
+  click(emptyButton);
+  await waitFor(() => calls.actions.length === before + 1 && !emptyButton.disabled, 'empty group creation');
+  assertEq(createdGroupValue, null, 'empty group value');
+  onRecordsCb(RECORDS);
+  const originalFetch = win.grist.docApi.fetchTable;
+  win.grist.docApi.fetchTable = async name => name === 'Table1'
+    ? { id: [99], sprint: [''] } : originalFetch(name);
+  try {
+    const button = [...doc.querySelectorAll('.group-add-row')]
+      .find(item => item.getAttribute('aria-label') === 'Add row to Sprint 13');
+    click(button);
+    await waitFor(() => doc.getElementById('toast').textContent.includes('did not retain'), 'failed assignment warning');
+    assert(!doc.getElementById('toast').classList.contains('success'), 'false success reported');
+    assert(!button.disabled, 'failed create left add button disabled');
+  } finally {
+    win.grist.docApi.fetchTable = originalFetch;
+  }
+});
+
 await test('E13: diagnostics lists the date column as date-like: yes', async () => {
   click(doc.getElementById('btn-settings'));
   assert(doc.getElementById('settings-panel').classList.contains('open'),

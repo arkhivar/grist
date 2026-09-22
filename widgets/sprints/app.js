@@ -357,6 +357,7 @@
       table.style.width =
         `${SELECT_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + dataWidth}px`;
     });
+    scheduleGroupSumAlignment();
   }
 
   function moveColumn(source, target, after) {
@@ -378,22 +379,46 @@
     return true;
   }
 
-  function buildColumnFooter(col, records) {
-    const numeric = isNumericColumn(col);
-    const sum = numeric ? sumColumn(records, col) : null;
-    const aggregate = numeric
-      ? `<span class="footer-aggregate" data-column="${esc(col)}"`
-        + ` title="Sum of ${esc(col)}" aria-label="Sum of ${esc(col)}: ${esc(sum == null ? '—' : String(sum))}">`
-        + `${esc(sum == null ? '—' : String(sum))}</span>`
-      : '';
+  function buildColumnFooter(col) {
     return `<th scope="col" class="column-header" draggable="true" tabindex="0"`
       + ` title="${esc(col)} — ${esc(T.reorderColumn)}" data-column="${esc(col)}">`
       + `<span class="column-footer-content"><span class="column-name">${esc(col)}</span>`
-      + `${aggregate}</span>`
+      + `</span>`
       + `<span class="column-resize-handle" draggable="false" tabindex="0"`
       + ` role="separator" aria-orientation="vertical"`
       + ` aria-label="${esc(T.resizeColumn)} ${esc(col)}"></span></th>`;
   }
+
+  function buildGroupSums(records, cols) {
+    return '<span class="group-sums">' + cols.filter(isNumericColumn).map(col => {
+      const sum = sumColumn(records, col);
+      const value = sum == null ? '—' : String(sum);
+      return `<span class="group-sum" data-column="${esc(col)}"`
+        + ` title="Sum of ${esc(col)}" aria-label="Sum of ${esc(col)}: ${esc(value)}">`
+        + `${esc(value)}</span>`;
+    }).join('') + '</span>';
+  }
+
+  let groupSumAlignFrame = 0;
+  function scheduleGroupSumAlignment() {
+    cancelAnimationFrame(groupSumAlignFrame);
+    groupSumAlignFrame = requestAnimationFrame(() => {
+      content.querySelectorAll('.group').forEach(card => {
+        const headerRect = card.querySelector('.group-header').getBoundingClientRect();
+        const footers = new Map([...card.querySelectorAll('tfoot th[data-column]')]
+          .map(cell => [cell.dataset.column, cell]));
+        card.querySelectorAll('.group-sum').forEach(sum => {
+          const cell = footers.get(sum.dataset.column);
+          if (!cell) return;
+          const rect = cell.getBoundingClientRect();
+          sum.style.left = `${rect.left + rect.width / 2 - headerRect.left}px`;
+        });
+      });
+    });
+  }
+  window.addEventListener('resize', scheduleGroupSumAlignment);
+  if (document.fonts && document.fonts.ready)
+    document.fonts.ready.then(scheduleGroupSumAlignment);
 
   function prefersReducedMotion() {
     return typeof window.matchMedia === 'function'
@@ -884,7 +909,8 @@
         <span class="group-badge"
               aria-label="${group.records.length}\u00a0${group.records.length > 1 ? T.records : T.record}"
         >${group.records.length}</span>
-        <span class="${labelCls}">${labelTxt}</span>`;
+        <span class="${labelCls}">${labelTxt}</span>
+        ${buildGroupSums(group.records, displayCols)}`;
 
       header.addEventListener('click', () => {
         if (collapsed.has(group.key)) {
@@ -917,6 +943,7 @@
       scroller.scrollLeft = sharedTableScrollLeft;
     });
     startPendingRowAnimations();
+    scheduleGroupSumAlignment();
     refreshBoolSection();
   }
 
@@ -944,10 +971,10 @@
       ? `${T.addRowToGroup} ${groupLabel}`
       : `${T.addRowUnavailable}: ${addContext.reason}`;
     const footer = '<th class="col-grip">'
-      + `<button type="button" class="group-add-row" data-group-key="${esc(group.key)}"`
+      + `<button type="button" class="group-add-row" data-group-key="${esc(encodeURIComponent(group.key))}"`
       + ` title="${esc(addLabel)}" aria-label="${esc(addLabel)}"`
       + `${addContext.enabled ? '' : ' disabled'}>${plusIconHtml()}</button></th>`
-      + cols.map(col => buildColumnFooter(col, records)).join('')
+      + cols.map(col => buildColumnFooter(col)).join('')
       + '<th class="col-actions" aria-hidden="true"></th>';
     const moveContext = getRecordMoveContext();
     const dragEnabled = moveContext.enabled;
@@ -1129,6 +1156,7 @@
       if (other !== scroller) other.scrollLeft = sharedTableScrollLeft;
     });
     syncingTableScroll = false;
+    scheduleGroupSumAlignment();
   }, true);
 
   // Per-row actions cell: duplicate ⧉ / delete ✕
@@ -1967,21 +1995,31 @@
   }
 
   async function addRecordToGroup(button, groupKey) {
-    await getWritableColumnIds();
-    const group = getGroups().find(candidate => candidate.key === groupKey);
-    if (!group) throw new Error('The destination group is no longer available');
-    const context = getAddRowContext(group);
-    if (!context.enabled) throw new Error(context.reason);
-    const label = group.key === '\x00__empty__' ? T.emptyGroup : String(group.label);
-    const detail = `column=${context.col} · target=${label} · type=${context.type}`;
     button.disabled = true;
     button.classList.add('saving');
-    recordActionDiagnostic('Add row', 'start', detail);
     try {
-      const created = await grist.selectedTable.create({
-        fields: { [context.col]: context.value },
-      }, { parseStrings: false });
-      const createdId = created && created.id != null ? created.id : 'unknown';
+      await getWritableColumnIds();
+      const group = getGroups().find(candidate => candidate.key === groupKey);
+      if (!group) throw new Error('The destination group is no longer available');
+      const context = getAddRowContext(group);
+      if (!context.enabled) throw new Error(context.reason);
+      const label = group.key === '\x00__empty__' ? T.emptyGroup : String(group.label);
+      const detail = `column=${context.col} · target=${label} · type=${context.type}`;
+      recordActionDiagnostic('Add row', 'start', detail);
+      const tableId = await grist.selectedTable.getTableId();
+      const result = await grist.docApi.applyUserActions([
+        ['AddRecord', tableId, null, { [context.col]: context.value }],
+      ], { parseStrings: false });
+      const createdId = validRecordId(result && result.retValues && result.retValues[0]);
+      // Verify stored data, rather than treating a returned ID as proof that
+      // the group assignment survived host defaults or document triggers.
+      const stored = await grist.docApi.fetchTable(tableId);
+      const index = stored.id.indexOf(createdId);
+      const savedValue = index < 0 ? undefined : stored[context.col]?.[index];
+      const expected = normalizeCellValueForWrite(context.value, context.type);
+      const actual = normalizeCellValueForWrite(savedValue, context.type);
+      if (index < 0 || !Object.prototype.hasOwnProperty.call(stored, context.col) || actual !== expected)
+        throw new Error(`Record ${createdId} was created, but Grist did not retain its group assignment. Check column defaults, formulas, or triggers before adding another row.`);
       queueRowAnimation(createdId, 'row-enter', 950);
       recordActionDiagnostic('Add row', 'ok', `${detail} · created=${createdId}`);
       showToast(`${T.addRow}: ${label}`, 'success');
@@ -2148,7 +2186,7 @@
     if (e.target.closest('.cell-fill-handle')) return;
     const addButton = e.target.closest('.group-add-row[data-group-key]');
     if (addButton && content.contains(addButton) && !addButton.disabled) {
-      addRecordToGroup(addButton, addButton.dataset.groupKey)
+      addRecordToGroup(addButton, decodeURIComponent(addButton.dataset.groupKey))
         .catch(err => showToast(actionErrorMessage('Add row', err)));
       return;
     }

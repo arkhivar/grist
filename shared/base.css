@@ -326,8 +326,13 @@
       display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis;
       padding-right: 5px;
     }
-    .footer-aggregate {
-      flex-shrink: 0; color: var(--accent); font-weight: 600;
+    .group-sums { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .group-sum {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      max-width: 160px; padding: 1px 7px; border-radius: 10px;
+      background: var(--surface); color: var(--accent);
+      font-family: var(--mono); font-size: 10px; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
     .column-resize-handle {
