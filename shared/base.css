@@ -69,6 +69,7 @@
     .toolbar select:focus-visible { border-color: var(--accent); box-shadow: var(--focus-ring); }
     .toolbar-sep { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; }
     .toolbar-right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+    .history-controls { display: flex; align-items: center; gap: 2px; }
 
     .btn {
       font-family: var(--font); font-size: 11px; font-weight: 500;
@@ -90,6 +91,10 @@
     .btn-icon:hover         { background: var(--bg); border-color: var(--muted); color: var(--text); }
     .btn-icon.active        { background: var(--accent); border-color: var(--accent); color: #fff; }
     .btn-icon:focus-visible { box-shadow: var(--focus-ring); }
+    .btn-icon:disabled {
+      background: var(--surface); border-color: var(--border); color: var(--border-strong);
+      cursor: default; opacity: .7;
+    }
 
     /* ── Settings panel ── */
     .settings-panel {

@@ -1207,6 +1207,7 @@
   const CELL_COPY_TYPES = new Set([
     'Text', 'Choice', 'Bool', 'Int', 'Numeric', 'Date', 'DateTime',
   ]);
+  const CELL_HISTORY_LIMIT = 50;
 
   function cellColumnType(col) {
     return columnBaseType(writableColumnTypes[col] || columnTypes[col]);
@@ -1218,6 +1219,86 @@
 
   function isWritableCellColumn(col) {
     return writableColumnIds.includes(col) && isSupportedCellColumn(col);
+  }
+
+  function cellHistoryValue(value, type) {
+    if (value == null) return null;
+    return normalizeCellValueForWrite(value, type);
+  }
+
+  function updateCellHistoryControls() {
+    const undoEntry = cellUndoStack[cellUndoStack.length - 1];
+    const redoEntry = cellRedoStack[cellRedoStack.length - 1];
+    const undoLabel = undoEntry
+      ? `${T.undo} ${undoEntry.label} (Ctrl/Cmd+Z)`
+      : T.nothingToUndo;
+    const redoLabel = redoEntry
+      ? `${T.redo} ${redoEntry.label} (Ctrl/Cmd+Y)`
+      : T.nothingToRedo;
+    btnUndo.disabled = cellHistoryBusy || !undoEntry;
+    btnRedo.disabled = cellHistoryBusy || !redoEntry;
+    btnUndo.title = undoLabel;
+    btnRedo.title = redoLabel;
+    btnUndo.setAttribute('aria-label', undoLabel);
+    btnRedo.setAttribute('aria-label', redoLabel);
+  }
+
+  function rememberCellHistory(label, col, changes) {
+    const meaningful = changes.filter(change => !Object.is(change.before, change.after));
+    if (!meaningful.length) return;
+    cellUndoStack.push({ label, col, changes: meaningful });
+    if (cellUndoStack.length > CELL_HISTORY_LIMIT) cellUndoStack.shift();
+    cellRedoStack.length = 0;
+    updateCellHistoryControls();
+  }
+
+  function applyCellChangesLocally(col, changes, side) {
+    const byId = new Map(changes.map(change => [change.id, change[side]]));
+    allRecords.forEach(record => {
+      const id = Number(record.id);
+      if (byId.has(id)) record[col] = byId.get(id);
+    });
+  }
+
+  async function replayCellHistory(direction) {
+    if (cellHistoryBusy) return;
+    const isUndo = direction === 'undo';
+    const source = isUndo ? cellUndoStack : cellRedoStack;
+    const destination = isUndo ? cellRedoStack : cellUndoStack;
+    const entry = source[source.length - 1];
+    if (!entry) return;
+    const side = isUndo ? 'before' : 'after';
+    const updates = entry.changes.map(change => ({
+      id: change.id,
+      fields: { [entry.col]: change[side] },
+    }));
+    const action = isUndo ? T.undo : T.redo;
+    const detail = `action=${entry.label} · records=${entry.changes.map(change => change.id).join(',')}`
+      + ` · column=${entry.col}`;
+    cellHistoryBusy = true;
+    updateCellHistoryControls();
+    recordActionDiagnostic(action, 'start', detail);
+    try {
+      await grist.selectedTable.update(
+        updates.length === 1 ? updates[0] : updates,
+        { parseStrings: false });
+      source.pop();
+      destination.push(entry);
+      applyCellChangesLocally(entry.col, entry.changes, side);
+      selectedCell = {
+        recordId: String(entry.changes[0].id),
+        col: entry.col,
+      };
+      recordActionDiagnostic(action, 'ok', detail);
+      showToast(`${action} complete: ${entry.label}`, 'success');
+      render();
+      requestAnimationFrame(focusSelectedCell);
+    } catch (err) {
+      showToast(actionErrorMessage(action, err));
+    } finally {
+      cellHistoryBusy = false;
+      updateCellHistoryControls();
+    }
   }
 
   function selectedCellMatches(recordId, col) {
@@ -1325,18 +1406,32 @@
   async function writeCellValues(action, recordIds, col, value) {
     const ids = [...new Set(recordIds.map(id => validRecordId(id)).filter(id => id != null))];
     if (!ids.length) return;
-    const updates = ids.map(id => ({ id, fields: { [col]: value } }));
-    const detail = `records=${ids.join(',')} · column=${col} · type=${cellColumnType(col)}`;
+    const type = cellColumnType(col);
+    const after = cellHistoryValue(value, type);
+    const changes = ids.map(id => {
+      const record = allRecords.find(item => Number(item.id) === id);
+      return {
+        id,
+        before: record ? cellHistoryValue(record[col], type) : null,
+        after,
+      };
+    }).filter(change => !Object.is(change.before, change.after));
+    if (!changes.length) {
+      showToast('No cell changes to apply', 'success');
+      return;
+    }
+    const updates = changes.map(change => ({ id: change.id, fields: { [col]: change.after } }));
+    const changedIds = changes.map(change => change.id);
+    const detail = `records=${changedIds.join(',')} · column=${col} · type=${type}`;
     recordActionDiagnostic(action, 'start', detail);
     try {
       await grist.selectedTable.update(
         updates.length === 1 ? updates[0] : updates,
         { parseStrings: false });
-      allRecords.forEach(record => {
-        if (ids.includes(Number(record.id))) record[col] = value;
-      });
+      applyCellChangesLocally(col, changes, 'after');
+      rememberCellHistory(action, col, changes);
       recordActionDiagnostic(action, 'ok', detail);
-      showToast(action === 'Fill' ? `${ids.length} cells filled` : 'Cell pasted', 'success');
+      showToast(action === 'Fill' ? `${changes.length} cells filled` : 'Cell pasted', 'success');
       render();
       requestAnimationFrame(focusSelectedCell);
     } catch (err) {
@@ -1638,7 +1733,8 @@
     const originalValue = isDateTime && value != null
       ? Math.floor(value / 60) * 60
       : value;
-    editingCell = { recordId, col, kind, originalValue, anchorEl };
+    const historyValue = cellHistoryValue(rec[col], cellColumnType(col));
+    editingCell = { recordId, col, kind, originalValue, historyValue, anchorEl };
     const editorLabel = `${isDateTime ? T.editDateTime : T.editCell}: ${col}`;
     cellEditorText.setAttribute('aria-label', editorLabel);
     datePickerGrid.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
@@ -1698,7 +1794,7 @@
 
   async function saveFieldEditor() {
     if (!editingCell || btnEditorSave.disabled) return;
-    const { recordId, col, kind, originalValue } = editingCell;
+    const { recordId, col, kind, originalValue, historyValue } = editingCell;
     let nextValue;
     try {
       if (kind === 'datetime') {
@@ -1731,6 +1827,11 @@
       recordActionDiagnostic(action, 'ok', detail);
       const current = allRecords.find(r => Number(r.id) === recordId);
       if (current) current[col] = nextValue;
+      rememberCellHistory(action, col, [{
+        id: recordId,
+        before: historyValue,
+        after: cellHistoryValue(nextValue, cellColumnType(col)),
+      }]);
       setEditorBusy(false);
       closeFieldEditor();
       render();
@@ -2108,6 +2209,20 @@
 
   document.addEventListener('copy', copySelectedCell);
   document.addEventListener('paste', pasteSelectedCell);
+  btnUndo.addEventListener('click', () => replayCellHistory('undo'));
+  btnRedo.addEventListener('click', () => replayCellHistory('redo'));
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || !cellEditor.hidden || isClipboardInput(e.target))
+      return;
+    const key = String(e.key || '').toLowerCase();
+    let direction = '';
+    if (key === 'z') direction = e.shiftKey ? 'redo' : 'undo';
+    else if (key === 'y') direction = 'redo';
+    if (!direction) return;
+    e.preventDefault();
+    replayCellHistory(direction);
+  });
+  updateCellHistoryControls();
 
   document.addEventListener('click', (e) => {
     if (cellEditor.hidden || !cellEditor.classList.contains('popover-mode')) return;

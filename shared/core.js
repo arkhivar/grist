@@ -5,6 +5,10 @@
       expandAll:       'Expand all',
       collapseAll:     'Collapse all',
       settingsLabel:   'Display settings',
+      undo:            'Undo',
+      redo:            'Redo',
+      nothingToUndo:   'Nothing to undo',
+      nothingToRedo:   'Nothing to redo',
       chooseCol:       '— choose —',
       sortAlphaAsc:    'A → Z',
       sortAlphaDesc:   'Z → A',
@@ -85,7 +89,7 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.09';
+  const WIDGET_VERSION = '7.10';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -144,6 +148,9 @@
   let selectedCell = null;
   let copiedCell = null;
   let activeFillDrag = null;
+  const cellUndoStack = [];
+  const cellRedoStack = [];
+  let cellHistoryBusy = false;
   const actionDiagnostics = [];
   const armedDeletes = new Map();  // id (string) → timeoutId, two-step confirmation
   const selectedIds = new Set();   // ids (string) of selected records
@@ -156,6 +163,8 @@
   const emptyState    = document.getElementById('empty-state');
   const settingsPanel = document.getElementById('settings-panel');
   const btnSettings   = document.getElementById('btn-settings');
+  const btnUndo       = document.getElementById('btn-undo');
+  const btnRedo       = document.getElementById('btn-redo');
   const boolRow       = document.getElementById('bool-row');
   const editableColList = document.getElementById('editable-col-list');
   const btnResetColumns = document.getElementById('btn-reset-columns');
@@ -191,6 +200,7 @@
     document.getElementById('btn-expand').textContent               = T.expandAll;
     document.getElementById('btn-collapse').textContent             = T.collapseAll;
     document.getElementById('btn-settings').setAttribute('aria-label', T.settingsLabel);
+    document.querySelector('.history-controls').setAttribute('aria-label', `${T.undo} / ${T.redo}`);
     document.querySelector('#group-select option').textContent      = T.chooseCol;
     const sortOpts = document.querySelectorAll('#sort-select option');
     sortOpts[0].textContent = T.sortAlphaAsc;

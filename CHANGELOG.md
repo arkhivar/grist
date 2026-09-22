@@ -2,6 +2,15 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.10 — 2026-09-22
+
+- Add compact undo/redo arrow buttons to the toolbar with live disabled states
+  and action-specific accessible labels/tooltips.
+- Add Ctrl/Cmd+Z undo plus Ctrl/Cmd+Y and Ctrl/Cmd+Shift+Z redo for cell edits,
+  typed paste operations, and batched drag-fill operations.
+- Keep a capped 50-operation in-memory cell history and replay each multi-cell
+  operation through one Grist update while surfacing real API failures.
+
 ## v7.09 — 2026-09-22
 
 - Add SeaTable-style cell selection: first click selects, second click edits,

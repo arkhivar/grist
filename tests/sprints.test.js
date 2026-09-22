@@ -410,9 +410,36 @@ await test('G17: live badge and every cache key use the same release version', a
   assertEq(doc.getElementById('version-badge').textContent, `v${versions[0]}`, 'version badge');
 });
 
+await test('H18: toolbar history buttons undo and redo a saved cell edit', async () => {
+  const undo = doc.getElementById('btn-undo');
+  const redo = doc.getElementById('btn-redo');
+  assert(undo.querySelector('svg') && redo.querySelector('svg'), 'history arrow icons missing');
+  assert(!undo.disabled, 'Undo did not enable after the DateTime edit');
+  assert(undo.title.includes('Edit DateTime'), 'Undo tooltip does not name the edit');
+  assert(redo.disabled, 'Redo enabled before an undo');
+
+  let before = calls.update.length;
+  click(undo);
+  await waitFor(() => calls.update.length === before + 1, 'toolbar undo');
+  await flush();
+  assertEq(calls.update[calls.update.length - 1][0].fields.startsAt,
+    Date.parse('2026-07-16T13:45:00Z') / 1000, 'undo DateTime value');
+  assertEq(cellText(1, 'startsAt'), '2026-07-16 13:45', 'undo rendering');
+  assert(!redo.disabled, 'Redo did not enable after undo');
+
+  before = calls.update.length;
+  click(redo);
+  await waitFor(() => calls.update.length === before + 1, 'toolbar redo');
+  await flush();
+  assertEq(calls.update[calls.update.length - 1][0].fields.startsAt,
+    Date.parse('2026-07-20T09:30:00Z') / 1000, 'redo DateTime value');
+  assertEq(cellText(1, 'startsAt'), '2026-07-20 09:30', 'redo rendering');
+  assert(redo.disabled, 'Redo stayed enabled after replaying the latest edit');
+});
+
 const copiedCellData = {};
 
-await test('H18: Ctrl+C / Ctrl+V copies a typed cell value', async () => {
+await test('I19: Ctrl+C / Ctrl+V copies a typed cell value', async () => {
   const source = cellEl(1, 'students');
   click(source.querySelector('.cell-edit-btn'));
   source.dispatchEvent(clipboardEvent('copy', copiedCellData));
@@ -430,7 +457,7 @@ await test('H18: Ctrl+C / Ctrl+V copies a typed cell value', async () => {
   await flush();
 });
 
-await test('H19: paste is blocked between incompatible column types', async () => {
+await test('I20: paste is blocked between incompatible column types', async () => {
   const destination = cellEl(1, 'C');
   click(destination);
   const before = calls.update.length;
@@ -441,7 +468,7 @@ await test('H19: paste is blocked between incompatible column types', async () =
     'incompatible paste did not explain the type mismatch');
 });
 
-await test('H20: fill handle copies a cell down through the dragged range', async () => {
+await test('I21: fill supports Ctrl/Cmd+Z, Ctrl/Cmd+Y, and Ctrl/Cmd+Shift+Z', async () => {
   const source = cellEl(1, 'students');
   click(source.querySelector('.cell-edit-btn'));
   const handle = source.querySelector('.cell-fill-handle');
@@ -463,9 +490,41 @@ await test('H20: fill handle copies a cell down through the dragged range', asyn
     'fill did not copy the source value');
   assertEq(options && options.parseStrings, false, 'fill parseStrings option');
   await flush();
+
+  let shortcutBefore = calls.update.length;
+  cellEl(1, 'students').dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'z', ctrlKey: true, bubbles: true, cancelable: true,
+  }));
+  await waitFor(() => calls.update.length === shortcutBefore + 1, 'Ctrl+Z fill undo');
+  await flush();
+  assertEq(cellText(3, 'students'), 'I..Petrov', 'Ctrl+Z restored the first filled value');
+  assertEq(cellText(4, 'students'), 'M..Kuznetsov', 'Ctrl+Z restored the middle filled value');
+  assertEq(cellText(5, 'students'), 'S..Orlov', 'Ctrl+Z restored the last filled value');
+
+  shortcutBefore = calls.update.length;
+  cellEl(3, 'students').dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'y', ctrlKey: true, bubbles: true, cancelable: true,
+  }));
+  await waitFor(() => calls.update.length === shortcutBefore + 1, 'Ctrl+Y fill redo');
+  await flush();
+  assertEq(cellText(3, 'students'), 'V..Petrichenko', 'Ctrl+Y did not redo the fill');
+
+  shortcutBefore = calls.update.length;
+  cellEl(3, 'students').dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'z', ctrlKey: true, bubbles: true, cancelable: true,
+  }));
+  await waitFor(() => calls.update.length === shortcutBefore + 1, 'second fill undo');
+  await flush();
+  shortcutBefore = calls.update.length;
+  cellEl(3, 'students').dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'z', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true,
+  }));
+  await waitFor(() => calls.update.length === shortcutBefore + 1, 'Ctrl+Shift+Z fill redo');
+  await flush();
+  assertEq(cellText(5, 'students'), 'V..Petrichenko', 'Ctrl+Shift+Z did not redo the fill');
 });
 
-await test('H21: arrow keys move the selected cell and Escape clears it', async () => {
+await test('I22: arrow keys move the selected cell and Escape clears it', async () => {
   const start = cellEl(1, 'weekday');
   click(start);
   start.dispatchEvent(new win.KeyboardEvent('keydown', {
@@ -487,7 +546,7 @@ await test('H21: arrow keys move the selected cell and Escape clears it', async 
   assert(!doc.querySelector('.cell-selected'), 'Escape did not clear the cell selection');
 });
 
-await test('I22: resized column width is saved to and restored from Grist options', async () => {
+await test('J23: resized column width is saved to and restored from Grist options', async () => {
   const handle = doc.querySelector('th[data-column="students"] .column-resize-handle');
   assert(handle, 'students resize handle missing');
   const before = calls.setOption.length;

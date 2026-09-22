@@ -21,7 +21,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
   UTC date and time without finding the record in the source table
 - **Spreadsheet-style cells** — click once to select, click again to edit,
   use arrow keys to move, Ctrl/Cmd+C and Ctrl/Cmd+V to copy/paste compatible
-  typed values, or drag the blue fill handle vertically
+  typed values, drag the blue fill handle vertically, or undo/redo widget cell
+  changes from the toolbar and keyboard
 - **Unified grip controls** — click a row's six-dot grip to select it, use
   Ctrl/Cmd or Shift for multi-selection, or drag a grip to move records
 - **Drag between groups** — move one record or a selected set between existing
@@ -156,6 +157,14 @@ are rejected with an explanation. External clipboard text is parsed according
 to the destination type. Drag the small blue handle at the selected cell's
 bottom-right corner vertically to copy its value through the visible range;
 the fill is sent to Grist as one batched update.
+
+The toolbar's back/forward arrow buttons undo and redo cell edits, paste
+operations, and complete fill ranges. The matching shortcuts are
+**Ctrl/Cmd+Z** for undo and **Ctrl/Cmd+Y** or **Ctrl/Cmd+Shift+Z** for redo.
+History is deliberately lightweight and session-local: it keeps the latest 50
+widget cell operations in memory and resets when the widget reloads. It does
+not attempt to replace Grist's document-wide history for external edits,
+record duplication/deletion, or moving rows between groups.
 
 ## Group height
 

@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.09">
+  <link rel="stylesheet" href="shared/base.css?v=7.10">
 </head>
 <body>
 <div id="app">
@@ -29,6 +29,29 @@
       </select>
     </div>
     <div class="toolbar-right">
+      <div class="history-controls" role="group" aria-label="Cell edit history">
+        <button class="btn-icon" id="btn-undo" type="button"
+                aria-label="Nothing to undo" title="Nothing to undo" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true" focusable="false">
+            <path d="M9 14 4 9l5-5"/>
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+          </svg>
+        </button>
+        <button class="btn-icon" id="btn-redo" type="button"
+                aria-label="Nothing to redo" title="Nothing to redo" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true" focusable="false">
+            <path d="m15 14 5-5-5-5"/>
+            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
       <button class="btn" id="btn-expand"   type="button">Expand all</button>
       <button class="btn" id="btn-collapse" type="button">Collapse all</button>
       <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
@@ -161,8 +184,8 @@
   </section>
 </div>
 
-<script src="shared/core.js?v=7.09"></script>
-  <script src="widgets/sprints/app.js?v=7.09"></script>
-  <script src="widgets/sprints/actions.js?v=7.09"></script>
+<script src="shared/core.js?v=7.10"></script>
+  <script src="widgets/sprints/app.js?v=7.10"></script>
+  <script src="widgets/sprints/actions.js?v=7.10"></script>
 </body>
 </html>
