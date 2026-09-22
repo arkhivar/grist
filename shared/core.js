@@ -1,7 +1,7 @@
   // ── 1. UI strings (English only — everything depends on T) ──
   const T = {
       groupBy:         'Group by',
-      sortBy:          'Sort',
+      sortBy:          'Sort groups',
       expandAll:       'Expand all',
       collapseAll:     'Collapse all',
       settingsLabel:   'Display settings',
@@ -90,7 +90,7 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.16';
+  const WIDGET_VERSION = '7.17';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -127,6 +127,7 @@
   let knownDateCols = new Set();   // date-like columns already observed (persists across empty fetches)
   let groupBy    = '';
   let sortMode   = 'alpha-desc';
+  let rowSort = { column: '', direction: 'asc' };
   let optionsLoaded = false;
   let metadataLoaded = false;
   let collapsed  = new Set();
@@ -162,6 +163,8 @@
   // ── 4. DOM refs ───────────────────────────────────────────
   const groupSelect   = document.getElementById('group-select');
   const sortSelect    = document.getElementById('sort-select');
+  const rowSortSelect = document.getElementById('row-sort-select');
+  const rowSortDirection = document.getElementById('row-sort-direction');
   const content       = document.getElementById('content');
   const statsbar      = document.getElementById('statsbar');
   const emptyState    = document.getElementById('empty-state');

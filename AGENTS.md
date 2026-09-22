@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.16)
+## Current state (v7.17)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -104,4 +104,6 @@ render as rows inside month groups or only contribute to totals.
 - DateTime display/edit/clipboard and calendar grouping use Asia/Vladivostok;
   storage stays UTC. Use dateTimeWallDate/formatDateTimeSec/parseDateTimeWallSec
   for local clock conversion; keep Date-only fields on their existing UTC path.
-- Test suite: `tests/sprints.test.js`, 45 checks, green.
+- Sort groups and Sort rows are independent. Row sort is a persisted section
+  option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
+- Test suite: `tests/sprints.test.js`, 51 checks, green.

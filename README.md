@@ -14,6 +14,11 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Date-aware grouping** — Date/DateTime columns (epoch seconds **or** ISO 8601 text) can be grouped **by day, month or year**, with chronological sorting; DateTime buckets use Vladivostok calendar dates
 - **Fold / unfold** each group by clicking its header; **expand all / collapse all** in one click
 - **Group sort**: Z→A by default, or A→Z / record count ascending or descending
+- **Independent row sort**: choose a column under **Sort rows** and its direction
+  to order records inside every group. DateTime uses Oldest/Newest first;
+  numeric fields use Lowest/Highest first. Empty values stay last, equal values
+  retain incoming order, and **Grist order** restores the original sequence.
+  Preferences persist per widget section; sorting never rewrites record data.
 - **Row actions** — duplicate ⧉ and delete ✕ any record inline, always visible (two-step delete, requires **Full access**, see below)
 - **Group-footer row creation** — click **+** below any group to create a
   blank record already assigned to that group

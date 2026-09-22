@@ -2,6 +2,17 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.17 — 2026-09-22
+
+- Rename the group ordering control to Sort groups and add independent Sort
+  rows column/direction controls, with chronological, numeric, and text sorting.
+- Persist row sorting in section options; keep blanks last, ties stable, and
+  offer Grist order without changing the underlying data or manualSort values.
+- Keep range operations in displayed order and retain only the active cell
+  when sorting changes, so an old rectangle cannot silently target new rows.
+- Add six regression checks covering sorting, persistence, clipboard order,
+  edits/undo, and serialized option saves with real error reporting.
+
 ## v7.16 — 2026-09-22
 
 - Align header sums with the left content edge of their columns, including

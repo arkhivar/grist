@@ -1039,6 +1039,125 @@ await test('M: DateTime day grouping uses local calendar boundaries', async () =
   onRecordsCb(RECORDS);
 });
 
+// ── N. Independent row sorting ───────────────────────────────
+const rowSortColumnControl = doc.getElementById('row-sort-select');
+const rowSortDirectionControl = doc.getElementById('row-sort-direction');
+function rowIds(groupLabel) {
+  const card = [...doc.querySelectorAll('.group')].find(el => el.dataset.groupLabel === groupLabel);
+  return [...card.querySelectorAll('tbody tr')].map(row => Number(row.dataset.recordId));
+}
+async function setRowSort(column, direction = 'asc') {
+  rowSortColumnControl.value = column;
+  rowSortDirectionControl.value = direction;
+  rowSortColumnControl.dispatchEvent(new win.Event('change', { bubbles: true }));
+  await flush();
+}
+const sortRecords = RECORDS.map((record, i) => ({ ...record, sprint: i < 5 ? 'Sprint 14' : 'Sprint 15',
+  startsAt: [Date.parse('2026-07-21T08:00:00Z') / 1000, '2026-07-07T08:00:00Z',
+    { toString: () => '2026-07-17T18:00:00+10:00' }, '2026-07-07T08:00:00Z', null, 'invalid'][i],
+  count: [10, -2, 2, 10, null, 0][i], students: ['Student 10', 'Student 2', 'Student 1', 'Student 2', '', 'Other'][i] }));
+
+await test('N: DateTime row sorting handles transport formats, ties, blanks, and independent group order', async () => {
+  onRecordsCb(sortRecords);
+  const mutations = calls.update.length + calls.create.length + calls.destroy.length + calls.actions.length;
+  await setRowSort('startsAt');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[2,4,3,1,5]', 'ascending chronological rows');
+  assertEq(rowSortDirectionControl.options[0].textContent, 'Oldest first', 'date direction label');
+  await setRowSort('startsAt', 'desc');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,3,2,4,5]', 'descending rows with stable ties and empty last');
+  doc.getElementById('sort-select').value = 'alpha-asc';
+  doc.getElementById('sort-select').dispatchEvent(new win.Event('change', { bubbles: true }));
+  assertEq(doc.querySelector('.group').dataset.groupLabel, 'Sprint 14', 'group sort failed');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,3,2,4,5]', 'group sorting changed row direction');
+  assertEq(calls.update.length + calls.create.length + calls.destroy.length + calls.actions.length, mutations, 'sorting rewrote data');
+  assertEq(sortRecords.map(r => r.id).join(','), '1,2,3,4,5,6', 'sorting mutated input order');
+});
+
+await test('N: numeric and natural text ordering; Grist order restores the incoming sequence', async () => {
+  await setRowSort('count');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[2,3,1,4,5]', 'numeric rather than lexical order');
+  await setRowSort('count', 'desc');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,4,3,2,5]', 'descending numeric order');
+  await setRowSort('students');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[3,2,4,1,5]', 'natural text order');
+  await setRowSort('');
+  assert(rowSortDirectionControl.disabled, 'Grist order has an active direction');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,2,3,4,5]', 'original Grist order not restored');
+});
+
+await test('N: row sorting persists and survives options arriving before the chosen column', async () => {
+  await setRowSort('startsAt', 'desc');
+  const saved = calls.setOption.filter(([key]) => key === 'rowSort').at(-1)[1];
+  assertEq(JSON.stringify(saved), '{"column":"startsAt","direction":"desc"}', 'persisted row sort');
+  onRecordsCb(sortRecords.map(({ startsAt, ...record }) => record));
+  onOptionsCb({ rowSort: saved }, { accessLevel: 'full' });
+  await flush();
+  assert(rowSortDirectionControl.disabled, 'missing sort column still enabled');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,2,3,4,5]', 'missing column scrambled rows');
+  onRecordsCb(sortRecords);
+  assertEq(rowSortColumnControl.value, 'startsAt', 'sort column was forgotten');
+  assertEq(rowSortDirectionControl.value, 'desc', 'sort direction was forgotten');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,3,2,4,5]', 'saved sort not applied to arriving records');
+  onOptionsCb({ rowSort: '{broken' }, { accessLevel: 'full' });
+  await flush();
+  assertEq(rowSortColumnControl.value, '', 'malformed option not safely reset');
+});
+
+await test('N: ranges copy in displayed order; changing sorting keeps only the active cell', async () => {
+  await setRowSort('count');
+  click(cellEl(2, 'count'));
+  click(cellEl(1, 'count'), { shiftKey: true });
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 3, 'sorted range selection');
+  const copied = {};
+  cellEl(2, 'count').dispatchEvent(clipboardEvent('copy', copied));
+  assertEq(copied['text/plain'], '-2\n2\n10', 'range clipboard used source order');
+  await setRowSort('count', 'desc');
+  assertEq(doc.querySelectorAll('td.cell-selected').length, 1, 'sort silently changed range contents');
+  assert(cellEl(2, 'count').classList.contains('cell-selected'), 'sort lost active cell');
+});
+
+await test('N: editing the sorted field repositions the row and undo restores it', async () => {
+  await setRowSort('count');
+  openEditor(1, 'count');
+  doc.getElementById('cell-editor-number').value = '-20';
+  const before = calls.update.length;
+  click(doc.getElementById('btn-editor-save'));
+  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'sorted number edit');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,2,3,4,5]', 'edited row did not move');
+  click(doc.getElementById('btn-undo'));
+  await waitFor(() => calls.update.length === before + 2 && !doc.getElementById('btn-redo').disabled, 'sorted edit undo');
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[2,3,1,4,5]', 'undo failed to re-sort');
+});
+
+await test('N: rapid sort saves are serialized and failures surface the real error', async () => {
+  const originalSetOption = win.grist.setOption;
+  let finishSave;
+  const received = [];
+  win.grist.setOption = (key, value) => {
+    if (key !== 'rowSort') return originalSetOption(key, value);
+    received.push(value);
+    if (received.length === 1) return new Promise(resolve => { finishSave = resolve; });
+  };
+  try {
+    await setRowSort('startsAt', 'asc');
+    await setRowSort('startsAt', 'desc');
+    assertEq(received.length, 1, 'sort saves ran concurrently');
+    onOptionsCb({ rowSort: received[0] }, { accessLevel: 'full' });
+    assertEq(rowSortDirectionControl.value, 'desc', 'stale echo overwrote current direction');
+    finishSave();
+    await waitFor(() => received.length === 2, 'queued row sort save');
+    await flush();
+    assertEq(received[1].direction, 'desc', 'newest preference not saved last');
+    win.grist.setOption = async () => { throw new Error('Options save rejected'); };
+    await setRowSort('count');
+    await flush();
+    assert(doc.getElementById('toast').textContent.includes('Options save rejected'), 'save error was swallowed');
+  } finally {
+    if (finishSave) finishSave();
+    win.grist.setOption = originalSetOption;
+  }
+});
+
 // ── Summary ──────────────────────────────────────────────────
 console.log(`===== ${passed} passed, ${failed} failed =====`);
 process.exitCode = failed ? 1 : 0;

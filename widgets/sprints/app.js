@@ -669,6 +669,12 @@
     if (opts) {
       if (opts.groupBy)  { groupBy  = opts.groupBy;  groupSelect.value = groupBy;  }
       if (opts.sortMode) { sortMode = opts.sortMode; sortSelect.value  = sortMode; }
+      if (Object.prototype.hasOwnProperty.call(opts, 'rowSort') && !pendingRowSortSaves) {
+        const nextRowSort = normalizeRowSort(opts.rowSort);
+        if (rowSort.column !== nextRowSort.column || rowSort.direction !== nextRowSort.direction)
+          cellRangeEnd = null;
+        rowSort = nextRowSort;
+      }
       if (opts.boolFmtKey && BOOL_FORMATS.find(f => f.key === opts.boolFmtKey))
         boolFmtKey = opts.boolFmtKey;
       if (opts.maxGroupH) maxGroupH = parseInt(opts.maxGroupH) || 200;
@@ -806,6 +812,89 @@
     animateSortedGroups(firstPositions);
   });
 
+  // Row sorting is a local view preference, never a manualSort/data write.
+  let rowSortSaveQueue = Promise.resolve();
+  let pendingRowSortSaves = 0;
+  const rowSortCollator = new Intl.Collator(LOCALE, { numeric: true, sensitivity: 'base' });
+
+  function normalizeRowSort(value) {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return { column: typeof parsed?.column === 'string' ? parsed.column : '',
+        direction: parsed?.direction === 'desc' ? 'desc' : 'asc' };
+    } catch (_) { return { column: '', direction: 'asc' }; }
+  }
+
+  function rowSortColumnType() {
+    const type = columnBaseType(columnTypes[rowSort.column]);
+    return type || (allColumns.includes(rowSort.column) && isDateLikeColumn(rowSort.column) ? 'DateTime' : '');
+  }
+
+  function refreshRowSortControls() {
+    rowSortSelect.replaceChildren(new Option('Grist order', ''));
+    allColumns.forEach(col => rowSortSelect.add(new Option(col, col)));
+    if (rowSort.column && !allColumns.includes(rowSort.column)) {
+      const missing = new Option(`${rowSort.column} (unavailable)`, rowSort.column);
+      missing.disabled = true;
+      rowSortSelect.add(missing);
+    }
+    rowSortSelect.value = rowSort.column;
+    const type = rowSortColumnType();
+    const labels = type === 'Date' || type === 'DateTime' ? ['Oldest first', 'Newest first']
+      : type === 'Int' || type === 'Numeric' ? ['Lowest first', 'Highest first']
+      : type === 'Bool' ? ['False first', 'True first'] : ['A → Z', 'Z → A'];
+    rowSortDirection.options[0].textContent = labels[0];
+    rowSortDirection.options[1].textContent = labels[1];
+    rowSortDirection.value = rowSort.direction;
+    rowSortDirection.disabled = !rowSort.column || !allColumns.includes(rowSort.column);
+  }
+
+  function changeRowSort() {
+    rowSort = { column: rowSortSelect.value, direction: rowSortDirection.value };
+    const snapshot = { ...rowSort };
+    // Reordering changes what lies between range endpoints: retain just the
+    // active cell, rather than silently selecting a different rectangle.
+    cellRangeEnd = null;
+    render();
+    pendingRowSortSaves++;
+    rowSortSaveQueue = rowSortSaveQueue
+      .then(() => grist.setOption('rowSort', snapshot))
+      .catch(err => showToast(actionErrorMessage('Save row sorting', err)))
+      .finally(() => { pendingRowSortSaves--; });
+  }
+  rowSortSelect.addEventListener('change', changeRowSort);
+  rowSortDirection.addEventListener('change', changeRowSort);
+
+  function sortGroupRows(groups) {
+    if (!rowSort.column || !allColumns.includes(rowSort.column)) return;
+    const type = rowSortColumnType();
+    const direction = rowSort.direction === 'desc' ? -1 : 1;
+    const keyFor = value => {
+      if (value == null || value === '') return null;
+      if (type === 'Date' || type === 'DateTime') {
+        const seconds = parseDateValueSec(value);
+        return Number.isFinite(seconds) ? seconds : null;
+      }
+      if (type === 'Int' || type === 'Numeric' || type === 'Bool' || typeof value === 'number') {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+      }
+      return String(value);
+    };
+    groups.forEach(group => {
+      // Parse once per row, not on every comparator call. Tie order remains
+      // the incoming Grist order in either direction; blanks always go last.
+      group.records = group.records.map((record, index) => ({ record, index, key: keyFor(record[rowSort.column]) }))
+        .sort((a, b) => {
+          if (a.key == null || b.key == null)
+            return a.key == null && b.key == null ? a.index - b.index : a.key == null ? 1 : -1;
+          const comparison = typeof a.key === 'number' && typeof b.key === 'number'
+            ? a.key - b.key : rowSortCollator.compare(String(a.key), String(b.key));
+          return comparison * direction || a.index - b.index;
+        }).map(item => item.record);
+    });
+  }
+
   document.getElementById('btn-expand').addEventListener('click', () => {
     collapsed.clear();
     document.querySelectorAll('.group.collapsed').forEach(el => {
@@ -858,6 +947,7 @@
       map.get(key).records.push(rec);
     });
     const groups = Array.from(map.values());
+    sortGroupRows(groups);
     groups.sort((a, b) => {
       if (a.key === '\x00__empty__') return  1;
       if (b.key === '\x00__empty__') return -1;
@@ -877,6 +967,7 @@
 
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
+    refreshRowSortControls();
     if (typeof closeRowContextMenu === 'function') closeRowContextMenu(false);
     const restoreCellFocus = content.contains(document.activeElement)
       && document.activeElement.closest('td.data-cell');
