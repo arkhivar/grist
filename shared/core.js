@@ -22,15 +22,16 @@
       resetColumns:    'Reset widths & order',
       resizeColumn:    'Resize column',
       reorderColumn:   'Drag to reorder column',
-      editableHint:    'Choose Text fields. Writable DateTime fields are enabled automatically.',
+      editableHint:    'Choose Text fields. Writable number and DateTime fields are enabled automatically.',
       editableLoading: 'Loading writable columns…',
-      editableNone:    'No writable Text or DateTime fields are visible.',
+      editableNone:    'No writable Text, number, or DateTime fields are visible.',
       editableAuto:    'DateTime · automatic',
       editCell:        'Edit text',
+      editNumber:      'Edit number',
       editDateTime:    'Edit date and time',
       editTitle:       'Edit',
       editRecord:      'Record',
-      dateTimeLabel:   'UTC date and time',
+      dateTimeLabel:   'Vladivostok date and time (VLAT)',
       dateTimeToday:   'Today',
       dateTimeClear:   'Clear',
       dateTimePreviousMonth: 'Previous month',
@@ -38,7 +39,7 @@
       dateTimePreviousYear: 'Previous year',
       dateTimeNextYear: 'Next year',
       dateTimeChooseDate: 'Choose a date',
-      dateTimeChooseTime: 'Choose a UTC time',
+      dateTimeChooseTime: 'Choose a Vladivostok time (VLAT)',
       dateTimeEarlier: 'Earlier times',
       dateTimeLater: 'Later times',
       editCancel:      'Cancel',
@@ -89,7 +90,7 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.15';
+  const WIDGET_VERSION = '7.16';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -174,6 +175,7 @@
   const cellEditor      = document.getElementById('cell-editor');
   const cellEditorDialog = document.getElementById('cell-editor-dialog');
   const cellEditorText  = document.getElementById('cell-editor-text');
+  const cellEditorNumber = document.getElementById('cell-editor-number');
   const cellEditorError = document.getElementById('cell-editor-error');
   const cellEditorDateTimePanel = document.getElementById('cell-editor-datetime-panel');
   const cellEditorDateTime = document.getElementById('cell-editor-datetime');
@@ -352,6 +354,39 @@
     return hh === 0 && mm === 0 && ss === 0
       ? date
       : `${date} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+
+  // Reuse one native formatter. Storage remains UTC; wall-clock dates below
+  // are calendar coordinates, not instants. Date-only columns never use this.
+  const DISPLAY_TIME_ZONE = 'Asia/Vladivostok';
+  const dateTimeWallFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: DISPLAY_TIME_ZONE, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  function dateTimeWallDate(sec = Date.now() / 1000) {
+    const parts = Object.fromEntries(dateTimeWallFormatter.formatToParts(new Date(sec * 1000))
+      .map(part => [part.type, part.value]));
+    return new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day,
+      +parts.hour, +parts.minute, +parts.second));
+  }
+  function formatDateTimeSec(sec) {
+    return dateTimeWallDate(sec).toISOString().slice(0, 16).replace('T', ' ');
+  }
+  function parseDateTimeWallSec(text) {
+    const normalized = String(text).replace(/[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/g, '').trim();
+    const wallSec = parseIsoDateSec(normalized);
+    if (wallSec == null) return null;
+    // Explicit offsets represent instants already; only timezone-free text
+    // from the picker or clipboard is interpreted in Vladivostok.
+    if (/(Z|[+-]\d{2}:?\d{2})$/i.test(normalized)) return wallSec;
+    let instant = wallSec;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const difference = wallSec - dateTimeWallDate(instant).getTime() / 1000;
+      if (!difference) return instant;
+      instant += difference;
+    }
+    return null; // A nonexistent local time at a historical clock transition.
   }
 
   function isDateLikeColumn(col) {

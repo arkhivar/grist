@@ -2,6 +2,18 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.16 — 2026-09-22
+
+- Align header sums with the left content edge of their columns, including
+  horizontal scrolling; batch alignment reads before style writes.
+- Automatically enable compact Int/Numeric editing with validation, empty
+  values, Enter-to-save, error feedback, and session Undo/Redo.
+- Display/edit DateTime in Asia/Vladivostok (VLAT), converting back to UTC
+  storage. Apply the same local time to clipboard text, Today, and date buckets;
+  preserve explicit pasted ISO offsets and leave Date-only fields unchanged.
+- Fix empty DateTime pickers selecting the Unix epoch; add seven regression
+  checks for numeric editing, timezone boundaries, and alignment.
+
 ## v7.15 — 2026-09-22
 
 - Add a lightweight right-click menu for duplicating or deleting rows covered

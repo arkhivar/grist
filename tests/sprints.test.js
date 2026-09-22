@@ -122,11 +122,11 @@ win.grist = {
         return { id: [1], tableId: ['Table1'] };
       if (name === '_grist_Tables_column')
         return {
-          id: [10, 11, 12, 13, 14, 15, 16, 17],
-          colId: ['date', 'C', 'students', 'weekday', 'count', 'performance', 'sprint', 'startsAt'],
-          parentId: [1, 1, 1, 1, 1, 1, 1, 1],
-          type: ['Date', 'Bool', 'Text', 'Text', 'Int', 'Text', 'Text', 'DateTime'],
-          isFormula: [false, false, false, false, false, false, false, false],
+          id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+          colId: ['date', 'C', 'students', 'weekday', 'count', 'performance', 'sprint', 'startsAt', 'rate', 'total'],
+          parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          type: ['Date', 'Bool', 'Text', 'Text', 'Int', 'Text', 'Text', 'DateTime:Asia/Vladivostok', 'Numeric', 'Numeric'],
+          isFormula: [false, false, false, false, false, false, false, false, false, true],
         };
       throw new Error(`unexpected fetchTable: ${name}`);
     },
@@ -452,7 +452,7 @@ await test('F15: DateTime cell has no pencil and opens a Monday-first calendar',
   assert(!doc.querySelector('.cell-editor-header'),
     'obsolete editor header is still present');
   assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-label'),
-    'Edit date and time: startsAt', 'DateTime popover accessible label');
+    'Edit date and time: startsAt (VLAT)', 'DateTime popover accessible label');
   const footerActions = doc.getElementById('date-picker-footer-actions');
   assert(!footerActions.hidden, 'DateTime quick actions are hidden');
   assert(footerActions.closest('.cell-editor-footer'),
@@ -482,7 +482,7 @@ await test('F15: DateTime cell has no pencil and opens a Monday-first calendar',
   await flush();
 });
 
-await test('F16: custom picker saves the selected UTC date and time', async () => {
+await test('F16: custom picker converts selected VLAT date and time to UTC storage', async () => {
   const before = calls.update.length;
   click(doc.querySelector('.date-picker-time-option[data-time="09:30"]'));
   click(doc.querySelector('.date-picker-day[data-date="2026-07-20"]'));
@@ -492,7 +492,7 @@ await test('F16: custom picker saves the selected UTC date and time', async () =
   const [record, options] = calls.update[calls.update.length - 1];
   assertEq(record.id, 1, 'updated record id');
   assertEq(record.fields.startsAt,
-    Date.parse('2026-07-20T09:30:00Z') / 1000, 'saved UTC epoch seconds');
+    Date.parse('2026-07-19T23:30:00Z') / 1000, 'saved UTC epoch seconds');
   assertEq(options && options.parseStrings, false, 'DateTime parseStrings option');
   assertEq(cellText(1, 'startsAt'), '2026-07-20 09:30', 'updated DateTime rendering');
 });
@@ -525,7 +525,7 @@ await test('H19: toolbar history buttons undo and redo a saved cell edit', async
   await flush();
   assertEq(calls.update[calls.update.length - 1][0].fields.startsAt,
     Date.parse('2026-07-16T13:45:00Z') / 1000, 'undo DateTime value');
-  assertEq(cellText(1, 'startsAt'), '2026-07-16 13:45', 'undo rendering');
+  assertEq(cellText(1, 'startsAt'), '2026-07-16 23:45', 'undo rendering');
   assert(!redo.disabled, 'Redo did not enable after undo');
 
   before = calls.update.length;
@@ -533,7 +533,7 @@ await test('H19: toolbar history buttons undo and redo a saved cell edit', async
   await waitFor(() => calls.update.length === before + 1, 'toolbar redo');
   await flush();
   assertEq(calls.update[calls.update.length - 1][0].fields.startsAt,
-    Date.parse('2026-07-20T09:30:00Z') / 1000, 'redo DateTime value');
+    Date.parse('2026-07-19T23:30:00Z') / 1000, 'redo DateTime value');
   assertEq(cellText(1, 'startsAt'), '2026-07-20 09:30', 'redo rendering');
   assert(redo.disabled, 'Redo stayed enabled after replaying the latest edit');
 });
@@ -878,6 +878,165 @@ await test('L: failed delete preserves selection and displays the real Grist err
   } finally {
     win.grist.selectedTable.destroy = originalDestroy;
   }
+});
+
+// ── M. Numeric editing, alignment, and Vladivostok time ───────
+function openEditor(rowId, col) {
+  const cell = cellEl(rowId, col);
+  cell.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  click(cell);
+  click(cell);
+}
+
+await test('M: number popover validates Int values, saves numbers, and supports undo/redo', async () => {
+  openEditor(1, 'count');
+  const input = doc.getElementById('cell-editor-number');
+  assert(!input.hidden, 'numeric input hidden');
+  assert(doc.getElementById('cell-editor-text').hidden, 'text editor leaked into number editor');
+  assert(doc.getElementById('cell-editor-datetime-panel').hidden, 'calendar leaked into number editor');
+  assert(doc.getElementById('cell-editor-dialog').classList.contains('number-mode'), 'compact numeric mode missing');
+  const original = input.value;
+  const before = calls.update.length;
+  for (const invalid of ['1.5', 'NaN', 'Infinity', '0xff']) {
+    input.value = invalid;
+    click(doc.getElementById('btn-editor-save'));
+    await flush();
+    assertEq(calls.update.length, before, 'invalid number saved');
+    assert(!doc.getElementById('cell-editor-error').hidden, 'validation feedback missing');
+  }
+  input.value = '-825';
+  input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'number save');
+  assertEq(calls.update[before][0].fields.count, -825, 'number was saved as text');
+  assertEq(cellText(1, 'count'), '-825', 'number rendering');
+  click(doc.getElementById('btn-undo'));
+  await waitFor(() => calls.update.length === before + 2 && !doc.getElementById('btn-redo').disabled, 'number undo');
+  assertEq(cellText(1, 'count'), original, 'number undo value');
+  click(doc.getElementById('btn-redo'));
+  await waitFor(() => calls.update.length === before + 3 && !doc.getElementById('btn-undo').disabled, 'number redo');
+  assertEq(cellText(1, 'count'), '-825', 'number redo value');
+});
+
+await test('M: Numeric allows decimals and empty values; formula numbers stay read-only', async () => {
+  onRecordsCb(RECORDS.map(record => ({ ...record, rate: 1.25, total: 8.5 })));
+  openEditor(1, 'rate');
+  const input = doc.getElementById('cell-editor-number');
+  let before = calls.update.length;
+  input.value = '-12.75';
+  click(doc.getElementById('btn-editor-save'));
+  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'decimal save');
+  assertEq(calls.update[before][0].fields.rate, -12.75, 'decimal value');
+  openEditor(1, 'rate');
+  input.value = '';
+  before = calls.update.length;
+  click(doc.getElementById('btn-editor-save'));
+  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'number clear');
+  assertEq(calls.update[before][0].fields.rate, null, 'empty number became zero');
+  assert(!cellEl(1, 'total').querySelector('.cell-edit-btn'), 'formula cell got an editor');
+  assert(cellEl(1, 'total').title.includes('Read-only'), 'read-only explanation missing');
+  onRecordsCb(RECORDS);
+});
+
+await test('M: number cancel and Grist errors do not lose the entered value', async () => {
+  openEditor(1, 'count');
+  const input = doc.getElementById('cell-editor-number');
+  const before = calls.update.length;
+  input.value = '99';
+  click(doc.getElementById('btn-editor-cancel'));
+  assertEq(calls.update.length, before, 'Cancel saved a value');
+  openEditor(1, 'count');
+  const originalUpdate = win.grist.selectedTable.update;
+  win.grist.selectedTable.update = async () => { throw new Error('Number edit denied by ACL'); };
+  try {
+    input.value = '99';
+    click(doc.getElementById('btn-editor-save'));
+    await waitFor(() => !doc.getElementById('btn-editor-save').disabled, 'failed numeric save');
+    assertEq(input.value, '99', 'failed save lost draft');
+    assert(doc.getElementById('cell-editor-error').textContent.includes('Number edit denied by ACL'), 'real API error hidden');
+  } finally {
+    win.grist.selectedTable.update = originalUpdate;
+    click(doc.getElementById('btn-editor-cancel'));
+  }
+});
+
+await test('M: DateTime displays VLAT for epochs, ISO strings and wrappers without shifting Date columns', async () => {
+  const values = [Date.parse('2026-07-17T08:00:00Z') / 1000,
+    '2026-07-17T08:00:00Z', { toString: () => '2026-07-17T08:00:00Z' }];
+  onRecordsCb(RECORDS.map((record, i) => ({ ...record, startsAt: values[i % 3] })));
+  for (const id of [1, 2, 3]) assertEq(cellText(id, 'startsAt'), '2026-07-17 18:00', 'VLAT transport rendering');
+  assertEq(cellText(1, 'date'), '2026-07-16', 'Date-only column shifted');
+  const copy = {};
+  click(cellEl(1, 'startsAt'));
+  cellEl(1, 'startsAt').dispatchEvent(clipboardEvent('copy', copy));
+  assertEq(copy['text/plain'], '2026-07-17 18:00', 'clipboard did not use displayed time');
+  for (const text of ['2026-07-18 00:30', '2026-07-17T14:30:00Z', '2026-07-18T00:30:00+10:00']) {
+    cellEl(1, 'startsAt').dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    cellEl(2, 'startsAt').dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    onRecordsCb(RECORDS.map(record => ({ ...record, startsAt: '2026-07-17T08:00:00Z' })));
+    click(cellEl(2, 'startsAt'));
+    const before = calls.update.length;
+    cellEl(2, 'startsAt').dispatchEvent(clipboardEvent('paste', { 'text/plain': text }));
+    await waitFor(() => calls.update.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'VLAT paste');
+    assertEq(calls.update[before][0].fields.startsAt, Date.parse('2026-07-17T14:30:00Z') / 1000, 'paste applied wrong offset');
+    assertEq(cellText(2, 'startsAt'), '2026-07-18 00:30', 'pasted wall time');
+  }
+  click(doc.getElementById('btn-editor-cancel'));
+  onRecordsCb(RECORDS);
+});
+
+await test('M: empty picker and Today use the VLAT date across a UTC month boundary', async () => {
+  const originalNow = win.Date.now;
+  win.Date.now = () => Date.parse('2090-07-31T15:15:00Z');
+  try {
+    openEditor(2, 'startsAt');
+    assertEq(doc.getElementById('date-picker-month').textContent, 'August 2090', 'empty picker month');
+    assert(!doc.querySelector('.date-picker-day.selected'), 'empty date selected epoch 1970');
+    click(doc.getElementById('date-picker-today'));
+    assertEq(doc.querySelector('.date-picker-day.selected').dataset.date, '2090-08-01', 'VLAT Today');
+    assertEq(doc.querySelector('.date-picker-time-option.selected').dataset.time, '01:00', 'VLAT current time');
+  } finally {
+    win.Date.now = originalNow;
+    click(doc.getElementById('btn-editor-cancel'));
+  }
+});
+
+await test('M: header sums align to the footer content edge, including after horizontal scrolling', async () => {
+  const card = cellEl(1, 'count').closest('.group');
+  const header = card.querySelector('.group-header');
+  const footer = card.querySelector('th[data-column="count"]');
+  const sum = card.querySelector('.group-sum[data-column="count"]');
+  const originalHeaderRect = header.getBoundingClientRect;
+  const originalFooterRect = footer.getBoundingClientRect;
+  header.getBoundingClientRect = () => ({ left: 10 });
+  footer.style.paddingLeft = '10px';
+  let left = 300;
+  footer.getBoundingClientRect = () => ({ left, width: 104 });
+  try {
+    win.dispatchEvent(new win.Event('resize'));
+    await new Promise(resolve => win.requestAnimationFrame(resolve));
+    assertEq(sum.style.left, '300px', 'sum is centered instead of content-aligned');
+    left = 180;
+    card.querySelector('.scroll-inner').scrollLeft = 120;
+    card.querySelector('.scroll-inner').dispatchEvent(new win.Event('scroll'));
+    await new Promise(resolve => win.requestAnimationFrame(resolve));
+    assertEq(sum.style.left, '180px', 'sum did not follow horizontal scroll');
+  } finally {
+    header.getBoundingClientRect = originalHeaderRect;
+    footer.getBoundingClientRect = originalFooterRect;
+    footer.style.paddingLeft = '';
+  }
+});
+
+await test('M: DateTime day grouping uses local calendar boundaries', async () => {
+  onRecordsCb(RECORDS.slice(0, 2).map((record, i) => ({ ...record,
+    startsAt: i ? '2026-07-31T14:30:00Z' : '2026-07-31T13:30:00Z' })));
+  groupSelect.value = 'startsAt::day';
+  groupSelect.dispatchEvent(new win.Event('change', { bubbles: true }));
+  assertEq(doc.querySelectorAll('.group').length, 2, 'two VLAT days combined into one UTC day');
+  assert(doc.getElementById('content').textContent.includes('Aug'), 'next-month group label missing');
+  groupSelect.value = 'sprint';
+  groupSelect.dispatchEvent(new win.Event('change', { bubbles: true }));
+  onRecordsCb(RECORDS);
 });
 
 // ── Summary ──────────────────────────────────────────────────

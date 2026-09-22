@@ -63,9 +63,19 @@
   }
 
   function editKindForColumn(col) {
-    if (editableDateTimeCandidates().includes(col)) return 'datetime';
-    if (isEditableTextColumn(col)) return 'text';
+    // Called for every rendered cell: check this column directly rather than
+    // rebuilding candidate lists across all columns for each cell.
+    if (!writableColumnIds.includes(col)) return null;
+    const type = writableColumnTypes[col];
+    if (isNumericColumnType(type)) return 'number';
+    if (col === parseGroupBy(groupBy).col) return null;
+    if (isDateTimeColumnType(type)) return 'datetime';
+    if (editableColumns.has(col) && isTextColumnType(type)) return 'text';
     return null;
+  }
+
+  function editLabelForKind(kind) {
+    return kind === 'datetime' ? T.editDateTime : kind === 'number' ? T.editNumber : T.editCell;
   }
 
   function saveEditableColumns() {
@@ -95,8 +105,9 @@
       return;
     }
     const textCandidates = editableTextCandidates();
-    const dateTimeCandidates = editableDateTimeCandidates();
-    if (!textCandidates.length && !dateTimeCandidates.length) {
+    const automaticCandidates = editableDateTimeCandidates().concat(allColumns.filter(col =>
+      writableColumnIds.includes(col) && isNumericColumnType(writableColumnTypes[col])));
+    if (!textCandidates.length && !automaticCandidates.length) {
       const msg = document.createElement('span');
       msg.className = 'editable-col-empty';
       msg.textContent = T.editableNone;
@@ -122,7 +133,7 @@
       label.appendChild(text);
       editableColList.appendChild(label);
     });
-    dateTimeCandidates.forEach(col => {
+    automaticCandidates.forEach(col => {
       const label = document.createElement('label');
       label.className = 'editable-col-option automatic';
       const cb = document.createElement('input');
@@ -132,7 +143,7 @@
       const text = document.createElement('span');
       text.textContent = col;
       const badge = document.createElement('small');
-      badge.textContent = T.editableAuto;
+      badge.textContent = isNumericColumnType(writableColumnTypes[col]) ? 'Number · automatic' : T.editableAuto;
       text.appendChild(badge);
       label.appendChild(cb);
       label.appendChild(text);
@@ -403,6 +414,7 @@
   function scheduleGroupSumAlignment() {
     cancelAnimationFrame(groupSumAlignFrame);
     groupSumAlignFrame = requestAnimationFrame(() => {
+      const placements = [];
       content.querySelectorAll('.group').forEach(card => {
         const headerRect = card.querySelector('.group-header').getBoundingClientRect();
         const footers = new Map([...card.querySelectorAll('tfoot th[data-column]')]
@@ -411,8 +423,15 @@
           const cell = footers.get(sum.dataset.column);
           if (!cell) return;
           const rect = cell.getBoundingClientRect();
-          sum.style.left = `${rect.left + rect.width / 2 - headerRect.left}px`;
+          const padding = parseFloat(getComputedStyle(cell).paddingLeft) || 0;
+          placements.push({ sum, left: rect.left + padding - headerRect.left,
+            width: Math.max(0, rect.width - padding * 2) });
         });
+      });
+      // Finish layout reads before writing styles, avoiding per-column reflow.
+      placements.forEach(({ sum, left, width }) => {
+        sum.style.left = `${left}px`;
+        sum.style.maxWidth = `${width}px`;
       });
     });
   }
@@ -821,7 +840,9 @@
         if (sec == null) {
           key = '\x00__empty__'; label = raw; sortKey = null; writeValue = null;
         } else {
-          const ms = bucketStartMs(sec, granularity);
+          const calendarSec = isDateTimeColumnType(columnTypes[col])
+            ? dateTimeWallDate(sec).getTime() / 1000 : sec;
+          const ms = bucketStartMs(calendarSec, granularity);
           key     = String(ms);               // the key carries the bucket epoch
           label   = bucketLabel(ms, granularity);
           sortKey = ms;
@@ -829,6 +850,8 @@
         }
       } else {
         key = String(raw); label = raw; sortKey = null; writeValue = raw;
+        if (isDateTimeColumnType(columnTypes[col]) && parseDateValueSec(raw) != null)
+          label = formatDateTimeSec(parseDateValueSec(raw));
       }
       if (!map.has(key))
         map.set(key, { key, label, sortKey, writeValue, records: [] });
@@ -1380,7 +1403,7 @@
       const seconds = parseDateValueSec(value);
       if (seconds == null) return '';
       const iso = new Date(seconds * 1000).toISOString();
-      return type === 'Date' ? iso.slice(0, 10) : iso.slice(0, 16).replace('T', ' ');
+      return type === 'Date' ? iso.slice(0, 10) : formatDateTimeSec(seconds);
     }
     return String(value);
   }
@@ -1396,12 +1419,13 @@
     }
     if (type === 'Int' || type === 'Numeric') {
       const number = Number(normalized);
-      if (!Number.isFinite(number) || (type === 'Int' && !Number.isInteger(number)))
+      if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized)
+          || !Number.isFinite(number) || (type === 'Int' && !Number.isSafeInteger(number)))
         throw new Error(`Paste requires a valid ${type} value, not "${normalized}"`);
       return number;
     }
     if (type === 'Date' || type === 'DateTime') {
-      const seconds = parseDateValueSec(normalized);
+      const seconds = type === 'DateTime' ? parseDateTimeWallSec(normalized) : parseDateValueSec(normalized);
       if (seconds == null) throw new Error(`Paste requires a valid ${type} value`);
       return normalizeCellValueForWrite(seconds, type);
     }
@@ -1662,12 +1686,14 @@
       .filter(Boolean).join(' ');
     const contentHtml = editKind
       ? `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
-        + ` aria-label="${esc(editKind === 'datetime' ? T.editDateTime : T.editCell)}: ${colAttr}"`
+        + ` aria-label="${esc(editLabelForKind(editKind))}: ${colAttr}"`
         + ` aria-haspopup="dialog" aria-expanded="false">`
         + `<span class="cell-edit-value">${rendered}</span></button>`
       : rendered;
     return `<td class="${classes}" data-cell-id="${id}" data-cell-col="${colAttr}"`
       + ` data-cell-writable="${String(isWritable)}" tabindex="${isSelected ? '0' : '-1'}"`
+      + (!isWritable && isNumericColumnType(columnTypes[col])
+        ? ' title="Read-only number: edit its source values or formula in Grist"' : '')
       + ` aria-selected="${String(isSelected)}">${contentHtml}`
       + `<span class="cell-fill-handle" aria-hidden="true" title="${esc(T.fillCells)}"></span></td>`;
   }
@@ -1678,6 +1704,7 @@
 
   function setEditorBusy(busy) {
     cellEditorText.disabled = busy;
+    cellEditorNumber.disabled = busy;
     cellEditorDateTimePanel.querySelectorAll('button, input').forEach(control => {
       control.disabled = busy;
     });
@@ -1689,10 +1716,10 @@
 
   function dateTimeInputSec(value) {
     if (!value) return null;
-    const milliseconds = Date.parse(`${value}Z`);
-    if (!Number.isFinite(milliseconds))
+    const seconds = parseDateTimeWallSec(value);
+    if (seconds == null)
       throw new Error('Choose a valid date and time');
-    return milliseconds / 1000;
+    return seconds;
   }
 
   let datePickerViewYear = 1970;
@@ -1754,7 +1781,7 @@
     const mondayOffset = (monthStart.getUTCDay() + 6) % 7;
     const gridStart = new Date(Date.UTC(
       datePickerViewYear, datePickerViewMonth, 1 - mondayOffset));
-    const todayKey = utcDateKey(new Date());
+    const todayKey = utcDateKey(dateTimeWallDate());
     const selectedVisible = datePickerSelectedDate &&
       datePickerSelectedDate >= utcDateKey(gridStart) &&
       datePickerSelectedDate <= utcDateKey(new Date(gridStart.getTime() + 41 * 86400000));
@@ -1799,15 +1826,15 @@
   }
 
   function setDateTimePickerValue(sec) {
-    const value = Number(sec);
-    const date = Number.isFinite(value) ? new Date(value * 1000) : null;
+    const value = sec == null ? NaN : Number(sec);
+    const date = Number.isFinite(value) ? dateTimeWallDate(value) : null;
     if (date && !Number.isNaN(date.getTime())) {
       datePickerSelectedDate = utcDateKey(date);
       datePickerViewYear = date.getUTCFullYear();
       datePickerViewMonth = date.getUTCMonth();
       datePickerSelectedTime = date.toISOString().slice(11, 16);
     } else {
-      const now = new Date();
+      const now = dateTimeWallDate();
       datePickerSelectedDate = '';
       datePickerViewYear = now.getUTCFullYear();
       datePickerViewMonth = now.getUTCMonth();
@@ -1836,7 +1863,7 @@
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value || '')) return;
     datePickerSelectedTime = value;
     if (!datePickerSelectedDate) {
-      const now = new Date();
+      const now = dateTimeWallDate();
       datePickerSelectedDate = utcDateKey(now);
       datePickerViewYear = now.getUTCFullYear();
       datePickerViewMonth = now.getUTCMonth();
@@ -1869,8 +1896,8 @@
       return;
     }
     const dialogRect = cellEditorDialog.getBoundingClientRect();
-    const fallbackWidth = editingCell.kind === 'datetime' ? 456 : 480;
-    const fallbackHeight = editingCell.kind === 'datetime' ? 330 : 220;
+    const fallbackWidth = editingCell.kind === 'datetime' ? 456 : editingCell.kind === 'number' ? 310 : 480;
+    const fallbackHeight = editingCell.kind === 'datetime' ? 330 : editingCell.kind === 'number' ? 108 : 220;
     const dialogWidth = dialogRect.width || Math.min(fallbackWidth, window.innerWidth - margin * 2);
     const dialogHeight = dialogRect.height || Math.min(fallbackHeight, window.innerHeight - margin * 2);
     let left = anchorRect.left;
@@ -1892,31 +1919,38 @@
     const rec = allRecords.find(r => Number(r.id) === recordId);
     if (!rec) return;
     const isDateTime = kind === 'datetime';
+    const isNumber = kind === 'number';
     const value = isDateTime
       ? parseDateValueSec(rec[col])
       : (rec[col] == null ? '' : String(rec[col]));
-    const originalValue = isDateTime && value != null
+    const originalValue = isNumber ? normalizeCellValueForWrite(rec[col], cellColumnType(col)) : isDateTime && value != null
       ? Math.floor(value / 60) * 60
       : value;
     const historyValue = cellHistoryValue(rec[col], cellColumnType(col));
     editingCell = { recordId, col, kind, originalValue, historyValue, anchorEl };
-    const editorLabel = `${isDateTime ? T.editDateTime : T.editCell}: ${col}`;
+    const editorLabel = `${editLabelForKind(kind)}: ${col}${isDateTime ? ' (VLAT)' : ''}`;
     cellEditorText.setAttribute('aria-label', editorLabel);
+    cellEditorNumber.setAttribute('aria-label', editorLabel);
     datePickerGrid.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
     cellEditorError.hidden = true;
     cellEditorError.textContent = '';
     cellEditorDialog.classList.toggle('date-mode', isDateTime);
+    cellEditorDialog.classList.toggle('number-mode', isNumber);
     cellEditor.classList.add('popover-mode');
     datePickerFooterActions.hidden = !isDateTime;
     cellEditorDialog.removeAttribute('aria-modal');
     cellEditorDialog.removeAttribute('aria-labelledby');
     cellEditorDialog.setAttribute('aria-label', editorLabel);
     if (anchorEl) anchorEl.setAttribute('aria-expanded', 'true');
-    cellEditorText.hidden = isDateTime;
+    cellEditorText.hidden = isDateTime || isNumber;
+    cellEditorNumber.hidden = !isNumber;
     cellEditorDateTimePanel.hidden = !isDateTime;
     if (isDateTime) {
       setDateTimePickerValue(value);
-      cellEditorCount.textContent = '';
+      cellEditorCount.textContent = 'VLAT';
+    } else if (isNumber) {
+      cellEditorNumber.value = value;
+      cellEditorCount.textContent = cellColumnType(col) === 'Int' ? 'Whole number' : 'Number';
     } else {
       cellEditorText.value = value;
       updateEditorCharacterCount();
@@ -1927,6 +1961,9 @@
     requestAnimationFrame(() => {
       if (isDateTime) {
         focusDateTimePicker();
+      } else if (isNumber) {
+        cellEditorNumber.focus();
+        cellEditorNumber.select();
       } else {
         cellEditorText.focus();
         cellEditorText.setSelectionRange(value.length, value.length);
@@ -1939,7 +1976,7 @@
     const anchor = editingCell && editingCell.anchorEl;
     if (anchor && anchor.isConnected) anchor.setAttribute('aria-expanded', 'false');
     cellEditor.hidden = true;
-    cellEditorDialog.classList.remove('date-mode');
+    cellEditorDialog.classList.remove('date-mode', 'number-mode');
     cellEditor.classList.remove('popover-mode');
     datePickerFooterActions.hidden = true;
     cellEditorError.hidden = true;
@@ -1950,6 +1987,8 @@
     cellEditorDialog.removeAttribute('aria-labelledby');
     editingCell = null;
     cellEditorText.value = '';
+    cellEditorNumber.value = '';
+    cellEditorNumber.hidden = true;
     cellEditorText.hidden = false;
     cellEditorDateTime.value = '';
     datePickerSelectedDate = '';
@@ -1964,13 +2003,16 @@
     try {
       if (kind === 'datetime') {
         nextValue = dateTimeInputSec(cellEditorDateTime.value);
+      } else if (kind === 'number') {
+        nextValue = parsePastedCellText(cellEditorNumber.value, cellColumnType(col));
       } else {
         nextValue = cellEditorText.value;
       }
     } catch (err) {
-      cellEditorError.textContent = err.message;
+      cellEditorError.textContent = kind === 'number' ? err.message.replace('Paste requires', 'Enter') : err.message;
       cellEditorError.hidden = false;
-      focusDateTimePicker();
+      if (kind === 'datetime') focusDateTimePicker();
+      else if (kind === 'number') cellEditorNumber.focus();
       return;
     }
     if (nextValue === originalValue) {
@@ -1980,9 +2022,10 @@
     setEditorBusy(true);
     cellEditorError.hidden = true;
     cellEditorError.textContent = '';
-    const action = kind === 'datetime' ? 'Edit DateTime' : 'Edit';
+    const action = kind === 'datetime' ? 'Edit DateTime' : kind === 'number' ? 'Edit number' : 'Edit';
     const detail = kind === 'datetime'
       ? `record=${recordId} · column=${col} · value=${nextValue == null ? 'empty' : nextValue} UTC`
+      : kind === 'number' ? `record=${recordId} · column=${col} · value=${nextValue == null ? 'empty' : nextValue}`
       : `record=${recordId} · column=${col} · characters=${nextValue.length}`;
     recordActionDiagnostic(action, 'start', detail);
     cellHistoryBusy = true;
@@ -2008,6 +2051,7 @@
       cellEditorError.hidden = false;
       setEditorBusy(false);
       if (kind === 'datetime') focusDateTimePicker();
+      else if (kind === 'number') cellEditorNumber.focus();
       else cellEditorText.focus();
     } finally {
       cellHistoryBusy = false;
@@ -2558,6 +2602,10 @@
     }
   }
   cellEditorText.addEventListener('keydown', onEditorKeydown);
+  cellEditorNumber.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); saveFieldEditor(); }
+    else onEditorKeydown(e);
+  });
   cellEditorDateTimePanel.addEventListener('keydown', onEditorKeydown);
   datePickerPrev.addEventListener('click', () => shiftDatePickerMonth(-1));
   datePickerNext.addEventListener('click', () => shiftDatePickerMonth(1));
@@ -2621,7 +2669,7 @@
   datePickerTimeUp.addEventListener('click', () => scrollDatePickerTimes(-1));
   datePickerTimeDown.addEventListener('click', () => scrollDatePickerTimes(1));
   datePickerToday.addEventListener('click', () => {
-    const now = new Date();
+    const now = dateTimeWallDate();
     datePickerSelectedTime = `${String(now.getUTCHours()).padStart(2, '0')}`
       + `:${now.getUTCMinutes() < 30 ? '00' : '30'}`;
     selectDatePickerDate(utcDateKey(now));
@@ -2647,7 +2695,7 @@
       // Grist Date and DateTime columns both arrive as epoch seconds. Format
       // every value in a detected date column, not only midnight-aligned dates.
       if (col && isDateLikeColumn(col))
-        return `<span class="cell-num">${formatUtcDateSec(val)}</span>`;
+        return `<span class="cell-num">${isDateTimeColumnType(columnTypes[col]) ? formatDateTimeSec(val) : formatUtcDateSec(val)}</span>`;
       return `<span class="cell-num">${String(val)}</span>`;
     }
     if (Array.isArray(val)) return esc(val.join(', '));
@@ -2655,6 +2703,6 @@
     // The strict parser prevents ordinary objects/text from being reformatted.
     const sec = parseDateValueSec(val);
     if (sec != null)
-      return `<span class="cell-num">${formatUtcDateSec(sec)}</span>`;
+      return `<span class="cell-num">${isDateTimeColumnType(columnTypes[col]) ? formatDateTimeSec(sec) : formatUtcDateSec(sec)}</span>`;
     return esc(String(val));
   }

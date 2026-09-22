@@ -352,8 +352,8 @@
     }
     .group-sums { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
     .group-sum {
-      position: absolute; top: 50%; transform: translate(-50%, -50%);
-      max-width: 160px; padding: 1px 7px; border-radius: 10px;
+      position: absolute; top: 50%; transform: translateY(-50%);
+      padding: 1px 0; text-align: left;
       background: var(--surface); color: var(--accent);
       font-family: var(--mono); font-size: 10px; font-weight: 600;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -639,6 +639,7 @@
     }
     .cell-editor-overlay[hidden] { display: none; }
     .cell-editor-dialog {
+      font: 13px/1.5 var(--font); color: var(--text);
       width: min(1120px, calc(100vw - 32px));
       height: min(860px, calc(100vh - 32px));
       min-height: min(520px, calc(100vh - 32px));
@@ -657,6 +658,12 @@
       tab-size: 2;
     }
     #cell-editor-text:focus { box-shadow: inset 0 0 0 2px rgba(37,99,235,.15); }
+    #cell-editor-number {
+      margin: 12px; padding: 8px 10px; min-width: 0;
+      border: 1px solid var(--border-strong); border-radius: 5px;
+      background: var(--surface); color: var(--text); font: 14px var(--mono);
+    }
+    #cell-editor-number:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     .cell-editor-datetime {
       flex: 1;
       display: grid; place-items: center;
@@ -769,7 +776,8 @@
       width: min(600px, calc(100vw - 32px));
       height: auto; min-height: 0;
     }
-    .cell-editor-dialog.date-mode #cell-editor-count { display: none; }
+    .cell-editor-dialog.date-mode #cell-editor-count { order: 1; font: 10px var(--mono); }
+    .cell-editor-dialog.date-mode .cell-editor-actions { order: 2; }
     /* Top/left are assigned from the active cell. */
     .cell-editor-overlay.popover-mode {
       display: block; padding: 0;
@@ -787,6 +795,9 @@
     }
     .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
       width: min(456px, calc(100vw - 16px));
+    }
+    .cell-editor-overlay.popover-mode .cell-editor-dialog.number-mode {
+      width: min(310px, calc(100vw - 16px));
     }
     .cell-editor-overlay.popover-mode #cell-editor-text {
       flex: 0 1 auto; height: 168px; min-height: 112px;

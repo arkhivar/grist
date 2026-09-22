@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.15)
+## Current state (v7.16)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -99,4 +99,9 @@ render as rows inside month groups or only contribute to totals.
   clipboard blocks. Session history includes range pastes and footer row creation.
 - Right-click menus target whole rows covered by a cell range or grip selection;
   duplicate/delete reuse existing API helpers (not session-undoable yet).
-- Test suite: `tests/sprints.test.js`, 38 checks, green.
+- Writable Int/Numeric cells have compact editors and session history; numeric
+  formula cells remain read-only. Header totals align to the column content edge.
+- DateTime display/edit/clipboard and calendar grouping use Asia/Vladivostok;
+  storage stays UTC. Use dateTimeWallDate/formatDateTimeSec/parseDateTimeWallSec
+  for local clock conversion; keep Date-only fields on their existing UTC path.
+- Test suite: `tests/sprints.test.js`, 45 checks, green.

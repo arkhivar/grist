@@ -11,7 +11,7 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Automatic first grouping** — when no valid grouping is saved, the widget
   picks the first single-value Grist Choice column; the toolbar still lets you
   switch to any other column
-- **Date-aware grouping** — Date/DateTime columns (epoch seconds **or** ISO 8601 text) can be grouped **by day, month or year** (UTC-based), with chronological sorting (see below)
+- **Date-aware grouping** — Date/DateTime columns (epoch seconds **or** ISO 8601 text) can be grouped **by day, month or year**, with chronological sorting; DateTime buckets use Vladivostok calendar dates
 - **Fold / unfold** each group by clicking its header; **expand all / collapse all** in one click
 - **Group sort**: Z→A by default, or A→Z / record count ascending or descending
 - **Row actions** — duplicate ⧉ and delete ✕ any record inline, always visible (two-step delete, requires **Full access**, see below)
@@ -20,7 +20,9 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Large text editor** — enable writable Text columns in Settings, then click
   a cell to edit long, multi-line notes and emoji content without leaving the widget
 - **DateTime editor** — click any visible, writable DateTime cell to choose its
-  UTC date and time without finding the record in the source table
+  Vladivostok (VLAT) date and time without finding the record in the source table
+- **Number editor** — writable Int/Numeric cells open a compact number popover
+  on the second click, with validation, Enter-to-save, and session Undo/Redo
 - **Spreadsheet-style cells** — click once to select, click again to edit,
   use arrow keys to move, Ctrl/Cmd+C and Ctrl/Cmd+V to copy/paste compatible
   typed values, drag the blue fill handle vertically, or undo/redo widget cell
@@ -164,11 +166,22 @@ rest of the widget interactive. Use the arrow buttons to change months, choose
 a day from the Monday-first calendar, choose a half-hour slot from the
 scrollable time rail, or use the left-aligned Today/Clear footer actions;
 Cancel/Save remain together on the right. Arrow keys, Home/End, and Page Up/Page
-Down are also supported. Values are edited, stored, and displayed in UTC,
-so the browser's local timezone does not shift the chosen time. Formula
-columns, unsupported types, hidden columns, and the active grouping column are
-not editable. Saving uses `grist.selectedTable.update()` and reports the real
+Down are also supported. DateTime values are displayed and edited in
+**Asia/Vladivostok (VLAT)**, independently of the browser's timezone, and
+converted back to UTC epoch seconds for Grist storage. Copy exports VLAT text;
+timezone-free DateTime pastes use VLAT, while explicit ISO offsets are honored.
+Date-only columns are not shifted. Formula columns remain read-only; Text and
+DateTime editors also exclude the active grouping column.
+Saving uses `grist.selectedTable.update()` and reports the real
 failure inline as well as in Diagnostics.
+
+Writable **Int** and **Numeric** cells are enabled automatically: select a cell,
+then click again (or Enter/F2) to open its compact number editor. Enter saves;
+Escape/Cancel discards changes. Int fields require whole numbers; Numeric fields
+accept decimals, and clearing either saves an empty value. These edits use the
+same session Undo/Redo as other cell edits. Formula numbers have a read-only
+tooltip: edit their source fields or formula in Grist rather than overwriting
+the calculated value.
 
 ## Cell selection, copy/paste, and fill
 
@@ -277,21 +290,22 @@ as UTC (`YYYY-MM-DD HH:mm` is normalized to `YYYY-MM-DDTHH:mmZ` before parsing).
 Date-like columns (numeric or ISO text) get three extra granularities in the
 **Group by** dropdown, in addition to the plain exact-value option:
 
-- `Column — by day` → one group per UTC calendar day (label e.g. *7 Apr 2025*)
-- `Column — by month` → one group per UTC month (label e.g. *April 2025*)
-- `Column — by year` → one group per UTC year (label e.g. *2025*)
+- `Column — by day` → one group per calendar day (label e.g. *7 Apr 2025*)
+- `Column — by month` → one group per month (label e.g. *April 2025*)
+- `Column — by year` → one group per year (label e.g. *2025*)
 
 Details:
 
-- **Bucketing is UTC-based** — day/month/year boundaries are computed with
-  `Date.UTC`, so groups never shift with the viewer's local timezone.
+- **DateTime buckets use Vladivostok calendar dates**; Date and detected
+  ISO-text columns keep UTC-based buckets. Neither follows the viewer's timezone.
 - With a date granularity active, **A→Z / Z→A sort chronologically** by bucket
   start (not by label string); count sorts are unchanged and the *(empty)*
   group stays last.
 - The selection is persisted as `Column::day|month|year` via
   `grist.setOption('groupBy', …)` and restored on reload; plain column names
   (no suffix) keep working exactly as before.
-- Numeric values in date-like columns render as `YYYY-MM-DD` at midnight UTC
+- Declared DateTime values render as `YYYY-MM-DD HH:mm` in VLAT, including
+  midnight. Other numeric values in date-like columns render as `YYYY-MM-DD` at midnight UTC
   or `YYYY-MM-DD HH:mm` otherwise, instead of raw epoch seconds.
 - ISO-text values render as `YYYY-MM-DD` when the time part is 00:00:00,
   otherwise as `YYYY-MM-DD HH:mm` (UTC). This cell rendering is **per value**:

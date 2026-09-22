@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.15">
+  <link rel="stylesheet" href="shared/base.css?v=7.16">
 </head>
 <body>
 <div id="app">
@@ -144,9 +144,10 @@
 <div class="cell-editor-overlay" id="cell-editor" hidden>
   <section class="cell-editor-dialog" id="cell-editor-dialog" role="dialog">
     <textarea id="cell-editor-text" spellcheck="true" aria-label="Edit text"></textarea>
+    <input id="cell-editor-number" type="text" inputmode="decimal" autocomplete="off" aria-label="Edit number" hidden>
     <div class="cell-editor-datetime" id="cell-editor-datetime-panel" hidden>
       <input id="cell-editor-datetime" type="hidden">
-      <div class="date-picker" id="date-picker" role="group" aria-label="UTC date and time">
+      <div class="date-picker" id="date-picker" role="group" aria-label="Vladivostok date and time (VLAT)">
         <div class="date-picker-calendar">
           <div class="date-picker-nav">
             <button type="button" class="date-picker-nav-btn date-picker-nav-year" id="date-picker-prev-year" aria-label="Previous year">«</button>
@@ -161,9 +162,9 @@
           </div>
           <div class="date-picker-grid" id="date-picker-grid" role="grid" aria-label="Choose a date"></div>
         </div>
-        <aside class="date-picker-time-panel" aria-label="Choose a UTC time">
+        <aside class="date-picker-time-panel" aria-label="Choose a Vladivostok time (VLAT)">
           <button type="button" class="date-picker-time-scroll" id="date-picker-time-up" aria-label="Earlier times">⌃</button>
-          <div class="date-picker-time-list" id="date-picker-time-list" role="listbox" aria-label="UTC time"></div>
+          <div class="date-picker-time-list" id="date-picker-time-list" role="listbox" aria-label="VLAT time"></div>
           <button type="button" class="date-picker-time-scroll" id="date-picker-time-down" aria-label="Later times">⌄</button>
         </aside>
       </div>
@@ -190,8 +191,8 @@
   <button type="button" role="menuitem" tabindex="-1" class="row-command-danger" data-row-command="delete"><span aria-hidden="true">×</span><span class="row-command-label">Delete rows</span></button>
 </div>
 
-<script src="shared/core.js?v=7.15"></script>
-  <script src="widgets/sprints/app.js?v=7.15"></script>
-  <script src="widgets/sprints/actions.js?v=7.15"></script>
+<script src="shared/core.js?v=7.16"></script>
+  <script src="widgets/sprints/app.js?v=7.16"></script>
+  <script src="widgets/sprints/actions.js?v=7.16"></script>
 </body>
 </html>
