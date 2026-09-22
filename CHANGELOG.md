@@ -2,6 +2,15 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.09 — 2026-09-22
+
+- Add SeaTable-style cell selection: first click selects, second click edits,
+  and arrow keys move the blue selection border.
+- Add typed Ctrl/Cmd+C and Ctrl/Cmd+V within compatible writable scalar
+  columns, including explicit type-mismatch feedback and real Grist API errors.
+- Add a bottom-right fill handle that copies the selected value vertically
+  through the dragged visible range using one batched update.
+
 ## v7.08 — 2026-09-22
 
 - Make column width/order persistence reliable by serializing and awaiting

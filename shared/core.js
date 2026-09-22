@@ -41,6 +41,7 @@
       editSave:        'Save changes',
       editShortcut:    'Ctrl/Cmd+Enter to save · Esc to cancel',
       editCharacters:  'characters',
+      fillCells:       'Drag to fill cells',
       reset:           'Reset',
       noGroups:        'No groups — choose a grouping column.',
       emptyTitle:      'No column selected',
@@ -84,7 +85,7 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.08';
+  const WIDGET_VERSION = '7.09';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -140,6 +141,9 @@
   let editableColumnsConfigured = false;
   let editableDefaultsApplied = false;
   let editingCell = null;
+  let selectedCell = null;
+  let copiedCell = null;
+  let activeFillDrag = null;
   const actionDiagnostics = [];
   const armedDeletes = new Map();  // id (string) → timeoutId, two-step confirmation
   const selectedIds = new Set();   // ids (string) of selected records

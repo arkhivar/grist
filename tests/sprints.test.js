@@ -134,6 +134,19 @@ function click(el, mods = {}) {
   assert(el, 'click target missing');
   el.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true, ...mods }));
 }
+function clipboardEvent(type, store) {
+  const event = new win.Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', { value: {
+    setData(format, value) { store[format] = String(value); },
+    getData(format) { return store[format] || ''; },
+  } });
+  return event;
+}
+function pointerEvent(type, pointerId, options = {}) {
+  const event = new win.MouseEvent(type, { bubbles: true, cancelable: true, ...options });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
+  return event;
+}
 function grip(id) {
   const g = doc.querySelector(`.row-grip[data-id="${id}"]`);
   assert(g, `grip for record ${id} not found`);
@@ -288,6 +301,10 @@ await test('F13: long-text editor is a compact, anchored, non-blocking popover',
     'redundant long-text pencil is still present');
   assertEq(editButton.getAttribute('aria-expanded'), 'false', 'initial text popover state');
   click(editButton);
+  assert(doc.getElementById('cell-editor').hidden, 'first click opened the long-text editor');
+  assert(cellEl(1, 'students').classList.contains('cell-selected'),
+    'first click did not select the long-text cell');
+  click(editButton);
   await flush();
   assert(!doc.getElementById('cell-editor').hidden, 'long-text editor did not open');
   assert(doc.getElementById('cell-editor').classList.contains('popover-mode'),
@@ -320,6 +337,10 @@ await test('F14: DateTime cell has no pencil and opens a Monday-first calendar',
   assertEq(editButton.dataset.editKind, 'datetime', 'DateTime edit kind');
   assert(!editButton.querySelector('.cell-edit-pencil'), 'redundant DateTime pencil is still present');
   assertEq(editButton.getAttribute('aria-expanded'), 'false', 'initial popover state');
+  click(editButton);
+  assert(doc.getElementById('cell-editor').hidden, 'first click opened the DateTime editor');
+  assert(cellEl(1, 'startsAt').classList.contains('cell-selected'),
+    'first click did not select the DateTime cell');
   click(editButton);
   await flush();
   assert(!doc.getElementById('cell-editor').hidden, 'DateTime editor did not open');
@@ -389,7 +410,84 @@ await test('G17: live badge and every cache key use the same release version', a
   assertEq(doc.getElementById('version-badge').textContent, `v${versions[0]}`, 'version badge');
 });
 
-await test('H18: resized column width is saved to and restored from Grist options', async () => {
+const copiedCellData = {};
+
+await test('H18: Ctrl+C / Ctrl+V copies a typed cell value', async () => {
+  const source = cellEl(1, 'students');
+  click(source.querySelector('.cell-edit-btn'));
+  source.dispatchEvent(clipboardEvent('copy', copiedCellData));
+  assertEq(copiedCellData['text/plain'], 'V..Petrichenko', 'copied cell text');
+
+  const destination = cellEl(2, 'students');
+  click(destination.querySelector('.cell-edit-btn'));
+  const before = calls.update.length;
+  destination.dispatchEvent(clipboardEvent('paste', copiedCellData));
+  await waitFor(() => calls.update.length === before + 1, 'cell paste update');
+  const [record, options] = calls.update[calls.update.length - 1];
+  assertEq(record.id, 2, 'paste destination record');
+  assertEq(record.fields.students, 'V..Petrichenko', 'pasted typed value');
+  assertEq(options && options.parseStrings, false, 'paste parseStrings option');
+  await flush();
+});
+
+await test('H19: paste is blocked between incompatible column types', async () => {
+  const destination = cellEl(1, 'C');
+  click(destination);
+  const before = calls.update.length;
+  destination.dispatchEvent(clipboardEvent('paste', copiedCellData));
+  await flush();
+  assertEq(calls.update.length, before, 'incompatible paste wrote a value');
+  assert(doc.getElementById('toast').textContent.includes('cannot be pasted'),
+    'incompatible paste did not explain the type mismatch');
+});
+
+await test('H20: fill handle copies a cell down through the dragged range', async () => {
+  const source = cellEl(1, 'students');
+  click(source.querySelector('.cell-edit-btn'));
+  const handle = source.querySelector('.cell-fill-handle');
+  const target = cellEl(3, 'students');
+  assert(handle, 'fill handle missing');
+  const originalElementFromPoint = doc.elementFromPoint;
+  doc.elementFromPoint = () => target;
+  const before = calls.update.length;
+  handle.dispatchEvent(pointerEvent('pointerdown', 42, { clientX: 10, clientY: 10 }));
+  win.dispatchEvent(pointerEvent('pointermove', 42, { clientX: 10, clientY: 30 }));
+  win.dispatchEvent(pointerEvent('pointerup', 42, { clientX: 10, clientY: 30 }));
+  doc.elementFromPoint = originalElementFromPoint;
+  await waitFor(() => calls.update.length === before + 1, 'fill range update');
+  const [records, options] = calls.update[calls.update.length - 1];
+  assert(Array.isArray(records), 'fill update was not batched');
+  assertEq(JSON.stringify(records.map(record => record.id)), JSON.stringify([3, 4, 5]),
+    'filled record range');
+  assert(records.every(record => record.fields.students === 'V..Petrichenko'),
+    'fill did not copy the source value');
+  assertEq(options && options.parseStrings, false, 'fill parseStrings option');
+  await flush();
+});
+
+await test('H21: arrow keys move the selected cell and Escape clears it', async () => {
+  const start = cellEl(1, 'weekday');
+  click(start);
+  start.dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'ArrowRight', bubbles: true, cancelable: true,
+  }));
+  assert(cellEl(1, 'count').classList.contains('cell-selected'),
+    'ArrowRight did not move to the next column');
+
+  const current = cellEl(1, 'count');
+  current.dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'ArrowDown', bubbles: true, cancelable: true,
+  }));
+  const next = cellEl(2, 'count');
+  assert(next.classList.contains('cell-selected'),
+    'ArrowDown did not move to the next visible row');
+  next.dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'Escape', bubbles: true, cancelable: true,
+  }));
+  assert(!doc.querySelector('.cell-selected'), 'Escape did not clear the cell selection');
+});
+
+await test('I22: resized column width is saved to and restored from Grist options', async () => {
   const handle = doc.querySelector('th[data-column="students"] .column-resize-handle');
   assert(handle, 'students resize handle missing');
   const before = calls.setOption.length;

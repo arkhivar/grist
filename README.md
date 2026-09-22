@@ -19,6 +19,9 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
   a cell to edit long, multi-line notes and emoji content without leaving the widget
 - **DateTime editor** — click any visible, writable DateTime cell to choose its
   UTC date and time without finding the record in the source table
+- **Spreadsheet-style cells** — click once to select, click again to edit,
+  use arrow keys to move, Ctrl/Cmd+C and Ctrl/Cmd+V to copy/paste compatible
+  typed values, or drag the blue fill handle vertically
 - **Unified grip controls** — click a row's six-dot grip to select it, use
   Ctrl/Cmd or Shift for multi-selection, or drag a grip to move records
 - **Drag between groups** — move one record or a selected set between existing
@@ -117,8 +120,9 @@ columns. The `C` column is enabled automatically when it has that type; every
 listed Text column can be enabled or disabled independently. Visible, writable
 DateTime columns are enabled automatically.
 
-Click an enabled Text cell to open a compact, non-blocking editor beside that
-cell. The table remains interactive and scrollable underneath it, while the
+Click an enabled Text cell once to select it and a second time to open a
+compact, non-blocking editor beside that cell. The table remains interactive
+and scrollable underneath it, while the
 textarea scrolls independently for longer notes. It preserves emoji,
 whitespace, and line breaks and includes a live character count. Save with the
 button or **Ctrl/Cmd+Enter**; cancel with the button or **Escape**. In the
@@ -137,6 +141,21 @@ so the browser's local timezone does not shift the chosen time. Formula
 columns, unsupported types, hidden columns, and the active grouping column are
 not editable. Saving uses `grist.selectedTable.update()` and reports the real
 failure inline as well as in Diagnostics.
+
+## Cell selection, copy/paste, and fill
+
+Every visible data cell can be selected with one click; arrow keys move the
+blue selection border through the visible rows and columns. **Enter** or **F2**
+opens the editor when that field supports direct editing. Copy/paste uses the
+underlying typed value rather than the formatted display text when the copy
+originated in this widget.
+
+Pasting is allowed only into writable scalar columns of the same Grist type:
+Text, Choice, Bool, Int, Numeric, Date, or DateTime. Incompatible typed pastes
+are rejected with an explanation. External clipboard text is parsed according
+to the destination type. Drag the small blue handle at the selected cell's
+bottom-right corner vertically to copy its value through the visible range;
+the fill is sent to Grist as one batched update.
 
 ## Group height
 

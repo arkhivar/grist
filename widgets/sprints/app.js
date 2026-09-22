@@ -1203,20 +1203,213 @@
     return `${action} failed${accessHint}: ${detail}`.slice(0, 240);
   }
 
+  const CELL_CLIPBOARD_MIME = 'application/x-arkhivar-grist-cell';
+  const CELL_COPY_TYPES = new Set([
+    'Text', 'Choice', 'Bool', 'Int', 'Numeric', 'Date', 'DateTime',
+  ]);
+
+  function cellColumnType(col) {
+    return columnBaseType(writableColumnTypes[col] || columnTypes[col]);
+  }
+
+  function isSupportedCellColumn(col) {
+    return CELL_COPY_TYPES.has(cellColumnType(col));
+  }
+
+  function isWritableCellColumn(col) {
+    return writableColumnIds.includes(col) && isSupportedCellColumn(col);
+  }
+
+  function selectedCellMatches(recordId, col) {
+    return Boolean(selectedCell &&
+      selectedCell.recordId === String(recordId) && selectedCell.col === col);
+  }
+
+  function normalizeCellValueForWrite(value, type) {
+    if (type === 'Text' || type === 'Choice') return value == null ? '' : String(value);
+    if (value == null || value === '') return null;
+    if (type === 'Bool') return Boolean(value);
+    if (type === 'Int' || type === 'Numeric') {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+    if (type === 'Date' || type === 'DateTime') {
+      const seconds = parseDateValueSec(value);
+      if (seconds == null) return null;
+      if (type === 'Date') {
+        const date = new Date(seconds * 1000);
+        return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 1000;
+      }
+      return Math.floor(seconds / 60) * 60;
+    }
+    return null;
+  }
+
+  function cellClipboardText(value, type) {
+    if (value == null || value === '') return '';
+    if (type === 'Bool') return value ? 'true' : 'false';
+    if (type === 'Date' || type === 'DateTime') {
+      const seconds = parseDateValueSec(value);
+      if (seconds == null) return '';
+      const iso = new Date(seconds * 1000).toISOString();
+      return type === 'Date' ? iso.slice(0, 10) : iso.slice(0, 16).replace('T', ' ');
+    }
+    return String(value);
+  }
+
+  function parsePastedCellText(text, type) {
+    if (type === 'Text' || type === 'Choice') return text;
+    const normalized = String(text || '').trim();
+    if (!normalized) return null;
+    if (type === 'Bool') {
+      if (/^(true|yes|1|✓)$/i.test(normalized)) return true;
+      if (/^(false|no|0|✗)$/i.test(normalized)) return false;
+      throw new Error(`Paste requires a Boolean value, not "${normalized}"`);
+    }
+    if (type === 'Int' || type === 'Numeric') {
+      const number = Number(normalized);
+      if (!Number.isFinite(number) || (type === 'Int' && !Number.isInteger(number)))
+        throw new Error(`Paste requires a valid ${type} value, not "${normalized}"`);
+      return number;
+    }
+    if (type === 'Date' || type === 'DateTime') {
+      const seconds = parseDateValueSec(normalized);
+      if (seconds == null) throw new Error(`Paste requires a valid ${type} value`);
+      return normalizeCellValueForWrite(seconds, type);
+    }
+    throw new Error(`Paste is not supported for ${type || 'this column type'}`);
+  }
+
+  function findDataCell(recordId, col) {
+    return [...content.querySelectorAll('td.data-cell')].find(cell =>
+      cell.dataset.cellId === String(recordId) && cell.dataset.cellCol === col) || null;
+  }
+
+  function focusSelectedCell() {
+    if (!selectedCell) return;
+    const cell = findDataCell(selectedCell.recordId, selectedCell.col);
+    if (cell) cell.focus({ preventScroll: true });
+  }
+
+  function selectDataCell(cell, focus = true) {
+    if (!cell) return false;
+    content.querySelectorAll('td.cell-selected').forEach(current => {
+      if (current !== cell) {
+        current.classList.remove('cell-selected');
+        current.setAttribute('aria-selected', 'false');
+        current.tabIndex = -1;
+      }
+    });
+    selectedCell = { recordId: cell.dataset.cellId, col: cell.dataset.cellCol };
+    cell.classList.add('cell-selected');
+    cell.setAttribute('aria-selected', 'true');
+    cell.tabIndex = 0;
+    if (focus) cell.focus({ preventScroll: true });
+    return true;
+  }
+
+  function clearSelectedCell() {
+    content.querySelectorAll('td.cell-selected').forEach(cell => {
+      cell.classList.remove('cell-selected');
+      cell.setAttribute('aria-selected', 'false');
+      cell.tabIndex = -1;
+    });
+    selectedCell = null;
+  }
+
+  function isClipboardInput(target) {
+    return Boolean(target && target.closest &&
+      target.closest('input, textarea, select, [contenteditable="true"]'));
+  }
+
+  async function writeCellValues(action, recordIds, col, value) {
+    const ids = [...new Set(recordIds.map(id => validRecordId(id)).filter(id => id != null))];
+    if (!ids.length) return;
+    const updates = ids.map(id => ({ id, fields: { [col]: value } }));
+    const detail = `records=${ids.join(',')} · column=${col} · type=${cellColumnType(col)}`;
+    recordActionDiagnostic(action, 'start', detail);
+    try {
+      await grist.selectedTable.update(
+        updates.length === 1 ? updates[0] : updates,
+        { parseStrings: false });
+      allRecords.forEach(record => {
+        if (ids.includes(Number(record.id))) record[col] = value;
+      });
+      recordActionDiagnostic(action, 'ok', detail);
+      showToast(action === 'Fill' ? `${ids.length} cells filled` : 'Cell pasted', 'success');
+      render();
+      requestAnimationFrame(focusSelectedCell);
+    } catch (err) {
+      showToast(actionErrorMessage(action, err));
+    }
+  }
+
+  function copySelectedCell(e) {
+    if (!selectedCell || isClipboardInput(e.target)) return;
+    const record = allRecords.find(item => String(item.id) === selectedCell.recordId);
+    const type = cellColumnType(selectedCell.col);
+    if (!record || !CELL_COPY_TYPES.has(type) || !e.clipboardData) return;
+    const value = normalizeCellValueForWrite(record[selectedCell.col], type);
+    const text = cellClipboardText(value, type);
+    copiedCell = { type, value, text };
+    e.clipboardData.setData('text/plain', text);
+    try {
+      e.clipboardData.setData(CELL_CLIPBOARD_MIME, JSON.stringify(copiedCell));
+    } catch (_) {}
+    e.preventDefault();
+    showToast('Cell copied', 'success');
+  }
+
+  async function pasteSelectedCell(e) {
+    if (!selectedCell || isClipboardInput(e.target) || !e.clipboardData) return;
+    e.preventDefault();
+    const col = selectedCell.col;
+    if (!isWritableCellColumn(col)) {
+      showToast(`Paste blocked: "${col}" is read-only or unsupported`);
+      return;
+    }
+    const destinationType = cellColumnType(col);
+    const text = e.clipboardData.getData('text/plain');
+    let packet = null;
+    try {
+      const encoded = e.clipboardData.getData(CELL_CLIPBOARD_MIME);
+      if (encoded) packet = JSON.parse(encoded);
+    } catch (_) {}
+    if (!packet && copiedCell && copiedCell.type === destinationType && copiedCell.text === text)
+      packet = copiedCell;
+    if (packet && packet.type !== destinationType) {
+      showToast(`Paste blocked: ${packet.type} cannot be pasted into ${destinationType}`);
+      return;
+    }
+    try {
+      const value = packet
+        ? normalizeCellValueForWrite(packet.value, destinationType)
+        : parsePastedCellText(text, destinationType);
+      await writeCellValues('Paste', [selectedCell.recordId], col, value);
+    } catch (err) {
+      showToast(err && err.message ? err.message : String(err));
+    }
+  }
+
   function renderTableCell(rec, col) {
     const rendered = renderCell(rec[col], col);
     const editKind = editKindForColumn(col);
-    if (!editKind)
-      return `<td>${rendered}</td>`;
     const id = esc(String(rec.id));
     const colAttr = esc(col);
-    const editLabel = editKind === 'datetime' ? T.editDateTime : T.editCell;
-    const popoverAttrs = ' aria-haspopup="dialog" aria-expanded="false"';
-    return `<td class="cell-editable">`
-      + `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
-      + ` aria-label="${esc(editLabel)}: ${colAttr}"${popoverAttrs}>`
-      + `<span class="cell-edit-value">${rendered}</span>`
-      + `</button></td>`;
+    const isSelected = selectedCellMatches(rec.id, col);
+    const isWritable = isWritableCellColumn(col);
+    const classes = ['data-cell', editKind ? 'cell-editable' : '', isSelected ? 'cell-selected' : '']
+      .filter(Boolean).join(' ');
+    const contentHtml = editKind
+      ? `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
+        + ` aria-label="${esc(editKind === 'datetime' ? T.editDateTime : T.editCell)}: ${colAttr}"`
+        + ` aria-haspopup="dialog" aria-expanded="false">`
+        + `<span class="cell-edit-value">${rendered}</span></button>`
+      : rendered;
+    return `<td class="${classes}" data-cell-id="${id}" data-cell-col="${colAttr}"`
+      + ` data-cell-writable="${String(isWritable)}" tabindex="${isSelected ? '0' : '-1'}"`
+      + ` aria-selected="${String(isSelected)}">${contentHtml}`
+      + `<span class="cell-fill-handle" aria-hidden="true" title="${esc(T.fillCells)}"></span></td>`;
   }
 
   function updateEditorCharacterCount() {
@@ -1780,7 +1973,63 @@
     }
   }
 
+  function visibleCellsForColumn(col) {
+    return [...content.querySelectorAll('td.data-cell')]
+      .filter(cell => cell.dataset.cellCol === col);
+  }
+
+  function clearFillPreview() {
+    content.querySelectorAll('td.cell-fill-preview')
+      .forEach(cell => cell.classList.remove('cell-fill-preview'));
+  }
+
+  function updateFillPreview(targetCell) {
+    if (!activeFillDrag || !targetCell ||
+        targetCell.dataset.cellCol !== activeFillDrag.col) return;
+    const cells = visibleCellsForColumn(activeFillDrag.col);
+    const sourceIndex = cells.indexOf(activeFillDrag.sourceCell);
+    const targetIndex = cells.indexOf(targetCell);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    clearFillPreview();
+    const start = Math.min(sourceIndex, targetIndex);
+    const end = Math.max(sourceIndex, targetIndex);
+    activeFillDrag.targetCells = cells.slice(start, end + 1)
+      .filter(cell => cell !== activeFillDrag.sourceCell);
+    activeFillDrag.targetCells.forEach(cell => cell.classList.add('cell-fill-preview'));
+  }
+
+  async function finishCellFill(commit) {
+    if (!activeFillDrag) return;
+    const drag = activeFillDrag;
+    activeFillDrag = null;
+    clearFillPreview();
+    if (!commit || !drag.targetCells.length) return;
+    const sourceRecord = allRecords.find(record => String(record.id) === drag.recordId);
+    const type = cellColumnType(drag.col);
+    if (!sourceRecord || !isWritableCellColumn(drag.col)) return;
+    const value = normalizeCellValueForWrite(sourceRecord[drag.col], type);
+    await writeCellValues(
+      'Fill', drag.targetCells.map(cell => cell.dataset.cellId), drag.col, value);
+  }
+
+  function moveSelectedCell(key) {
+    if (!selectedCell) return false;
+    const current = findDataCell(selectedCell.recordId, selectedCell.col);
+    if (!current) return false;
+    let cells;
+    if (key === 'ArrowUp' || key === 'ArrowDown') {
+      cells = visibleCellsForColumn(selectedCell.col);
+    } else {
+      cells = [...current.closest('tr').querySelectorAll('td.data-cell')];
+    }
+    const index = cells.indexOf(current);
+    const delta = key === 'ArrowUp' || key === 'ArrowLeft' ? -1 : 1;
+    const target = cells[index + delta];
+    return target ? selectDataCell(target) : false;
+  }
+
   content.addEventListener('click', (e) => {
+    if (e.target.closest('.cell-fill-handle')) return;
     const btn = e.target.closest('button[data-act]');
     if (btn && content.contains(btn) && !btn.disabled) {
       const idStr = btn.dataset.id;
@@ -1788,10 +2037,77 @@
       else if (btn.dataset.act === 'del') onDelete(btn, idStr);
       return;
     }
-    const editBtn = e.target.closest('button[data-edit-id][data-edit-col]');
-    if (editBtn && content.contains(editBtn) && !editBtn.disabled)
+    const cell = e.target.closest('td.data-cell');
+    if (!cell || !content.contains(cell)) return;
+    const wasSelected = selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol);
+    selectDataCell(cell);
+    const editBtn = cell.querySelector('button[data-edit-id][data-edit-col]');
+    if (wasSelected && editBtn && !editBtn.disabled)
       openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn);
   });
+
+  content.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.cell-fill-handle');
+    if (!handle) return;
+    const sourceCell = handle.closest('td.data-cell');
+    if (!sourceCell || sourceCell.dataset.cellWritable !== 'true') return;
+    e.preventDefault();
+    e.stopPropagation();
+    selectDataCell(sourceCell, false);
+    activeFillDrag = {
+      pointerId: e.pointerId,
+      sourceCell,
+      recordId: sourceCell.dataset.cellId,
+      col: sourceCell.dataset.cellCol,
+      targetCells: [],
+    };
+    if (handle.setPointerCapture) {
+      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!activeFillDrag || e.pointerId !== activeFillDrag.pointerId) return;
+    e.preventDefault();
+    const hit = document.elementFromPoint
+      ? document.elementFromPoint(e.clientX, e.clientY)
+      : null;
+    const targetCell = hit && hit.closest ? hit.closest('td.data-cell') : null;
+    updateFillPreview(targetCell);
+  });
+
+  window.addEventListener('pointerup', (e) => {
+    if (activeFillDrag && e.pointerId === activeFillDrag.pointerId)
+      finishCellFill(true);
+  });
+  window.addEventListener('pointercancel', (e) => {
+    if (activeFillDrag && e.pointerId === activeFillDrag.pointerId)
+      finishCellFill(false);
+  });
+
+  content.addEventListener('keydown', (e) => {
+    const cell = e.target.closest('td.data-cell');
+    if (!cell || !selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol)) return;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (moveSelectedCell(e.key)) e.preventDefault();
+      return;
+    }
+    if (e.key === 'Enter' || e.key === 'F2') {
+      const editBtn = cell.querySelector('button[data-edit-id][data-edit-col]');
+      if (editBtn && !editBtn.disabled) {
+        e.preventDefault();
+        openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      clearSelectedCell();
+    }
+  });
+
+  document.addEventListener('copy', copySelectedCell);
+  document.addEventListener('paste', pasteSelectedCell);
 
   document.addEventListener('click', (e) => {
     if (cellEditor.hidden || !cellEditor.classList.contains('popover-mode')) return;
