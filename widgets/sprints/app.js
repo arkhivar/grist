@@ -972,7 +972,7 @@
     const restoreCellFocus = content.contains(document.activeElement)
       && document.activeElement.closest('td.data-cell');
     Array.from(content.children).forEach(c => {
-      if (c.id !== 'empty-state' && c.id !== 'toast') c.remove();
+      if (c.id !== 'empty-state') c.remove();
     });
 
     if (!groupBy || allRecords.length === 0) {
@@ -1292,14 +1292,9 @@
   // ── 14b. Row actions: delegation on #content ───────
   let toastTimer = null;
   function showToast(msg, tone = 'error') {
-    let toast = document.getElementById('toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'toast';
-      toast.className = 'toast';
-      content.prepend(toast);
-    }
+    const toast = document.getElementById('toast');
     toast.setAttribute('role', tone === 'success' ? 'status' : 'alert');
+    toast.setAttribute('aria-live', tone === 'success' ? 'polite' : 'assertive');
     toast.classList.toggle('success', tone === 'success');
     toast.textContent = msg;
     toast.classList.add('visible');
@@ -1688,7 +1683,8 @@
     e.clipboardData.setData('text/plain', text);
     try { e.clipboardData.setData(CELL_CLIPBOARD_MIME, JSON.stringify(copiedCell)); } catch (_) {}
     e.preventDefault();
-    showToast(cells.length * cells[0].length + ' cells copied', 'success');
+    const copiedCount = cells.length * cells[0].length;
+    showToast(`${copiedCount} ${copiedCount === 1 ? 'cell' : 'cells'} copied`, 'success');
   }
 
   async function pasteSelectedCell(e) {

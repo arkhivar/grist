@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.18)
+## Current state (v7.19)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -107,4 +107,6 @@ render as rows inside month groups or only contribute to totals.
   for local clock conversion; keep Date-only fields on their existing UTC path.
 - Sort groups and Sort rows are independent. Row sort is a persisted section
   option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
-- Test suite: `tests/sprints.test.js`, 51 checks, green.
+- Notifications use a persistent, fixed bottom-right live region outside
+  `#content`; never put feedback in table flow or steal cell focus.
+- Test suite: `tests/sprints.test.js`, 53 checks, green.

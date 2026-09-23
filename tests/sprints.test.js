@@ -1160,6 +1160,68 @@ await test('N: rapid sort saves are serialized and failures surface the real err
   }
 });
 
+// ── O. Non-disruptive notifications ──────────────────────────
+await test('O: copying uses a persistent toast outside the table without moving focus or selection', async () => {
+  const toast = doc.getElementById('toast');
+  const target = cellEl(3, 'weekday');
+  click(target);
+  target.focus();
+  const groups = [...doc.querySelectorAll('.group')];
+  const children = [...doc.getElementById('content').children];
+  target.dispatchEvent(clipboardEvent('copy', {}));
+  assertEq(toast.parentElement.id, 'app', 'toast is not outside scrollable content');
+  assertEq(toast.textContent, '1 cell copied', 'copy feedback');
+  assert(toast.classList.contains('visible'), 'toast did not appear');
+  assertEq(toast.getAttribute('role'), 'status', 'success announcement role');
+  assertEq(toast.getAttribute('aria-live'), 'polite', 'success announcement priority');
+  assertEq(toast.getAttribute('aria-atomic'), 'true', 'partial announcement risk');
+  assertEq(doc.activeElement, target, 'toast stole focus');
+  assert(target.classList.contains('cell-selected'), 'toast lost cell selection');
+  assert(children.every((child, i) => doc.getElementById('content').children[i] === child), 'toast altered table flow');
+  assert(groups.every((group, i) => doc.querySelectorAll('.group')[i] === group), 'toast rebuilt the table');
+  onRecordsCb(sortRecords);
+  assertEq(doc.getElementById('toast'), toast, 'record refresh replaced the live region');
+});
+
+await test('O: notifications reuse one toast, reset dismissal, and keep errors assertive', async () => {
+  const toast = doc.getElementById('toast');
+  const originalSetTimeout = win.setTimeout;
+  const originalClearTimeout = win.clearTimeout;
+  const scheduled = new Map();
+  const cleared = new Set();
+  let nextId = -100;
+  win.setTimeout = (callback, delay, ...args) => {
+    if (delay !== 4000) return originalSetTimeout(callback, delay, ...args);
+    scheduled.set(--nextId, callback);
+    return nextId;
+  };
+  win.clearTimeout = id => {
+    if (scheduled.has(id)) cleared.add(id);
+    else originalClearTimeout(id);
+  };
+  try {
+    const data = {};
+    click(cellEl(3, 'weekday'));
+    cellEl(3, 'weekday').dispatchEvent(clipboardEvent('copy', data));
+    const firstTimer = nextId;
+    click(cellEl(3, 'C'));
+    cellEl(3, 'C').dispatchEvent(clipboardEvent('paste', data));
+    await flush();
+    assert(cleared.has(firstTimer), 'old timer could hide the new notification');
+    assertEq(doc.querySelectorAll('#toast').length, 1, 'notifications stacked');
+    assertEq(toast.getAttribute('role'), 'alert', 'error role lost');
+    assertEq(toast.getAttribute('aria-live'), 'assertive', 'error priority lost');
+    assert(!toast.classList.contains('success'), 'error retained success styling');
+    assert(toast.textContent.includes('cannot be pasted'), 'error message lost');
+    scheduled.get(nextId)();
+    assert(!toast.classList.contains('visible'), 'toast failed to dismiss');
+    assert(toast.isConnected, 'dismissal removed the live region');
+  } finally {
+    win.setTimeout = originalSetTimeout;
+    win.clearTimeout = originalClearTimeout;
+  }
+});
+
 // ── Summary ──────────────────────────────────────────────────
 console.log(`===== ${passed} passed, ${failed} failed =====`);
 process.exitCode = failed ? 1 : 0;

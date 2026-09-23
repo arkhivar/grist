@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.18">
+  <link rel="stylesheet" href="shared/base.css?v=7.19">
 </head>
 <body>
 <div id="app">
@@ -143,6 +143,8 @@
     </div>
   </main>
 
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
   <div id="sel-bar" role="toolbar">
     <span id="sel-count-txt"></span>
     <button type="button" id="btn-sel-dup" class="sel-btn"></button>
@@ -202,8 +204,8 @@
   <button type="button" role="menuitem" tabindex="-1" class="row-command-danger" data-row-command="delete"><span aria-hidden="true">×</span><span class="row-command-label">Delete rows</span></button>
 </div>
 
-<script src="shared/core.js?v=7.18"></script>
-  <script src="widgets/sprints/app.js?v=7.18"></script>
-  <script src="widgets/sprints/actions.js?v=7.18"></script>
+<script src="shared/core.js?v=7.19"></script>
+  <script src="widgets/sprints/app.js?v=7.19"></script>
+  <script src="widgets/sprints/actions.js?v=7.19"></script>
 </body>
 </html>

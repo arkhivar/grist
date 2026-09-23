@@ -482,14 +482,22 @@
     }
     .row-act:disabled { opacity: .4; cursor: default; }
 
-    /* ── Error toast (write actions) ── */
+    /* Out-of-flow feedback: never move rows, steal focus, or intercept clicks. */
     .toast {
-      display: none; position: sticky; top: 0; z-index: 5;
-      padding: 6px 12px; border-radius: var(--radius);
+      position: fixed; right: 12px; bottom: 12px; z-index: 90;
+      width: max-content; max-width: min(360px, calc(100vw - 24px));
+      padding: 9px 12px; border-radius: 8px; overflow-wrap: anywhere;
       background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b;
-      font-size: 12px; font-weight: 500; box-shadow: var(--shadow);
+      font-size: 12px; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,.10);
+      pointer-events: none; opacity: 0; visibility: hidden;
+      transform: translateY(6px);
+      transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
     }
-    .toast.visible { display: block; }
+    .toast.visible {
+      opacity: 1; visibility: visible; transform: translateY(0);
+      transition-delay: 0s;
+    }
+    #app.has-sel .toast { bottom: 64px; }
     .toast.success {
       background: color-mix(in srgb, var(--accent) 8%, var(--surface));
       border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
@@ -603,6 +611,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+      .toast { transition: none; transform: none; }
       .group.group-sort-moving,
       .rec-table tbody tr.row-enter,
       .rec-table tbody tr.row-enter td,

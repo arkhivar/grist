@@ -145,7 +145,7 @@ remain guarded. See [ROADMAP.md](ROADMAP.md) for the deferred rules.
 
 These are **write operations**: the widget must be configured with **Full
 access** in Grist (step 3 above). If access is insufficient, the operation is
-rejected and a transient error toast is shown at the top of the widget. After a
+rejected and a transient error toast is shown at the bottom right of the widget. After a
 successful move, the widget renders the confirmed destination immediately and
 then accepts Grist's fresh `onRecords` state.
 
@@ -272,6 +272,9 @@ the columns in that group away from the others.
 
 ## Motion and feedback
 
+- Notifications appear in a compact bottom-right toast without shifting rows
+  or taking focus. They allow clicks through, stay above the selection bar,
+  and fade away after four seconds; new messages replace the previous one.
 - A row added or duplicated from this widget fades/slides into place and
   receives a short accent highlight after Grist returns it through
   `onRecords`. The returned record ID ensures unrelated additions do not
@@ -279,7 +282,7 @@ the columns in that group away from the others.
 - Changing the toolbar's **Sort** mode uses a FLIP transition: each group card,
   together with all of its records, visibly moves from its old position to its
   new one.
-- Both effects automatically turn off when the operating system or browser
+- Motion effects automatically turn off when the operating system or browser
   requests reduced motion.
 
 ## Date-aware grouping

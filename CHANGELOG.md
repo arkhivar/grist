@@ -2,6 +2,15 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.19 — 2026-09-23
+
+- Move notifications to a compact, click-through bottom-right toast outside
+  the table layout, preserving cell focus and avoiding row movement.
+- Add a gentle fade/slide, respect reduced motion, and keep notifications
+  clear of the bottom selection bar. Reuse one live region with automatic
+  dismissal and separate success/error announcement priorities.
+- Fix singular copy feedback and add two notification regression checks.
+
 ## v7.18 — 2026-09-23
 
 - Remove the second confirmation click only from right-click menu deletion.
