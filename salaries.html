@@ -3,63 +3,210 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher salary counter — planned Grist widget</title>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #f7f6f3;
-      --card: #ffffff;
-      --border: #e3e1dc;
-      --text: #2e2b27;
-      --muted: #8a867e;
-      --accent: #2f7d4f;
-    }
-    * { box-sizing: border-box; }
-    body {
-      min-height: 100vh;
-      margin: 0;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-      background: var(--bg);
-      color: var(--text);
-      font: 15px/1.55 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    main {
-      width: min(560px, 100%);
-      padding: 32px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
-    }
-    .eyebrow {
-      margin: 0 0 12px;
-      color: var(--accent);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-    }
-    h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.2; }
-    p { margin: 0; color: var(--muted); }
-    a {
-      display: inline-block;
-      margin-top: 24px;
-      color: var(--accent);
-      font-weight: 500;
-      text-decoration-thickness: 1px;
-      text-underline-offset: 3px;
-    }
-  </style>
+  <title>Salaries — teacher salary counter (Grist widget)</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared/base.css?v=7.21">
 </head>
 <body>
-  <main>
-    <p class="eyebrow">Planned Grist widget</p>
-    <h1>Teacher salary counter</h1>
-    <p>This widget is being designed for monthly grouped classes and linked salary expenses. It is not ready to add to a Grist document yet.</p>
-    <a href="./">Back to the widget gallery</a>
+<div id="app">
+
+  <header class="toolbar" role="toolbar" aria-label="Grouping options">
+    <div class="toolbar-group">
+      <label for="group-select">Group by</label>
+      <select id="group-select">
+        <option value="">— choose —</option>
+      </select>
+    </div>
+    <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
+    <div class="toolbar-group">
+      <label for="sort-select">Sort groups</label>
+      <select id="sort-select">
+        <option value="alpha-asc">A → Z</option>
+        <option value="alpha-desc" selected>Z → A</option>
+        <option value="count-desc">Count ↓</option>
+        <option value="count-asc">Count ↑</option>
+      </select>
+    </div>
+    <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
+    <div class="toolbar-group">
+      <label for="row-sort-select">Sort rows</label>
+      <select id="row-sort-select" title="Sort rows within every group">
+        <option value="">Grist order</option>
+      </select>
+      <select id="row-sort-direction" aria-label="Row sort direction" disabled>
+        <option value="asc">A → Z</option>
+        <option value="desc">Z → A</option>
+      </select>
+    </div>
+    <div class="toolbar-right">
+      <div class="history-controls" role="group" aria-label="Cell edit history">
+        <button class="btn-icon" id="btn-undo" type="button"
+                aria-label="Nothing to undo" title="Nothing to undo" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true" focusable="false">
+            <path d="M9 14 4 9l5-5"/>
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+          </svg>
+        </button>
+        <button class="btn-icon" id="btn-redo" type="button"
+                aria-label="Nothing to redo" title="Nothing to redo" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true" focusable="false">
+            <path d="m15 14 5-5-5-5"/>
+            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>
+          </svg>
+        </button>
+      </div>
+      <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
+      <button class="btn" id="btn-expand"   type="button">Expand all</button>
+      <button class="btn" id="btn-collapse" type="button">Collapse all</button>
+      <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
+      <span class="version-badge" id="version-badge" title="Widget version"></span>
+      <button class="btn-icon" id="btn-settings" type="button"
+              aria-label="Display settings" aria-expanded="false" aria-controls="settings-panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="settings-panel" id="settings-panel"
+       role="region" aria-label="Display settings">
+
+    <div>
+      <label for="limit-maxh-cb" id="lbl-limitmaxh"
+             style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:500;color:var(--text);cursor:pointer">
+        <input type="checkbox" id="limit-maxh-cb" style="accent-color:var(--accent)">
+        <span id="lbl-limitmaxh-txt">Limit group height</span>
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <input type="range" id="maxh-range" min="80" max="600" step="20" value="200"
+               style="flex:1;accent-color:var(--accent)" disabled>
+        <span id="maxh-val" style="font-family:var(--mono);font-size:11px;color:var(--text);min-width:36px">200px</span>
+        <button class="btn-reset-color" type="button" id="btn-reset-maxh"
+                aria-label="Reset maximum height" disabled>Reset</button>
+      </div>
+    </div>
+
+    <div id="bool-section" style="display:none">
+      <p class="setting-section-title" id="lbl-bool">True / false display</p>
+      <div class="bool-row" id="bool-row"
+           role="radiogroup" aria-labelledby="lbl-bool"></div>
+    </div>
+
+    <div>
+      <p class="setting-section-title" id="lbl-column-layout">Column layout</p>
+      <p class="setting-help" id="column-layout-hint">Drag footer columns to reorder. Drag a footer edge to resize; double-click the edge to reset that column.</p>
+      <button class="btn" id="btn-reset-columns" type="button">Reset widths &amp; order</button>
+    </div>
+
+    <div>
+      <p class="setting-section-title" id="lbl-editable">Editable fields</p>
+      <p class="setting-help" id="editable-hint">Choose Text fields. Writable DateTime fields are enabled automatically.</p>
+      <div class="editable-col-list" id="editable-col-list"
+           aria-labelledby="lbl-editable"></div>
+    </div>
+
+    <div>
+      <p class="setting-section-title" id="lbl-diag">Diagnostics</p>
+      <div class="diag-list" id="diag-list"></div>
+    </div>
+
+  </div>
+
+  <div class="statsbar" id="statsbar" role="status" aria-live="polite" aria-atomic="true">
+    <span><span class="stat-val" id="stat-groups">0</span> groups</span>
+    <span aria-hidden="true">·</span>
+    <span><span class="stat-val" id="stat-records">0</span> records</span>
+  </div>
+
+  <main class="content" id="content" aria-label="Record groups">
+    <div class="empty" id="empty-state" role="status">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.2"
+           aria-hidden="true" focusable="false">
+        <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+        <path d="M3 9h18M9 21V9"/>
+      </svg>
+      <p class="empty-title">No column selected</p>
+      <p class="empty-sub">Choose a column in the toolbar above<br>to group records.</p>
+    </div>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="sel-bar" role="toolbar">
+    <span id="sel-count-txt"></span>
+    <button type="button" id="btn-sel-dup" class="sel-btn"></button>
+    <button type="button" id="btn-sel-del" class="sel-btn sel-del"></button>
+    <button type="button" id="btn-sel-clear" class="sel-btn"></button>
+  </div>
+
+</div>
+
+<div class="cell-editor-overlay" id="cell-editor" hidden>
+  <section class="cell-editor-dialog" id="cell-editor-dialog" role="dialog">
+    <textarea id="cell-editor-text" spellcheck="true" aria-label="Edit text"></textarea>
+    <input id="cell-editor-number" type="text" inputmode="decimal" autocomplete="off" aria-label="Edit number" hidden>
+    <div class="cell-editor-datetime" id="cell-editor-datetime-panel" hidden>
+      <input id="cell-editor-datetime" type="hidden">
+      <div class="date-picker" id="date-picker" role="group" aria-label="Vladivostok date and time (VLAT)">
+        <div class="date-picker-calendar">
+          <div class="date-picker-nav">
+            <button type="button" class="date-picker-nav-btn date-picker-nav-year" id="date-picker-prev-year" aria-label="Previous year">«</button>
+            <button type="button" class="date-picker-nav-btn" id="date-picker-prev" aria-label="Previous month">‹</button>
+            <div class="date-picker-month" id="date-picker-month" aria-live="polite"></div>
+            <button type="button" class="date-picker-nav-btn" id="date-picker-next" aria-label="Next month">›</button>
+            <button type="button" class="date-picker-nav-btn date-picker-nav-year" id="date-picker-next-year" aria-label="Next year">»</button>
+          </div>
+          <div class="date-picker-weekdays" aria-hidden="true">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span>
+            <span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+          <div class="date-picker-grid" id="date-picker-grid" role="grid" aria-label="Choose a date"></div>
+        </div>
+        <aside class="date-picker-time-panel" aria-label="Choose a Vladivostok time (VLAT)">
+          <button type="button" class="date-picker-time-scroll" id="date-picker-time-up" aria-label="Earlier times">⌃</button>
+          <div class="date-picker-time-list" id="date-picker-time-list" role="listbox" aria-label="VLAT time"></div>
+          <button type="button" class="date-picker-time-scroll" id="date-picker-time-down" aria-label="Later times">⌄</button>
+        </aside>
+      </div>
+    </div>
+    <p class="cell-editor-error" id="cell-editor-error" role="alert" hidden></p>
+    <footer class="cell-editor-footer">
+      <span id="cell-editor-count">0 characters</span>
+      <div class="date-picker-footer-actions" id="date-picker-footer-actions" hidden>
+        <button type="button" class="date-picker-link" id="date-picker-today">Today</button>
+        <button type="button" class="date-picker-link date-picker-clear" id="date-picker-clear">Clear</button>
+      </div>
+      <span class="cell-editor-shortcut" id="cell-editor-shortcut"></span>
+      <div class="cell-editor-actions">
+        <button type="button" class="btn editor-btn" id="btn-editor-cancel">Cancel</button>
+        <button type="button" class="btn editor-btn editor-save" id="btn-editor-save">Save changes</button>
+      </div>
+    </footer>
+  </section>
+</div>
+
+<div id="row-context-menu" class="row-context-menu" role="menu" aria-labelledby="row-context-label" hidden>
+  <div id="row-context-label" class="row-context-label"></div>
+  <button type="button" role="menuitem" tabindex="-1" data-row-command="duplicate"><span aria-hidden="true">⧉</span><span class="row-command-label">Duplicate rows</span></button>
+  <button type="button" role="menuitem" tabindex="-1" class="row-command-danger" data-row-command="delete"><span aria-hidden="true">×</span><span class="row-command-label">Delete rows</span></button>
+</div>
+
+<script src="widgets/salaries/config.js?v=7.21"></script>
+<script src="shared/core.js?v=7.21"></script>
+  <script src="widgets/sprints/app.js?v=7.21"></script>
+  <script src="widgets/sprints/actions.js?v=7.21"></script>
 </body>
 </html>

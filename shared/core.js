@@ -90,7 +90,21 @@
       boolFalse: ['✗ false', 'No',    'False', 'false', '0'],
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
-  const WIDGET_VERSION = '7.20';
+  if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
+    T.groupBy = 'Month from';
+    T.groups = 'months';
+    T.records = 'classes';
+    T.record = 'class';
+    T.ariaContent = 'Monthly classes';
+    T.ariaGroupRegion = 'Classes — ';
+    T.emptyTitle = 'No date column selected';
+    T.emptySub = 'Choose a date column to group classes by month.';
+    T.emptyTitleNoRec = 'No classes for this selection';
+    T.emptySubNoRec = 'Select a teacher in the linked Grist section.';
+    T.emptyNoDataTitle = 'No classes for this selection';
+    T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
+  }
+  const WIDGET_VERSION = '7.21';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──

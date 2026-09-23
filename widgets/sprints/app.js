@@ -401,11 +401,14 @@
   }
 
   function buildGroupSums(records, cols) {
-    return '<span class="group-sums">' + cols.filter(isNumericColumn).map(col => {
+    const sumColumns = typeof WIDGET_CONFIG === 'undefined' ? null : WIDGET_CONFIG.sumColumns;
+    return '<span class="group-sums">' + cols.filter(col =>
+      isNumericColumn(col) && (!sumColumns || sumColumns.includes(col))).map(col => {
       const sum = sumColumn(records, col);
       const value = sum == null ? '—' : String(sum);
+      const label = sumColumns ? 'Salary subtotal' : `Sum of ${col}`;
       return `<span class="group-sum" data-column="${esc(col)}"`
-        + ` title="Sum of ${esc(col)}" aria-label="Sum of ${esc(col)}: ${esc(value)}">`
+        + ` title="${esc(label)}" aria-label="${esc(label)}: ${esc(value)}">`
         + `${esc(value)}</span>`;
     }).join('') + '</span>';
   }
@@ -637,6 +640,8 @@
     if (!value) return false;
     const { col, granularity } = parseGroupBy(value);
     if (!allColumns.includes(col)) return false;
+    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)
+      return granularity === 'month' && knownDateCols.has(col);
     return !granularity
       || (knownDateCols.has(col) && DATE_GRANULARITIES.includes(granularity));
   }
@@ -647,6 +652,21 @@
     // mistaken for a single-value Choice column.
     if (!optionsLoaded || !metadataLoaded || allColumns.length === 0) return false;
     if (isValidGroupByOption(groupBy)) return false;
+
+    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
+      const dateColumn = allColumns.find(col => col.toLowerCase() === 'date' && knownDateCols.has(col))
+        || allColumns.find(col => knownDateCols.has(col)
+          && ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col])))
+        || allColumns.find(col => knownDateCols.has(col));
+      if (!dateColumn) return false;
+      groupBy = `${dateColumn}::month`;
+      collapsed.clear();
+      rebuildColumnSelect();
+      groupSelect.value = groupBy;
+      grist.setOption('groupBy', groupBy);
+      recordActionDiagnostic('Auto grouping', 'ok', `column=${dateColumn} · month`);
+      return true;
+    }
 
     const choiceColumn = allColumns.find(col =>
       columnBaseType(columnTypes[col] || writableColumnTypes[col]) === 'Choice');
@@ -776,6 +796,12 @@
     const prev = groupSelect.value;
     groupSelect.innerHTML = `<option value="">${T.chooseCol}</option>`;
     allColumns.forEach(col => {
+      if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
+        if (!knownDateCols.has(col)) return;
+        const option = new Option(`${col} — ${T.byMonth}`, `${col}::month`);
+        groupSelect.add(option);
+        return;
+      }
       const opt = document.createElement('option');
       opt.value = col; opt.textContent = col;
       groupSelect.appendChild(opt);
