@@ -383,7 +383,6 @@
   const rowContextDelete = rowContextMenu.querySelector('[data-row-command="delete"]');
   let rowContextState = null;
   let rowContextBusy = false;
-  let rowContextArmTimer = null;
   let pendingRowContext = null;
 
   function closeRowContextMenu(restoreFocus = true) {
@@ -393,8 +392,6 @@
     const anchor = rowContextState && rowContextState.anchor;
     rowContextMenu.hidden = true;
     rowContextState = null;
-    clearTimeout(rowContextArmTimer);
-    rowContextDelete.classList.remove('armed');
     if (restoreFocus && anchor && anchor.isConnected) anchor.focus({ preventScroll: true });
   }
 
@@ -490,15 +487,6 @@
     if (!button || !rowContextState || rowContextBusy || cellHistoryBusy) return;
     const { ids, anchor } = rowContextState;
     const deleting = button.dataset.rowCommand === 'delete';
-    if (deleting && !button.classList.contains('armed')) {
-      button.classList.add('armed');
-      button.querySelector('.row-command-label').textContent = `Confirm delete ${ids.length} ${ids.length === 1 ? 'row' : 'rows'}?`;
-      rowContextArmTimer = setTimeout(() => {
-        button.classList.remove('armed');
-        button.querySelector('.row-command-label').textContent = `Delete ${ids.length === 1 ? 'row' : 'rows'}`;
-      }, 4000);
-      return;
-    }
     closeRowContextMenu(false);
     rowContextBusy = true;
     setSelBarDisabled(true);

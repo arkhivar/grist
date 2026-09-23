@@ -2,6 +2,12 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.18 — 2026-09-23
+
+- Remove the second confirmation click only from right-click menu deletion.
+  Keep selection scope, duplicate-click protection, and real API error feedback;
+  inline and bottom-bar deletion still require confirmation.
+
 ## v7.17 — 2026-09-22
 
 - Rename the group ordering control to Sort groups and add independent Sort

@@ -793,12 +793,12 @@ await test('L: rectangular selection duplicates each covered row exactly once', 
   assert(rowMenu.hidden, 'menu remained open after duplicate');
 });
 
-await test('L: range deletion requires confirmation and sends one ID array', async () => {
+await test('L: range deletion takes one click and ignores repeat clicks', async () => {
   contextMenu(cellEl(4, 'count'));
   const before = calls.destroy.length;
   click(menuDelete);
-  assertEq(calls.destroy.length, before, 'first click deleted without confirmation');
-  assert(menuDelete.textContent.includes('Confirm delete 3 rows?'), 'missing explicit row confirmation');
+  assertEq(calls.destroy.length, before + 1, 'first click did not delete immediately');
+  assert(rowMenu.hidden, 'menu remained open after deletion');
   click(menuDelete);
   await waitFor(() => calls.destroy.length === before + 1 && !doc.getElementById('btn-sel-dup').disabled, 'range deletion');
   assertEq(JSON.stringify(calls.destroy[before][0]), '[3,4,5]', 'wrong deletion scope');
@@ -811,14 +811,17 @@ await test('L: grip multiselection is retained; right-click outside selects only
   contextMenu(grip(1));
   assertEq(doc.getElementById('row-context-label').textContent, '2 whole rows', 'grip selection scope');
   assertEq(doc.querySelectorAll('.row-grip[aria-pressed="true"]').length, 2, 'grip selection changed');
+  const gripDeleteBefore = calls.destroy.length;
   click(menuDelete);
+  await waitFor(() => calls.destroy.length === gripDeleteBefore + 1 && !doc.getElementById('btn-sel-dup').disabled, 'grip deletion');
+  assertEq(JSON.stringify(calls.destroy[gripDeleteBefore][0]), '[1,2]', 'grip deletion scope');
+  click(grip(1));
+  click(grip(2), { ctrlKey: true });
   contextMenu(cellEl(6, 'weekday'));
   assertEq(doc.getElementById('row-context-label').textContent, '1 whole row', 'outside selection scope');
-  assert(!menuDelete.classList.contains('armed'), 'delete confirmation leaked to different scope');
   assertEq(doc.querySelectorAll('.row-grip[aria-pressed="true"]').length, 0, 'unrelated grips remained selected');
   assert(cellEl(6, 'weekday').classList.contains('cell-selected'), 'right-click did not select target');
   const before = calls.destroy.length;
-  click(menuDelete);
   click(menuDelete);
   await waitFor(() => calls.destroy.length === before + 1 && !doc.getElementById('btn-sel-dup').disabled, 'single deletion');
   assertEq(JSON.stringify(calls.destroy[before][0]), '[6]', 'outside selection deleted other rows');
@@ -870,7 +873,6 @@ await test('L: failed delete preserves selection and displays the real Grist err
   const originalDestroy = win.grist.selectedTable.destroy;
   win.grist.selectedTable.destroy = async () => { throw new Error('Access denied by row rule'); };
   try {
-    click(menuDelete);
     click(menuDelete);
     await waitFor(() => !doc.getElementById('btn-sel-dup').disabled, 'failed delete completion');
     assert(doc.getElementById('toast').textContent.includes('Access denied by row rule'), 'real error hidden');

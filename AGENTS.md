@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.17)
+## Current state (v7.18)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -99,6 +99,7 @@ render as rows inside month groups or only contribute to totals.
   clipboard blocks. Session history includes range pastes and footer row creation.
 - Right-click menus target whole rows covered by a cell range or grip selection;
   duplicate/delete reuse existing API helpers (not session-undoable yet).
+  Menu deletion takes one click; inline and bottom-bar deletion remain two-step.
 - Writable Int/Numeric cells have compact editors and session history; numeric
   formula cells remain read-only. Header totals align to the column content edge.
 - DateTime display/edit/clipboard and calendar grouping use Asia/Vladivostok;
