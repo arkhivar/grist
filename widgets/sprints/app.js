@@ -801,6 +801,7 @@
     if (settingsPanel.classList.contains('open')) refreshEditableColumnsSection();
     if (settingsPanel.classList.contains('open')) refreshDiag();
     render();
+    if (typeof salaryRefreshPayments === 'function') salaryRefreshPayments();
   });
 
   buildBoolButtons();
@@ -989,6 +990,7 @@
         map.set(key, { key, label, sortKey, writeValue, records: [] });
       map.get(key).records.push(rec);
     });
+    if (typeof salaryAddPaymentGroups === 'function') salaryAddPaymentGroups(map);
     const groups = Array.from(map.values());
     sortGroupRows(groups);
     groups.sort((a, b) => {
@@ -1085,7 +1087,8 @@
               aria-label="${group.records.length}\u00a0${group.records.length > 1 ? T.records : T.record}"
         >${group.records.length}</span>
         <span class="${labelCls}">${labelTxt}</span>
-        ${buildGroupSums(group.records, displayCols)}`;
+        ${typeof salaryGroupTotalsHtml === 'function'
+          ? salaryGroupTotalsHtml(group) : buildGroupSums(group.records, displayCols)}`;
 
       header.addEventListener('click', () => {
         if (collapsed.has(group.key)) {
@@ -1108,7 +1111,10 @@
 
       const inner = document.createElement('div');
       inner.className = 'group-body-inner';
-      inner.innerHTML = buildTable(displayCols, group);
+      inner.innerHTML = (group.records.length ? buildTable(displayCols, group)
+        : '<p class="salary-no-classes">No classes this month.</p>')
+        + (typeof salaryPaymentSectionHtml === 'function'
+          ? salaryPaymentSectionHtml(group.key) : '');
 
       body.appendChild(inner);
       card.appendChild(header);

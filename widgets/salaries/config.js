@@ -5,4 +5,5 @@ const WIDGET_CONFIG = {
   sumColumns: ['wage'],
   showGroupingColumn: true,
   hiddenDisplayColumns: ['group'],
+  expensesTableId: 'Expenses',
 };

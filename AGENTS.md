@@ -72,19 +72,19 @@ npm test      # discovers and runs every tests/*.test.js suite
   custom-widget URL in the Grist doc accordingly (fresh widget instance, see
   the options note above).
 
-## Next widget in the queue: `salaries.html`
+## Salaries widget
 
-Purpose: teacher salary counter. Monthly grouped class records (from the
-attendance/classes table) with extra computed columns, plus linked rows from
-the `all expenses` table (salary expenses marked per teacher). Planned data
-flow: primary table via `onRecords` + `grist.docApi.fetchTable('all expenses')`
-for the linked expenses; teacher matching should prefer a Reference column to
-a Teachers table, with a Text/Choice initials column as fallback.
-**Open questions for the owner before building**: exact table/column names,
-rate column, expense amount column, teacher marker type, and whether expenses
-render as rows inside month groups or only contribute to totals.
+`salaries.html` uses the shared grouped-table app for linked class records and
+adds `widgets/salaries/expenses.js`. It reads `Expenses` with `fetchTable`,
+matches raw `performance` Reference IDs against the selected class rows, and
+groups payments using `Expenses.date` in Vladivostok time. Every expense with
+a teacher reference counts as salary received. The month header compares the
+absolute `wage` subtotal (earned) with `amount` (received); payment rows are
+read-only and a toolbar button re-fetches Expenses after edits there. Keep
+selection changes race-safe and never treat a failed expense fetch as zero
+payments.
 
-## Current state (v7.20)
+## Current state (v7.24)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -114,3 +114,5 @@ render as rows inside month groups or only contribute to totals.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 59 checks, green.
+- `tests/salaries.test.js` covers linked teacher matching, VLAT month boundaries,
+  expense-only months, refresh, and failed expense fetches.
