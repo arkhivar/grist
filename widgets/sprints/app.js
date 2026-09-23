@@ -286,7 +286,10 @@
 
   function orderedDisplayColumns(groupCol) {
     reconcileColumnOrder();
-    return columnOrder.filter(col => col !== groupCol && allColumns.includes(col));
+    const config = typeof WIDGET_CONFIG === 'undefined' ? null : WIDGET_CONFIG;
+    const hidden = config?.hiddenDisplayColumns || [];
+    return columnOrder.filter(col => allColumns.includes(col)
+      && !hidden.includes(col) && (config?.showGroupingColumn || col !== groupCol));
   }
 
   function defaultColumnWidth(col) {

@@ -36,10 +36,10 @@ win.grist = {
     if (name === '_grist_Tables')
       return { id: [1], tableId: ['Attendance'] };
     if (name === '_grist_Tables_column')
-      return { id: [10, 11, 12, 13], parentId: [1, 1, 1, 1],
-        colId: ['startsAt', 'wage', 'students', 'rate'],
-        type: ['DateTime:Asia/Vladivostok', 'Numeric', 'Text', 'Numeric'],
-        isFormula: [false, true, false, false] };
+      return { id: [10, 11, 12, 13, 14], parentId: [1, 1, 1, 1, 1],
+        colId: ['group', 'performance', 'datetime', 'wage', 'rate'],
+        type: ['Ref:Attendance', 'Ref:Teachers', 'DateTime:Asia/Vladivostok', 'Numeric', 'Numeric'],
+        isFormula: [false, false, false, true, false] };
     throw new Error(`Unexpected table ${name}`);
   } },
 };
@@ -52,9 +52,9 @@ win.eval([
 ].map(read).join('\n;\n'));
 
 const records = [
-  { id: 1, startsAt: '2026-07-31T14:30:00Z', wage: 100, students: 'A', rate: 10 },
-  { id: 2, startsAt: Date.parse('2026-08-15T03:00:00Z') / 1000, wage: 200, students: 'B', rate: 20 },
-  { id: 3, startsAt: { toString: () => '2026-07-31T13:30:00Z' }, wage: 50, students: 'C', rate: 30 },
+  { id: 1, group: 3456, performance: 'VP', datetime: '2026-07-31T14:30:00Z', wage: 100, rate: 10 },
+  { id: 2, group: 3457, performance: 'VP', datetime: Date.parse('2026-08-15T03:00:00Z') / 1000, wage: 200, rate: 20 },
+  { id: 3, group: 3564, performance: 'VP', datetime: { toString: () => '2026-07-31T13:30:00Z' }, wage: 50, rate: 30 },
 ];
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const cards = () => [...doc.querySelectorAll('.group')];
@@ -67,12 +67,17 @@ async function main() {
   await tick();
   await tick();
   assert.equal(calls.ready[0].requiredAccess, 'full');
-  assert(calls.options.some(([key, value]) => key === 'groupBy' && value === 'startsAt::month'));
-  assert.equal(doc.getElementById('group-select').value, 'startsAt::month');
-  assert.deepEqual([...doc.querySelectorAll('#group-select option')].map(option => option.value), ['', 'startsAt::month']);
+  assert(calls.options.some(([key, value]) => key === 'groupBy' && value === 'datetime::month'));
+  assert.equal(doc.getElementById('group-select').value, 'datetime::month');
+  assert.deepEqual([...doc.querySelectorAll('#group-select option')].map(option => option.value), ['', 'datetime::month']);
   assert.equal(cards().length, 2);
   assert.equal(cards()[0].dataset.groupLabel, 'July 2026');
   assert.equal(month('August 2026').querySelector('.group-badge').textContent, '2');
+  const headers = [...month('August 2026').querySelectorAll('tfoot th[data-column]')]
+    .map(cell => cell.dataset.column);
+  assert(headers.includes('datetime'), 'monthly date is missing from the row columns');
+  assert(!headers.includes('group'), 'Attendance reference IDs should be hidden');
+  assert(month('August 2026').querySelector('td[data-cell-col="datetime"]').textContent.includes('2026-08-01 00:30'));
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '300');
   assert.equal(month('July 2026').querySelector('.group-sum[data-column="wage"]').textContent, '50');
   assert.equal(doc.querySelectorAll('.group-sum[data-column="rate"]').length, 0);
@@ -94,18 +99,18 @@ async function main() {
   assert(doc.querySelector('.empty-title').textContent.includes('No classes'));
 
   // A typed DateTime column remains selectable when this teacher has no dates yet.
-  onRecords([{ id: 4, startsAt: null, wage: 75, students: 'D', rate: 15 }]);
-  assert.equal(doc.getElementById('group-select').value, 'startsAt::month');
+  onRecords([{ id: 4, group: 3565, performance: 'VP', datetime: null, wage: 75, rate: 15 }]);
+  assert.equal(doc.getElementById('group-select').value, 'datetime::month');
   assert.equal(cards()[0].dataset.groupLabel, '(empty)');
 
   // A source with no class date explains the actual table/selection problem.
   onRecords([{ id: 5, performance: 'VP', wage: -1425 }]);
   assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
   assert(doc.querySelector('.empty-sub').textContent.includes('Source: Attendance'));
-  onOptions({ groupBy: 'startsAt::month' }, { accessLevel: 'full' });
+  onOptions({ groupBy: 'datetime::month' }, { accessLevel: 'full' });
   await tick();
   assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
-  console.log('PASS salaries: linked records, VLAT months, wage totals, typed dates, source guidance, cache keys');
+  console.log('PASS salaries: linked records, visible VLAT dates, hidden reference IDs, wage totals, source guidance, cache keys');
   win.close();
 }
 
