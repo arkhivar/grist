@@ -96,15 +96,26 @@ async function main() {
     .map(cell => cell.dataset.column);
   assert(headers.includes('datetime'), 'monthly date is missing from the row columns');
   assert(!headers.includes('group'), 'Attendance reference IDs should be hidden');
+  assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
+  assert.equal(month('August 2026').querySelector('[data-column="wage"] .column-name').textContent, 'income');
+  assert.equal(month('August 2026').querySelector('[data-column="salary_received"] .column-name').textContent, 'expenses');
   assert(month('August 2026').querySelector('td[data-cell-col="datetime"]').textContent.includes('2026-08-01 00:30'));
-  assert(month('August 2026').querySelector('.salary-totals').textContent.includes('Earned 300'));
-  assert(month('August 2026').querySelector('.salary-totals').textContent.includes('Received 100'));
-  assert(month('July 2026').querySelector('.salary-totals').textContent.includes('Earned 50'));
-  assert(month('July 2026').querySelector('.salary-match'));
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-300');
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '100');
+  assert.equal(month('July 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-50');
+  assert(month('July 2026').querySelector('.salary-matched'));
   assert.equal(month('September 2026').querySelector('.group-badge').textContent, '0');
-  assert(month('September 2026').querySelector('.salary-totals').textContent.includes('Received 20'));
-  assert.equal(doc.querySelectorAll('.salary-payments tbody tr').length, 3);
-  assert(!doc.querySelector('.salary-payment-id')?.textContent.includes('#13'));
+  assert.equal(month('September 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '20');
+  assert.equal(doc.querySelectorAll('.salary-payment-row').length, 3);
+  assert(!month('August 2026').querySelector('[data-expense-id="13"]'));
+  assert(!doc.querySelector('.salary-payments-heading'));
+  const payment = month('August 2026').querySelector('.salary-payment-row');
+  const dateIndex = headers.indexOf('datetime') + 1;
+  const receivedIndex = headers.indexOf('salary_received') + 1;
+  assert(payment.cells[dateIndex].textContent.includes('2026-08-01 00:30'));
+  assert.equal(payment.cells[receivedIndex].textContent, '100');
+  assert.equal(payment.querySelectorAll('td.data-cell').length, 0, 'payment rows entered class edit history');
+  assert.equal(payment.closest('table'), month('August 2026').querySelector('[data-record-id="1"]').closest('table'));
   assert.equal(doc.getElementById('stat-records').textContent, '3');
   assert(doc.getElementById('statsbar').textContent.includes('classes'));
 
@@ -117,25 +128,25 @@ async function main() {
   onRecords(records.slice(0, 1));
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
   assert.equal(cards().length, 3);
-  assert(month('August 2026').querySelector('.salary-totals').textContent.includes('Earned 100'));
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-100');
   assert(month('August 2026').classList.contains('collapsed'));
 
   expenses = { ...expenses, amount: [125, 50, 200, 20] };
   doc.getElementById('btn-refresh-payments').click();
-  await waitFor(() => month('August 2026').querySelector('.salary-totals').textContent.includes('Received 125'));
+  await waitFor(() => month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent === '125');
   const savedExpenses = expenses;
   expenses = new Error('Expenses table blocked');
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => doc.getElementById('salary-payment-status').textContent.includes('Expenses table blocked'));
-  assert(month('August 2026').querySelector('.salary-totals').textContent.includes('Received —'));
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '—');
   expenses = savedExpenses;
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
 
   onRecords([{ id: 6, group: 4000, performance: 'TR', datetime: '2026-08-15T03:00:00Z', wage: 200, rate: 10 }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
-  assert(month('August 2026').querySelector('.salary-payment-id').textContent.includes('#13'));
-  assert.equal(doc.querySelectorAll('.salary-payments tbody tr').length, 1);
+  assert(month('August 2026').querySelector('[data-expense-id="13"]'));
+  assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);
   onRecords([]);
   assert.equal(cards().length, 0);
   assert(doc.querySelector('.empty-title').textContent.includes('No classes'));
@@ -152,7 +163,7 @@ async function main() {
   onOptions({ groupBy: 'datetime::month' }, { accessLevel: 'full' });
   await tick();
   assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
-  console.log('PASS salaries: linked classes and teacher payments, VLAT months, earned/received totals, refresh, cache keys');
+  console.log('PASS salaries: one aligned class/payment grid, VLAT months, income/expenses totals, refresh, cache keys');
   win.close();
 }
 

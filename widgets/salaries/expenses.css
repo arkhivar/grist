@@ -1,27 +1,11 @@
-.salary-totals {
-  display: flex; align-items: center; gap: 14px; flex-shrink: 0;
-  font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums;
-}
-.salary-totals > span { white-space: nowrap; }
-.salary-total-label { color: var(--muted); font-family: var(--font); font-weight: 500; }
-.salary-totals strong { color: var(--accent); font-weight: 600; }
-.salary-match { color: #15803d; font-weight: 700; }
-.salary-no-classes { padding: 9px 12px; color: var(--muted); font-size: 11px; }
-.salary-payments { border-top: 1px solid var(--border); background: var(--group-stripe); }
-.salary-payments-heading {
-  display: flex; align-items: center; gap: 7px; padding: 5px 10px;
-  color: var(--text); font-size: 11px; font-weight: 600;
-}
-.salary-payment-scroll { overflow-x: auto; }
-.salary-payments table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.salary-payments th, .salary-payments td {
-  padding: 4px 10px; border-top: 1px solid var(--border); text-align: left;
-}
-.salary-payments th { color: var(--muted); font-weight: 500; }
-.salary-payments td { background: var(--surface); }
-.salary-payment-amount { text-align: right !important; font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.salary-payment-id { color: var(--muted); font-family: var(--mono); }
-.salary-payment-empty { padding: 3px 10px 8px; color: var(--muted); font-size: 11px; }
-@media (max-width: 700px) {
-  .salary-totals { gap: 6px; font-size: 10px; }
-}
+/* Class and payment rows share the same grid and column widths. */
+.rec-table td[data-cell-col="wage"],
+.rec-table td[data-cell-col="salary_received"],
+.rec-table td.salary-payment-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.rec-table td[data-cell-col="wage"] .cell-edit-btn,
+.rec-table td[data-cell-col="salary_received"] .cell-edit-btn { justify-content: flex-end; }
+.group-sum.salary-income-sum,
+.group-sum.salary-received-sum { text-align: right; }
+.salary-received-sum.salary-matched { color: #15803d; }
+.rec-table .salary-payment-row td { background: var(--surface); }
+.rec-table .salary-payment-row:hover td { background: var(--hover-row); }

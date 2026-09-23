@@ -32,34 +32,46 @@ function salaryAddPaymentGroups(groups) {
 
 function salaryGroupTotalsHtml(group) {
   const wage = sumColumn(group.records, 'wage');
-  const earned = wage == null ? 0 : Math.abs(wage);
   const payments = salaryPaymentRowsFor(group.key);
   const received = payments.reduce((total, row) =>
     total + (Number.isFinite(row.amount) ? row.amount : 0), 0);
+  const incomeLabel = wage == null ? '—' : salaryAmount(wage);
   const receivedLabel = salaryPaymentsLoaded ? salaryAmount(received) : '—';
-  const matched = salaryPaymentsLoaded && earned > 0 && Math.abs(earned - received) < 0.005;
-  return `<span class="salary-totals" aria-label="Earned ${esc(salaryAmount(earned))}; received ${esc(receivedLabel)}">`
-    + `<span><span class="salary-total-label">Earned</span> <strong>${esc(salaryAmount(earned))}</strong></span>`
-    + `<span><span class="salary-total-label">Received</span> <strong>${esc(receivedLabel)}</strong></span>`
-    + (matched ? '<span class="salary-match" title="Earned and received match" aria-label="Amounts match">✓</span>' : '')
+  const matched = salaryPaymentsLoaded && wage != null
+    && Math.abs(Math.abs(wage) - received) < 0.005;
+  return '<span class="group-sums">'
+    + `<span class="group-sum salary-income-sum" data-column="wage"`
+    + ` title="Class income: ${esc(incomeLabel)}" aria-label="Class income: ${esc(incomeLabel)}">${esc(incomeLabel)}</span>`
+    + `<span class="group-sum salary-received-sum${matched ? ' salary-matched' : ''}"`
+    + ` data-column="${esc(WIDGET_CONFIG.receivedColumn)}"`
+    + ` title="Salary received: ${esc(receivedLabel)}${matched ? ' · amounts match' : ''}"`
+    + ` aria-label="Salary received: ${esc(receivedLabel)}${matched ? '; amounts match' : ''}">`
+    + `${esc(receivedLabel)}</span>`
     + '</span>';
 }
 
-function salaryPaymentSectionHtml(key) {
+function salaryColumnLabel(col) {
+  if (col === 'wage') return 'income';
+  if (col === WIDGET_CONFIG.receivedColumn) return 'expenses';
+  return col;
+}
+
+function salaryPaymentRowsHtml(cols, key, classRecords) {
   const payments = salaryPaymentRowsFor(key);
-  const rows = payments.map(row => `<tr>`
-    + `<td>${esc(row.dateLabel)}</td>`
-    + `<td class="salary-payment-amount">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</td>`
-    + `<td class="salary-payment-id">#${esc(row.id)}</td>`
-    + `</tr>`).join('');
-  const body = !salaryPaymentsLoaded
-    ? '<p class="salary-payment-empty">Payments are loading or unavailable.</p>'
-    : payments.length
-      ? `<div class="salary-payment-scroll"><table><thead><tr><th>Date (VLAT)</th><th>Amount</th><th>Expense</th></tr></thead><tbody>${rows}</tbody></table></div>`
-      : '<p class="salary-payment-empty">No payments recorded for this month.</p>';
-  return `<section class="salary-payments" aria-label="Salary payments">`
-    + `<div class="salary-payments-heading">Payments <span class="group-badge">${payments.length}</span></div>`
-    + body + '</section>';
+  const dateColumn = parseGroupBy(groupBy).col;
+  const teacherLabel = classRecords[0]?.performance ?? allRecords[0]?.performance ?? '';
+  return payments.map(row => `<tr class="salary-payment-row" data-expense-id="${esc(row.id)}"`
+    + ` title="Salary payment from Expenses #${esc(row.id)}">`
+    + '<td class="row-grip-cell"></td>'
+    + cols.map(col => {
+      if (col === dateColumn)
+        return `<td class="salary-payment-date"><span class="cell-num">${esc(row.dateLabel)}</span></td>`;
+      if (col === 'performance') return `<td>${esc(teacherLabel)}</td>`;
+      if (col === WIDGET_CONFIG.receivedColumn)
+        return `<td class="salary-payment-amount"><span class="cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
+      return '<td></td>';
+    }).join('')
+    + '<td class="row-actions"></td></tr>').join('');
 }
 
 function salaryRawRef(value) {

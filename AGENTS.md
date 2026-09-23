@@ -78,13 +78,14 @@ npm test      # discovers and runs every tests/*.test.js suite
 adds `widgets/salaries/expenses.js`. It reads `Expenses` with `fetchTable`,
 matches raw `performance` Reference IDs against the selected class rows, and
 groups payments using `Expenses.date` in Vladivostok time. Every expense with
-a teacher reference counts as salary received. The month header compares the
-absolute `wage` subtotal (earned) with `amount` (received); payment rows are
-read-only and a toolbar button re-fetches Expenses after edits there. Keep
+a teacher reference counts as salary received. Month headers show the signed
+`wage` subtotal and `amount` payment subtotal over their columns; class and
+payment rows share one table grid with income and expenses columns. Payment
+rows are read-only and a toolbar button re-fetches Expenses after edits there. Keep
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.24)
+## Current state (v7.25)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk

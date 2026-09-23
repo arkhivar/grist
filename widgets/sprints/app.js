@@ -278,21 +278,31 @@
 
   function reconcileColumnOrder() {
     const known = new Set(allColumns);
+    const received = allColumns.length && typeof WIDGET_CONFIG !== 'undefined'
+      ? WIDGET_CONFIG.receivedColumn : null;
+    if (received) known.add(received);
     const saved = columnOrder.filter((col, i) =>
       known.has(col) && columnOrder.indexOf(col) === i);
     const missing = allColumns.filter(col => !saved.includes(col));
     columnOrder = [...saved, ...missing];
+    if (received && !columnOrder.includes(received)) {
+      const wageIndex = columnOrder.indexOf('wage');
+      columnOrder.splice(wageIndex < 0 ? columnOrder.length : wageIndex + 1, 0, received);
+    }
   }
 
   function orderedDisplayColumns(groupCol) {
     reconcileColumnOrder();
     const config = typeof WIDGET_CONFIG === 'undefined' ? null : WIDGET_CONFIG;
     const hidden = config?.hiddenDisplayColumns || [];
-    return columnOrder.filter(col => allColumns.includes(col)
+    return columnOrder.filter(col => (allColumns.includes(col)
+      || (config?.receivedColumn && col === config.receivedColumn))
       && !hidden.includes(col) && (config?.showGroupingColumn || col !== groupCol));
   }
 
   function defaultColumnWidth(col) {
+    if (typeof WIDGET_CONFIG !== 'undefined' && col === WIDGET_CONFIG.receivedColumn)
+      return 118;
     const type = columnBaseType(columnTypes[col]);
     if (type === 'Bool') return 72;
     if (type === 'Numeric' || type === 'Int') return 104;
@@ -394,9 +404,10 @@
   }
 
   function buildColumnFooter(col) {
+    const label = typeof salaryColumnLabel === 'function' ? salaryColumnLabel(col) : col;
     return `<th scope="col" class="column-header" draggable="true" tabindex="0"`
       + ` title="${esc(col)} — ${esc(T.reorderColumn)}" data-column="${esc(col)}">`
-      + `<span class="column-footer-content"><span class="column-name">${esc(col)}</span>`
+      + `<span class="column-footer-content"><span class="column-name">${esc(label)}</span>`
       + `</span>`
       + `<span class="column-resize-handle" draggable="false" tabindex="0"`
       + ` role="separator" aria-orientation="vertical"`
@@ -438,6 +449,7 @@
       placements.forEach(({ sum, left, width }) => {
         sum.style.left = `${left}px`;
         sum.style.maxWidth = `${width}px`;
+        sum.style.width = `${width}px`;
       });
     });
   }
@@ -1111,10 +1123,7 @@
 
       const inner = document.createElement('div');
       inner.className = 'group-body-inner';
-      inner.innerHTML = (group.records.length ? buildTable(displayCols, group)
-        : '<p class="salary-no-classes">No classes this month.</p>')
-        + (typeof salaryPaymentSectionHtml === 'function'
-          ? salaryPaymentSectionHtml(group.key) : '');
+      inner.innerHTML = buildTable(displayCols, group);
 
       body.appendChild(inner);
       card.appendChild(header);
@@ -1190,7 +1199,8 @@
       + ` aria-label="${esc(gripLabel)} ${esc(idStr)}">${gripIconHtml()}</button></td>`
       + `${cols.map(c => renderTableCell(rec, c)).join('')}`
       + `<td class="row-actions">${rowActionsHtml(rec)}</td></tr>`;
-    }).join('');
+    }).join('') + (typeof salaryPaymentRowsHtml === 'function'
+      ? salaryPaymentRowsHtml(cols, group.key, group.records) : '');
     return `<div class="scroll-inner" tabindex="0"><table class="rec-table"`
       + ` style="width:${getTableWidth(cols)}px">`
       + `${buildColGroup(cols)}
@@ -1836,7 +1846,8 @@
   }
 
   function renderTableCell(rec, col) {
-    const rendered = renderCell(rec[col], col);
+    const rendered = typeof WIDGET_CONFIG !== 'undefined' && col === WIDGET_CONFIG.receivedColumn
+      ? '' : renderCell(rec[col], col);
     const editKind = editKindForColumn(col);
     const id = esc(String(rec.id));
     const colAttr = esc(col);

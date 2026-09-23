@@ -6,4 +6,5 @@ const WIDGET_CONFIG = {
   showGroupingColumn: true,
   hiddenDisplayColumns: ['group'],
   expensesTableId: 'Expenses',
+  receivedColumn: 'salary_received',
 };
