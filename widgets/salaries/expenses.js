@@ -1,5 +1,5 @@
 // Salary payments are read from Expenses and matched by the raw Performance
-// reference ID. The selected class rows are still supplied by Grist's link.
+// reference ID. The linked All_att group lists select original Attendance rows.
 let salaryPaymentsByMonth = new Map();
 let salaryPaymentsLoaded = false;
 let salaryPaymentRequest = 0;
@@ -137,34 +137,81 @@ content.addEventListener('click', event => {
 });
 
 function salaryRawRef(value) {
-  const id = Number(value);
+  const id = Number(Array.isArray(value) && value[0] === 'R' ? value[2] : value);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function salaryGroupIds(value) {
+  if (!Array.isArray(value)) return [];
+  if (value[0] === 'l') return salaryGroupIds(value[1]);
+  if (value[0] === 'r') return salaryGroupIds(value[2]);
+  if (value[0] !== 'L') return [];
+  return value.slice(1).map(salaryRawRef).filter(id => id != null);
+}
+
+function salaryDisplayClassCell(col, value) {
+  if (Array.isArray(value) && value[0] === 'l')
+    return salaryDisplayClassCell(col, value[1]);
+  const type = columnTypes[col] || '';
+  if (type.startsWith('Ref:')) {
+    const id = salaryRawRef(value);
+    return id == null ? '' : salaryRefDisplay(col, id);
+  }
+  if (type.startsWith('RefList:'))
+    return salaryGroupIds(value).map(id => salaryRefDisplay(col, id)).join(', ');
+  if (Array.isArray(value) && (value[0] === 'D' || value[0] === 'd'))
+    return value[1];
+  return value;
 }
 
 async function salaryLoadClassColumns(selectedRecords, apply) {
   const request = ++salaryClassColumnsRequest;
-  if (!selectedRecords.length) return;
+  ++salaryPaymentRequest;
+  salaryPaymentsByMonth = new Map();
+  salaryPaymentsLoaded = false;
+  salaryPaymentStatus.textContent = selectedRecords.length ? 'Loading classes…' : 'No teacher selected';
+  if (!selectedRecords.length) { apply([]); return; }
   try {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const fetched = await grist.viewApi.fetchSelectedTable({
-        format: 'rows', includeColumns: 'normal', expandRefs: true,
+    const sourceId = await grist.selectedTable.getTableId();
+    await getWritableColumnIds();
+    const [source, classes] = await Promise.all([
+      sourceId === WIDGET_CONFIG.classTableId ? null : grist.docApi.fetchTable(sourceId),
+      grist.docApi.fetchTable(WIDGET_CONFIG.classTableId),
+    ]);
+    if (request !== salaryClassColumnsRequest) return;
+    if (!Array.isArray(classes.id)) throw new Error('Attendance rows are unavailable');
+    let classIds;
+    if (!source) classIds = selectedRecords.map(row => salaryRawRef(row.id));
+    else {
+      if (!Array.isArray(source.id) || !Array.isArray(source.group))
+        throw new Error(`${sourceId}.group must link to Attendance rows`);
+      const sourceById = new Map(source.id.map((id, index) => [Number(id), index]));
+      classIds = selectedRecords.flatMap(row => {
+        const index = sourceById.get(Number(row.id));
+        return index == null ? [] : salaryGroupIds(source.group[index]);
       });
-      if (request !== salaryClassColumnsRequest) return;
-      if (!Array.isArray(fetched)) throw new Error('Selected Attendance rows are unavailable');
-      const byId = new Map(fetched.map(row => [String(row.id), row]));
-      if (byId.size === selectedRecords.length
-          && selectedRecords.every(row => byId.has(String(row.id)))) {
-        // The full selected-table read supplies expanded Reference labels as well as hidden columns.
-        apply(selectedRecords.map(row => ({ ...row, ...byId.get(String(row.id)) })));
-        return;
-      }
-      // The linked selection can settle just after onRecords; retry once.
-      if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 0));
     }
-    throw new Error('Selected Attendance rows changed while loading');
+    const selectedIds = new Set(classIds.filter(id => id != null));
+    if (source && !selectedIds.size)
+      throw new Error(`${sourceId}.group has no Attendance rows for this selection`);
+    const refCols = Object.keys(columnTypes).filter(col =>
+      columnTypes[col].startsWith('Ref:') || columnTypes[col].startsWith('RefList:'));
+    await Promise.allSettled(refCols.map(col => salaryRefChoices(col)));
+    if (request !== salaryClassColumnsRequest) return;
+    const cols = Object.keys(columnTypes).filter(col => Array.isArray(classes[col]));
+    const records = classes.id.flatMap((id, index) => {
+      if (!selectedIds.has(Number(id))) return [];
+      const record = { id: Number(id) };
+      cols.forEach(col => { record[col] = salaryDisplayClassCell(col, classes[col][index]); });
+      return [record];
+    });
+    apply(records);
   } catch (error) {
     if (request !== salaryClassColumnsRequest) return;
-    showToast(`Load Attendance columns failed: ${error.message || String(error)}`);
+    apply([]);
+    const message = error.message || String(error);
+    salaryPaymentStatus.textContent = `Classes unavailable: ${message}`;
+    showToast(`Load Attendance classes failed: ${message}`);
   }
 }
 
@@ -177,6 +224,7 @@ async function salaryRefreshPayments() {
   salaryPaymentStatus.textContent = classIds.size ? 'Loading payments…' : 'No teacher selected';
   if (!classIds.size) {
     salaryClearExpenseSelection();
+    salaryRefreshButton.disabled = false;
     return;
   }
   render();

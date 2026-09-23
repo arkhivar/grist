@@ -1,4 +1,33 @@
 // Reference editing for the extra Attendance columns in the salary view.
+const salaryAttendanceOps = {
+  getTableId: async () => WIDGET_CONFIG.classTableId,
+  update: async (updates, options) => {
+    const rows = Array.isArray(updates) ? updates : [updates];
+    return grist.docApi.applyUserActions(rows.map(row =>
+      ['UpdateRecord', WIDGET_CONFIG.classTableId, row.id, row.fields]), options);
+  },
+  create: async (record, options) => {
+    const result = await grist.docApi.applyUserActions([
+      ['AddRecord', WIDGET_CONFIG.classTableId, null, record.fields],
+    ], options);
+    return { id: result?.retValues?.[0] };
+  },
+  destroy: async ids => grist.docApi.applyUserActions(ids.map(id =>
+    ['RemoveRecord', WIDGET_CONFIG.classTableId, id])),
+};
+
+function salaryTableOperations() {
+  return salaryAttendanceOps;
+}
+
+async function salaryFetchClassRecord(recordId) {
+  const table = await grist.docApi.fetchTable(WIDGET_CONFIG.classTableId);
+  const index = (table.id || []).findIndex(id => Number(id) === Number(recordId));
+  if (index < 0) throw new Error(`Attendance record ${recordId} is unavailable`);
+  return Object.fromEntries(Object.entries(table).map(([col, values]) =>
+    [col, Array.isArray(values) ? values[index] : undefined]));
+}
+
 const salaryRefEditor = document.getElementById('salary-ref-editor');
 const salaryRefSearch = document.getElementById('salary-ref-search');
 const salaryRefOptions = document.getElementById('salary-ref-options');
@@ -71,7 +100,7 @@ function renderSalaryRefOptions() {
 }
 
 async function salaryRefChoices(col) {
-  const refTable = String(writableColumnTypes[col] || '').split(':')[1];
+  const refTable = String(columnTypes[col] || '').split(':')[1];
   if (!refTable) throw new Error(`Reference table is unknown for ${col}`);
   const [tables, columns, table] = await Promise.all([
     grist.docApi.fetchTable('_grist_Tables'),
@@ -111,9 +140,7 @@ async function openSalaryRefEditor(idStr, col, anchor) {
   try {
     const [choices, raw] = await Promise.all([
       salaryRefChoices(col),
-      grist.viewApi.fetchSelectedRecord(Number(idStr), {
-        cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
-      }),
+      salaryFetchClassRecord(Number(idStr)),
     ]);
     if (request !== salaryRefRequest || !salaryRefContext) return;
     salaryRefContext.choices = choices;
@@ -134,7 +161,7 @@ async function saveSalaryRef(id, label) {
   salaryRefSaving = true;
   salaryRefStatus.textContent = 'Saving…';
   try {
-    await grist.selectedTable.update({ id: recordId, fields: { [col]: id } },
+    await salaryTableOperations().update({ id: recordId, fields: { [col]: id } },
       { parseStrings: false });
     const record = allRecords.find(item => Number(item.id) === recordId);
     if (record) record[col] = label;

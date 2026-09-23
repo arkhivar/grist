@@ -15,6 +15,11 @@
     return String(type || '').split(':')[0];
   }
 
+  function activeTableOps() {
+    return typeof salaryTableOperations === 'function'
+      ? salaryTableOperations() : grist.selectedTable;
+  }
+
   function isTextColumnType(type) {
     return columnBaseType(type) === 'Text';
   }
@@ -828,9 +833,12 @@
   }
 
   grist.onRecords((records) => {
-    if (typeof salaryLoadClassColumns === 'function')
-      salaryLoadClassColumns(records || [], expanded => applyIncomingRecords(expanded, false));
-    applyIncomingRecords(records);
+    if (typeof salaryLoadClassColumns === 'function') {
+      salaryLoadClassColumns(records || [], expanded => applyIncomingRecords(expanded));
+      applyIncomingRecords([], false);
+    } else {
+      applyIncomingRecords(records);
+    }
   });
 
   buildBoolButtons();
@@ -1539,7 +1547,7 @@
         await grist.docApi.applyUserActions(updates.map(update =>
           ['UpdateRecord', entry.tableId, update.id, update.fields]), { parseStrings: false });
       } else {
-        await grist.selectedTable.update(
+        await activeTableOps().update(
           updates.length === 1 ? updates[0] : updates,
           { parseStrings: false });
       }
@@ -1723,7 +1731,7 @@
     cellHistoryBusy = true;
     updateCellHistoryControls();
     try {
-      await grist.selectedTable.update(
+      await activeTableOps().update(
         updates.length === 1 ? updates[0] : updates,
         { parseStrings: false });
       applyCellChangesLocally(col, changes, 'after');
@@ -1849,7 +1857,7 @@
       cellHistoryBusy = true;
       updateCellHistoryControls();
       try {
-        const tableId = await grist.selectedTable.getTableId();
+        const tableId = await activeTableOps().getTableId();
         await grist.docApi.applyUserActions(meaningful.map(change =>
           ['UpdateRecord', tableId, change.id, { [change.col]: change.after }]), { parseStrings: false });
         meaningful.forEach(change => applyCellChangesLocally(change.col, [change], 'after'));
@@ -2268,7 +2276,7 @@
     cellHistoryBusy = true;
     updateCellHistoryControls();
     try {
-      await grist.selectedTable.update(
+      await activeTableOps().update(
         { id: recordId, fields: { [col]: nextValue } },
         { parseStrings: false });
       recordActionDiagnostic(action, 'ok', detail);
@@ -2350,7 +2358,7 @@
   async function getWritableColumnIds() {
     if (writableColumnIdsPromise) return writableColumnIdsPromise;
     writableColumnIdsPromise = (async () => {
-      const tableId = await grist.selectedTable.getTableId();
+      const tableId = await activeTableOps().getTableId();
       selectedTableId = tableId;
       const tables = await grist.docApi.fetchTable('_grist_Tables');
       const tableIndex = (tables.tableId || []).indexOf(tableId);
@@ -2418,7 +2426,7 @@
       + ` · target=${label} · type=${context.type}`;
     recordActionDiagnostic('Move', 'start', detail);
 
-    await grist.selectedTable.update(
+    await activeTableOps().update(
       records.map(record => ({
         id: Number(record.id),
         fields: { [context.col]: targetValue },
@@ -2474,9 +2482,11 @@
       return fields;
     if (!writableColumnIds.includes(studentCol))
       throw new Error(`The student field "${studentCol}" is read-only; a new row cannot be assigned to this student.`);
-    const raw = await grist.viewApi.fetchSelectedRecord(Number(sample.id), {
-      cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
-    });
+    const raw = typeof salaryFetchClassRecord === 'function'
+      ? await salaryFetchClassRecord(Number(sample.id))
+      : await grist.viewApi.fetchSelectedRecord(Number(sample.id), {
+        cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
+      });
     if (allRecords !== records || parseGroupBy(groupBy).col !== context.col)
       throw new Error('The selected student or grouping changed. Please click + again.');
     if (!raw || !Object.prototype.hasOwnProperty.call(raw, studentCol))
@@ -2501,7 +2511,7 @@
       const detail = `column=${context.col} · target=${label} · type=${context.type}`;
       const fields = await getNewRowFields(context, group);
       recordActionDiagnostic('Add row', 'start', detail);
-      const tableId = await grist.selectedTable.getTableId();
+      const tableId = await activeTableOps().getTableId();
       const result = await grist.docApi.applyUserActions([
         ['AddRecord', tableId, null, fields],
       ], { parseStrings: false });
@@ -2536,11 +2546,11 @@
   async function duplicateRecordById(idStr) {
     const recordId = validRecordId(idStr);
     recordActionDiagnostic('Duplicate', 'start', `record=${recordId}`);
-    const raw = await grist.viewApi.fetchSelectedRecord(recordId, {
-      cellFormat: 'typed',
-      expandRefs: false,
-      includeColumns: 'all',
-    });
+    const raw = typeof salaryFetchClassRecord === 'function'
+      ? await salaryFetchClassRecord(recordId)
+      : await grist.viewApi.fetchSelectedRecord(recordId, {
+        cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
+      });
     if (!raw) throw new Error(`Record ${recordId} is no longer available`);
     const writable = await getWritableColumnIds();
     const typedFields = {};
@@ -2560,7 +2570,7 @@
     }
     recordActionDiagnostic('Duplicate payload', 'ok',
       `record=${recordId} · typed: ${fieldTypeSummary(typedFields)} · normalized: ${fieldTypeSummary(fields)}`);
-    const created = await grist.selectedTable.create({ fields }, { parseStrings: false });
+    const created = await activeTableOps().create({ fields }, { parseStrings: false });
     const createdId = created && created.id != null ? created.id : 'unknown';
     recordActionDiagnostic('Duplicate', 'ok',
       `source=${recordId} · created=${createdId}`);
@@ -2574,7 +2584,7 @@
     recordActionDiagnostic('Delete', 'start', `records=${recordIds.join(', ')}`);
     // Pass an array even for one record. This avoids older TableOperations
     // implementations rejecting the single-record response after deletion.
-    await grist.selectedTable.destroy(recordIds);
+    await activeTableOps().destroy(recordIds);
     recordActionDiagnostic('Delete', 'ok', `records=${recordIds.join(', ')}`);
   }
 

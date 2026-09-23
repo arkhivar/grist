@@ -25,8 +25,25 @@ const win = dom.window;
 const doc = win.document;
 let onOptions;
 let onRecords;
-let selectedRecordsForFetch = [];
 const calls = { ready: [], options: [], updates: [] };
+let summary = { id: [91, 92, 93, 94], group: [
+  ['L', 1, 2, 3], ['L', 6], ['L', 4], ['L', 5],
+] };
+const attendance = {
+  id: [1, 2, 3, 4, 5, 6],
+  datetime: [['D', Date.parse('2026-07-31T14:30:00Z') / 1000, 'Asia/Vladivostok'],
+    Date.parse('2026-08-15T03:00:00Z') / 1000, '2026-07-31T13:30:00Z',
+    null, null, Date.parse('2026-08-15T03:00:00Z') / 1000],
+  performance: [7, 7, 7, 7, 7, 8],
+  group: [31, 31, 31, 31, 31, 31],
+  students: [21, 21, 21, 21, 21, 21],
+  weekday: ['Tue', 'Sat', 'Fri', '', '', 'Sat'],
+  notes: [true, true, true, true, true, true],
+  count: [-100, -200, -50, 75, -1425, 200],
+  wage: [-100, -200, -50, 75, -1425, 200],
+  rate: [10, 20, 30, 15, 15, 10],
+  sprint: [41, 41, 41, 41, 41, 41],
+};
 let expenses = {
   id: [11, 12, 13, 14],
   performance: [7, 7, 8, 7],
@@ -36,46 +53,43 @@ let expenses = {
 win.grist = {
   ready(options) { calls.ready.push(options); },
   onOptions(callback) { onOptions = callback; },
-  onRecords(callback) { onRecords = records => {
-    selectedRecordsForFetch = records;
-    callback(records);
-  }; },
+  onRecords(callback) { onRecords = callback; },
   setOption(key, value) { calls.options.push([key, value]); },
   selectedTable: {
-    getTableId: async () => 'Attendance',
-    update: async update => { calls.updates.push(update); },
+    getTableId: async () => 'All_att',
   },
-  viewApi: {
-    fetchSelectedTable: async options => {
-      assert.equal(options.includeColumns, 'normal');
-      assert.equal(options.format, 'rows');
-      return selectedRecordsForFetch.map(record => ({
-        ...record,
-        students: 'A. Student', weekday: 'Tue', notes: true,
-        count: -100, sprint: 'Sprint 07', group: 'Relentless',
-      }));
-    },
-    fetchSelectedRecord: async id => ({
-      id, students: ['R', 'A. Student', 21], performance: ['R', 'VP', 7],
-    }),
-  },
-  docApi: { fetchTable: async name => {
+  viewApi: {},
+  docApi: { applyUserActions: async actions => {
+    actions.forEach(([kind, table, id, fields]) => {
+      assert.equal(table, 'Attendance', 'class edits must target original Attendance rows');
+      if (kind === 'UpdateRecord') {
+        calls.updates.push({ id, fields });
+        const index = attendance.id.indexOf(id);
+        Object.entries(fields).forEach(([col, value]) => { attendance[col][index] = value; });
+      }
+    });
+    return { retValues: [] };
+  }, fetchTable: async name => {
     if (name === '_grist_Tables')
-      return { id: [1, 2], tableId: ['Attendance', 'Students'] };
+      return { id: [1, 2, 3, 4, 5], tableId: ['Attendance', 'Students', 'Performance', 'Groups', 'Sprints'] };
     if (name === '_grist_Tables_column')
-      return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-        parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+      return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5],
         colId: ['group', 'performance', 'datetime', 'wage', 'rate',
-          'students', 'weekday', 'notes', 'count', 'sprint', 'Name'],
-        type: ['Ref:Attendance', 'Ref:Teachers', 'DateTime:Asia/Vladivostok',
+          'students', 'weekday', 'notes', 'count', 'sprint', 'Name', 'Name', 'Name', 'Name'],
+        type: ['Ref:Groups', 'Ref:Performance', 'DateTime:Asia/Vladivostok',
           'Numeric', 'Numeric', 'Ref:Students', 'Text', 'Bool', 'Numeric',
-          'Ref:Sprints', 'Text'],
-        visibleCol: [0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0],
-        isFormula: [false, false, false, true, false, false, false, false, true, false, false] };
+          'Ref:Sprints', 'Text', 'Text', 'Text', 'Text'],
+        visibleCol: [22, 21, 0, 0, 0, 20, 0, 0, 0, 23, 0, 0, 0, 0],
+        isFormula: [false, false, false, true, false, false, false, false, true, false, false, false, false, false] };
+    if (name === 'All_att') return summary;
     if (name === 'Attendance')
-      return { id: [1, 2, 3, 4, 5, 6], performance: [7, 7, 7, 7, 7, 8] };
+      return attendance;
     if (name === 'Students')
       return { id: [21, 22], Name: ['A. Student', 'B. Student'] };
+    if (name === 'Performance') return { id: [7, 8], Name: ['VP', 'TR'] };
+    if (name === 'Groups') return { id: [31], Name: ['Relentless'] };
+    if (name === 'Sprints') return { id: [41], Name: ['Sprint 07'] };
     if (name === 'Expenses') {
       if (expenses instanceof Error) throw expenses;
       return expenses;
@@ -93,11 +107,7 @@ win.eval([
   'widgets/salaries/attendance.js',
 ].map(read).join('\n;\n'));
 
-const records = [
-  { id: 1, group: 3456, performance: 'VP', datetime: '2026-07-31T14:30:00Z', wage: -100, rate: 10 },
-  { id: 2, group: 3457, performance: 'VP', datetime: Date.parse('2026-08-15T03:00:00Z') / 1000, wage: -200, rate: 20 },
-  { id: 3, group: 3564, performance: 'VP', datetime: { toString: () => '2026-07-31T13:30:00Z' }, wage: -50, rate: 30 },
-];
+const records = [{ id: 91, group: ['L', 1, 2, 3], performance: 'VP' }];
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 async function waitFor(condition) {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -175,6 +185,8 @@ async function main() {
   assert.equal(month('August 2026').querySelector('[data-column="wage"] .column-name').textContent, 'income');
   assert.equal(month('August 2026').querySelector('[data-column="salary_received"] .column-name').textContent, 'expenses');
   assert(month('August 2026').querySelector('td[data-cell-col="datetime"]').textContent.includes('2026-08-01 00:30'));
+  assert(!doc.getElementById('content').textContent.includes('D, '), 'encoded DateTime leaked into class cells');
+  assert(!doc.getElementById('content').textContent.includes('L, '), 'encoded RefList leaked into class cells');
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-300');
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '100');
   assert.equal(month('July 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-50');
@@ -225,7 +237,8 @@ async function main() {
   assert.equal(header.getAttribute('aria-expanded'), 'false');
   assert(month('August 2026').classList.contains('collapsed'));
 
-  // onRecords is already scoped by Grist's linked teacher selection.
+  // The linked All_att summary row selects its original Attendance rows.
+  summary.group[0] = ['L', 1];
   onRecords(records.slice(0, 1));
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
   assert.equal(cards().length, 3);
@@ -244,39 +257,39 @@ async function main() {
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
 
-  onRecords([{ id: 6, group: 4000, performance: 'TR', datetime: '2026-08-15T03:00:00Z', wage: 200, rate: 10 }]);
+  onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
   assert(month('August 2026').querySelector('[data-expense-id="13"]'));
   assert.equal(expenseGrip(13).getAttribute('aria-pressed'), 'false', 'teacher change leaves no stale selection');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);
-  const fetchSelectedTable = win.grist.viewApi.fetchSelectedTable;
+  const fetchTable = win.grist.docApi.fetchTable;
   let releaseOldFetch;
-  win.grist.viewApi.fetchSelectedTable = options => {
-    win.grist.viewApi.fetchSelectedTable = fetchSelectedTable;
+  win.grist.docApi.fetchTable = name => {
+    if (name !== 'All_att') return fetchTable(name);
+    win.grist.docApi.fetchTable = fetchTable;
     return new Promise(resolve => { releaseOldFetch = resolve; });
   };
   onRecords(records.slice(0, 1));
-  onRecords([{ id: 6, group: 4000, performance: 'TR', datetime: '2026-08-15T03:00:00Z', wage: 200, rate: 10 }]);
-  releaseOldFetch([{ ...records[0], students: 'Wrong teacher' }]);
+  await waitFor(() => releaseOldFetch);
+  onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);
+  releaseOldFetch({ id: [91], group: [['L', 1]] });
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment'
     && doc.querySelector('[data-cell-id="6"][data-cell-col="students"]'));
   assert(!doc.querySelector('[data-cell-id="1"]'), 'stale teacher fetch replaced the latest selection');
   onRecords([]);
-  assert.equal(cards().length, 0);
+  await waitFor(() => cards().length === 0);
   assert(doc.querySelector('.empty-title').textContent.includes('No classes'));
 
   // A typed DateTime column remains selectable when this teacher has no dates yet.
-  onRecords([{ id: 4, group: 3565, performance: 'VP', datetime: null, wage: 75, rate: 15 }]);
+  onRecords([{ id: 93, group: ['L', 4], performance: 'VP' }]);
+  await waitFor(() => cards().some(card => card.dataset.groupLabel === '(empty)'));
   assert.equal(doc.getElementById('group-select').value, 'datetime::month');
   assert(cards().some(card => card.dataset.groupLabel === '(empty)'));
 
-  // A source with no class date explains the actual table/selection problem.
-  onRecords([{ id: 5, performance: 'VP', wage: -1425 }]);
-  assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
-  assert(doc.querySelector('.empty-sub').textContent.includes('Source: Attendance'));
-  onOptions({ groupBy: 'datetime::month' }, { accessLevel: 'full' });
-  await tick();
-  assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
+  summary.group[3] = ['L'];
+  onRecords([{ id: 94, group: ['L'], performance: 'VP' }]);
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent.includes('has no Attendance rows'));
+  assert.equal(cards().length, 0);
   console.log('PASS salaries: complete Attendance columns, editing, linked payments, VLAT months, refresh, cache keys');
   win.close();
 }
