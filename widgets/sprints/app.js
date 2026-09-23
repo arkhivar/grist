@@ -636,12 +636,17 @@
   // grist.selectedTable.create / update / destroy.
   grist.ready({ requiredAccess: 'full' });
 
+  function salaryDateColumn(col) {
+    const type = columnBaseType(columnTypes[col]);
+    return type ? type === 'Date' || type === 'DateTime' : knownDateCols.has(col);
+  }
+
   function isValidGroupByOption(value) {
     if (!value) return false;
     const { col, granularity } = parseGroupBy(value);
     if (!allColumns.includes(col)) return false;
     if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)
-      return granularity === 'month' && knownDateCols.has(col);
+      return granularity === 'month' && salaryDateColumn(col);
     return !granularity
       || (knownDateCols.has(col) && DATE_GRANULARITIES.includes(granularity));
   }
@@ -654,11 +659,15 @@
     if (isValidGroupByOption(groupBy)) return false;
 
     if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
-      const dateColumn = allColumns.find(col => col.toLowerCase() === 'date' && knownDateCols.has(col))
-        || allColumns.find(col => knownDateCols.has(col)
+      const dateColumn = allColumns.find(col => col.toLowerCase() === 'date' && salaryDateColumn(col))
+        || allColumns.find(col => salaryDateColumn(col)
           && ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col])))
-        || allColumns.find(col => knownDateCols.has(col));
-      if (!dateColumn) return false;
+        || allColumns.find(col => salaryDateColumn(col));
+      if (!dateColumn) {
+        groupBy = '';
+        groupSelect.value = '';
+        return false;
+      }
       groupBy = `${dateColumn}::month`;
       collapsed.clear();
       rebuildColumnSelect();
@@ -747,6 +756,7 @@
     optionsLoaded = true;
     getWritableColumnIds().then(() => {
       applyStartupGroupDefault();
+      rebuildColumnSelect();
       applyEditableColumnDefaults();
       refreshEditableColumnsSection();
       refreshDiag();
@@ -778,6 +788,8 @@
         if (isDateLikeColumn(c)) knownDateCols.add(c);
         else knownDateCols.delete(c);
       });
+      if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly
+          && groupBy && !isValidGroupByOption(groupBy)) groupBy = '';
     }
     // Always rebuild: already-known columns stay offered
     // even when the current filter returns no records.
@@ -797,7 +809,7 @@
     groupSelect.innerHTML = `<option value="">${T.chooseCol}</option>`;
     allColumns.forEach(col => {
       if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
-        if (!knownDateCols.has(col)) return;
+        if (!salaryDateColumn(col)) return;
         const option = new Option(`${col} — ${T.byMonth}`, `${col}::month`);
         groupSelect.add(option);
         return;
@@ -942,7 +954,9 @@
     if (!groupBy) return [];
     const { col, granularity } = parseGroupBy(groupBy);
     // Granularity active only if the column is still date-like
-    const dateMode = !!granularity && allColumns.includes(col) && isDateLikeColumn(col);
+    const dateMode = !!granularity && allColumns.includes(col)
+      && (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly
+        ? salaryDateColumn(col) : isDateLikeColumn(col));
     const map = new Map();
     allRecords.forEach(rec => {
       const raw = rec[col];
@@ -1017,6 +1031,15 @@
       emptyState.querySelector('.empty-sub').innerHTML =
         noData ? T.emptyNoDataSub
                : (!groupBy ? T.emptySub : T.emptySubNoRec);
+      if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly && !groupBy) {
+        const table = selectedTableId === 'unknown' ? 'the selected table' : esc(selectedTableId);
+        emptyState.querySelector('.empty-title').textContent = allRecords.length
+          ? (metadataLoaded ? 'No Date/DateTime column available' : 'Loading date columns…')
+          : T.emptyNoDataTitle;
+        emptyState.querySelector('.empty-sub').innerHTML = allRecords.length
+          ? `Source: ${table} · ${allRecords.length} records. Choose a class table with a Date/DateTime column and wage in Grist’s Edit data selection.`
+          : `Source: ${table}. Check the Select By link and choose a teacher in Grist.`;
+      }
       statsbar.classList.remove('visible');
       return;
     }

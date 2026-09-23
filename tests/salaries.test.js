@@ -92,7 +92,20 @@ async function main() {
   onRecords([]);
   assert.equal(cards().length, 0);
   assert(doc.querySelector('.empty-title').textContent.includes('No classes'));
-  console.log('PASS salaries: linked records, VLAT monthly groups, wage subtotals, collapse, empty state, cache keys');
+
+  // A typed DateTime column remains selectable when this teacher has no dates yet.
+  onRecords([{ id: 4, startsAt: null, wage: 75, students: 'D', rate: 15 }]);
+  assert.equal(doc.getElementById('group-select').value, 'startsAt::month');
+  assert.equal(cards()[0].dataset.groupLabel, '(empty)');
+
+  // A source with no class date explains the actual table/selection problem.
+  onRecords([{ id: 5, performance: 'VP', wage: -1425 }]);
+  assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
+  assert(doc.querySelector('.empty-sub').textContent.includes('Source: Attendance'));
+  onOptions({ groupBy: 'startsAt::month' }, { accessLevel: 'full' });
+  await tick();
+  assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
+  console.log('PASS salaries: linked records, VLAT months, wage totals, typed dates, source guidance, cache keys');
   win.close();
 }
 
