@@ -9,3 +9,6 @@
 .salary-received-sum.salary-matched { color: #15803d; }
 .rec-table .salary-payment-row td { background: var(--surface); }
 .rec-table .salary-payment-row:hover td { background: var(--hover-row); }
+.rec-table .salary-payment-row.row-selected td {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}

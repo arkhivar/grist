@@ -116,6 +116,32 @@ async function main() {
   assert.equal(payment.cells[receivedIndex].textContent, '100');
   assert.equal(payment.querySelectorAll('td.data-cell').length, 0, 'payment rows entered class edit history');
   assert.equal(payment.closest('table'), month('August 2026').querySelector('[data-record-id="1"]').closest('table'));
+  const expenseGrip = id => doc.querySelector(`.salary-expense-grip[data-expense-id="${id}"]`);
+  assert(expenseGrip(11), 'payment row has no selector grip');
+  assert.equal(expenseGrip(11).hasAttribute('data-id'), false, 'payment grip can trigger class actions');
+  assert.equal(expenseGrip(11).getAttribute('draggable'), 'false');
+  expenseGrip(11).click();
+  assert.equal(expenseGrip(11).getAttribute('aria-pressed'), 'true');
+  assert(expenseGrip(11).closest('tr').classList.contains('row-selected'));
+  assert.equal(doc.getElementById('sel-bar').classList.contains('visible'), false);
+  expenseGrip(11).click();
+  assert.equal(expenseGrip(11).getAttribute('aria-pressed'), 'false', 'second click must unselect');
+  expenseGrip(11).click();
+  expenseGrip(12).dispatchEvent(new win.MouseEvent('click', { bubbles: true, ctrlKey: true }));
+  assert.equal(expenseGrip(11).getAttribute('aria-pressed'), 'true');
+  assert.equal(expenseGrip(12).getAttribute('aria-pressed'), 'true');
+  expenseGrip(14).dispatchEvent(new win.MouseEvent('click', { bubbles: true, shiftKey: true }));
+  assert.equal(doc.querySelectorAll('.salary-expense-grip[aria-pressed="true"]').length, 3,
+    'Shift-click selects the visible payment range');
+  doc.querySelector('.row-grip[data-id="1"]').click();
+  assert.equal(expenseGrip(11).getAttribute('aria-pressed'), 'false', 'class selection clears payments');
+  assert.equal(expenseGrip(12).getAttribute('aria-pressed'), 'false');
+  expenseGrip(11).click();
+  assert.equal(doc.querySelector('.row-grip[data-id="1"]').getAttribute('aria-pressed'), 'false',
+    'payment selection clears class action selection');
+  doc.getElementById('btn-refresh-payments').click();
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
+  assert.equal(expenseGrip(11).getAttribute('aria-pressed'), 'true', 'selection survives refresh');
   assert.equal(doc.getElementById('stat-records').textContent, '3');
   assert(doc.getElementById('statsbar').textContent.includes('classes'));
 
@@ -146,6 +172,7 @@ async function main() {
   onRecords([{ id: 6, group: 4000, performance: 'TR', datetime: '2026-08-15T03:00:00Z', wage: 200, rate: 10 }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
   assert(month('August 2026').querySelector('[data-expense-id="13"]'));
+  assert.equal(expenseGrip(13).getAttribute('aria-pressed'), 'false', 'teacher change leaves no stale selection');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);
   onRecords([]);
   assert.equal(cards().length, 0);

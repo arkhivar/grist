@@ -3,6 +3,8 @@
 let salaryPaymentsByMonth = new Map();
 let salaryPaymentsLoaded = false;
 let salaryPaymentRequest = 0;
+const selectedSalaryExpenseIds = new Set();
+let salaryExpenseAnchorId = null;
 const salaryRefreshButton = document.getElementById('btn-refresh-payments');
 const salaryPaymentStatus = document.getElementById('salary-payment-status');
 const salaryNumber = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 });
@@ -60,9 +62,13 @@ function salaryPaymentRowsHtml(cols, key, classRecords) {
   const payments = salaryPaymentRowsFor(key);
   const dateColumn = parseGroupBy(groupBy).col;
   const teacherLabel = classRecords[0]?.performance ?? allRecords[0]?.performance ?? '';
-  return payments.map(row => `<tr class="salary-payment-row" data-expense-id="${esc(row.id)}"`
+  return payments.map(row => `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
     + ` title="Salary payment from Expenses #${esc(row.id)}">`
-    + '<td class="row-grip-cell"></td>'
+    + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`
+    + ` data-expense-id="${esc(row.id)}" draggable="false"`
+    + ` aria-pressed="${String(selectedSalaryExpenseIds.has(String(row.id)))}"`
+    + ` aria-label="Select salary payment ${esc(row.id)}"`
+    + ` title="Select salary payment">${gripIconHtml()}</button></td>`
     + cols.map(col => {
       if (col === dateColumn)
         return `<td class="salary-payment-date"><span class="cell-num">${esc(row.dateLabel)}</span></td>`;
@@ -73,6 +79,61 @@ function salaryPaymentRowsHtml(cols, key, classRecords) {
     }).join('')
     + '<td class="row-actions"></td></tr>').join('');
 }
+
+function salaryRefreshExpenseSelection() {
+  content.querySelectorAll('.salary-expense-grip[data-expense-id]').forEach(grip => {
+    const selected = selectedSalaryExpenseIds.has(grip.dataset.expenseId);
+    grip.setAttribute('aria-pressed', String(selected));
+    grip.closest('tr')?.classList.toggle('row-selected', selected);
+  });
+}
+
+function salaryClearExpenseSelection() {
+  if (!selectedSalaryExpenseIds.size) return;
+  selectedSalaryExpenseIds.clear();
+  salaryExpenseAnchorId = null;
+  salaryRefreshExpenseSelection();
+}
+
+content.addEventListener('click', event => {
+  const grip = event.target.closest('.salary-expense-grip[data-expense-id]');
+  if (!grip) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const id = grip.dataset.expenseId;
+  if (selectedIds.size) {
+    selectedIds.clear();
+    selectionAnchorId = null;
+    finishSelectionChange();
+  }
+  const additive = event.ctrlKey || event.metaKey;
+  if (event.shiftKey) {
+    const orderedIds = [...content.querySelectorAll('.salary-expense-grip[data-expense-id]')]
+      .filter(button => !button.closest('.group.collapsed'))
+      .map(button => button.dataset.expenseId);
+    const targetIndex = orderedIds.indexOf(id);
+    if (targetIndex < 0) return;
+    let anchorIndex = orderedIds.indexOf(salaryExpenseAnchorId);
+    if (anchorIndex < 0) {
+      salaryExpenseAnchorId = id;
+      anchorIndex = targetIndex;
+    }
+    if (!additive) selectedSalaryExpenseIds.clear();
+    orderedIds.slice(Math.min(anchorIndex, targetIndex), Math.max(anchorIndex, targetIndex) + 1)
+      .forEach(expenseId => selectedSalaryExpenseIds.add(expenseId));
+  } else if (additive) {
+    if (selectedSalaryExpenseIds.has(id)) selectedSalaryExpenseIds.delete(id);
+    else selectedSalaryExpenseIds.add(id);
+    salaryExpenseAnchorId = id;
+  } else {
+    const alreadySoleSelected = selectedSalaryExpenseIds.size === 1
+      && selectedSalaryExpenseIds.has(id);
+    selectedSalaryExpenseIds.clear();
+    if (!alreadySoleSelected) selectedSalaryExpenseIds.add(id);
+    salaryExpenseAnchorId = alreadySoleSelected ? null : id;
+  }
+  salaryRefreshExpenseSelection();
+});
 
 function salaryRawRef(value) {
   const id = Number(value);
@@ -86,7 +147,10 @@ async function salaryRefreshPayments() {
   salaryPaymentsLoaded = false;
   salaryRefreshButton.disabled = true;
   salaryPaymentStatus.textContent = classIds.size ? 'Loading payments…' : 'No teacher selected';
-  if (!classIds.size) return;
+  if (!classIds.size) {
+    salaryClearExpenseSelection();
+    return;
+  }
   render();
 
   try {
@@ -130,6 +194,11 @@ async function salaryRefreshPayments() {
       || Number(b.id) - Number(a.id)));
     salaryPaymentsByMonth = months;
     salaryPaymentsLoaded = true;
+    const presentIds = new Set([...months.values()].flat().map(row => String(row.id)));
+    selectedSalaryExpenseIds.forEach(id => {
+      if (!presentIds.has(id)) selectedSalaryExpenseIds.delete(id);
+    });
+    if (!selectedSalaryExpenseIds.size) salaryExpenseAnchorId = null;
     const count = [...months.values()].reduce((total, rows) => total + rows.length, 0);
     salaryPaymentStatus.textContent = `${count} ${count === 1 ? 'payment' : 'payments'}`;
   } catch (error) {

@@ -258,6 +258,14 @@ await test('B8: Clear button empties the selection and hides the bar', async () 
   assertEq(grip(2).getAttribute('aria-pressed'), 'false', 'grip 2');
 });
 
+await test('B8a: clicking the sole selected grip again clears selection', async () => {
+  click(grip(1));
+  assertEq(grip(1).getAttribute('aria-pressed'), 'true', 'grip selected');
+  click(grip(1));
+  assertEq(grip(1).getAttribute('aria-pressed'), 'false', 'grip deselected');
+  assert(!doc.getElementById('sel-bar').classList.contains('visible'), 'selection bar still visible');
+});
+
 // ── C. Row actions ───────────────────────────────────────────
 await test('C9: dup click → selectedTable.create with fields minus id/manualSort', async () => {
   const before = calls.create.length;

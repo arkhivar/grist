@@ -85,7 +85,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.25)
+## Current state (v7.26)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -114,6 +114,9 @@ payments.
   option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
-- Test suite: `tests/sprints.test.js`, 59 checks, green.
+- Test suite: `tests/sprints.test.js`, 60 checks, green.
 - `tests/salaries.test.js` covers linked teacher matching, VLAT month boundaries,
   expense-only months, refresh, and failed expense fetches.
+- Payment rows have selector grips with single, additive, and range selection;
+  they stay read-only and cannot be dragged or acted on as Attendance records.
+  Clicking the sole selected grip again clears selection in both widgets.

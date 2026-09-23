@@ -40,6 +40,7 @@
   }
 
   function selectRecordFromClick(id, event) {
+    if (typeof salaryClearExpenseSelection === 'function') salaryClearExpenseSelection();
     const additive = event.ctrlKey || event.metaKey;
     if (event.shiftKey) {
       const orderedIds = recordIdsInVisualOrder();
@@ -59,9 +60,10 @@
       else selectedIds.add(id);
       selectionAnchorId = id;
     } else {
+      const alreadySoleSelected = selectedIds.size === 1 && selectedIds.has(id);
       selectedIds.clear();
-      selectedIds.add(id);
-      selectionAnchorId = id;
+      if (!alreadySoleSelected) selectedIds.add(id);
+      selectionAnchorId = alreadySoleSelected ? null : id;
     }
     finishSelectionChange();
   }
