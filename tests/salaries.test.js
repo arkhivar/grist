@@ -25,8 +25,9 @@ const win = dom.window;
 const doc = win.document;
 let onOptions;
 let onRecords;
+let selectedSourceId = 'All_att_summary_performance';
 const calls = { ready: [], options: [], updates: [] };
-let summary = { id: [91, 92, 93, 94], group: [
+let summary = { id: [91, 92, 93, 94], performance: [7, 8, 7, 7], group: [
   ['L', 1, 2, 3], ['L', 6], ['L', 4], ['L', 5],
 ] };
 const attendance = {
@@ -34,15 +35,15 @@ const attendance = {
   datetime: [['D', Date.parse('2026-07-31T14:30:00Z') / 1000, 'Asia/Vladivostok'],
     Date.parse('2026-08-15T03:00:00Z') / 1000, '2026-07-31T13:30:00Z',
     null, null, Date.parse('2026-08-15T03:00:00Z') / 1000],
-  performance: [7, 7, 7, 7, 7, 8],
-  group: [31, 31, 31, 31, 31, 31],
+  performance: [['L', 7], ['L', 7, 8], ['L', 7], ['L', 7], ['L', 7], ['L', 8]],
+  group2: [31, 31, 31, 31, 31, 31],
+  group3: [null, null, null, null, null, null],
   students: [21, 21, 21, 21, 21, 21],
   weekday: ['Tue', 'Sat', 'Fri', '', '', 'Sat'],
-  notes: [true, true, true, true, true, true],
+  notes: ['First note', '', '', '', '', ''],
   count: [-100, -200, -50, 75, -1425, 200],
   wage: [-100, -200, -50, 75, -1425, 200],
-  rate: [10, 20, 30, 15, 15, 10],
-  sprint: [41, 41, 41, 41, 41, 41],
+  sprint: ['Sprint 07', 'Sprint 07', 'Sprint 07', '', '', 'Sprint 07'],
 };
 let expenses = {
   id: [11, 12, 13, 14],
@@ -56,12 +57,12 @@ win.grist = {
   onRecords(callback) { onRecords = callback; },
   setOption(key, value) { calls.options.push([key, value]); },
   selectedTable: {
-    getTableId: async () => 'All_att',
+    getTableId: async () => selectedSourceId,
   },
   viewApi: {},
   docApi: { applyUserActions: async actions => {
     actions.forEach(([kind, table, id, fields]) => {
-      assert.equal(table, 'Attendance', 'class edits must target original Attendance rows');
+      assert.equal(table, 'All_att', 'class edits must target original class rows');
       if (kind === 'UpdateRecord') {
         calls.updates.push({ id, fields });
         const index = attendance.id.indexOf(id);
@@ -71,25 +72,23 @@ win.grist = {
     return { retValues: [] };
   }, fetchTable: async name => {
     if (name === '_grist_Tables')
-      return { id: [1, 2, 3, 4, 5], tableId: ['Attendance', 'Students', 'Performance', 'Groups', 'Sprints'] };
+      return { id: [1, 2, 3, 4, 5], tableId: ['All_att', 'FolksBase', 'Performance', 'Groups', 'All_att_summary_performance'] };
     if (name === '_grist_Tables_column')
-      return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
-        parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5],
-        colId: ['group', 'performance', 'datetime', 'wage', 'rate',
-          'students', 'weekday', 'notes', 'count', 'sprint', 'Name', 'Name', 'Name', 'Name'],
-        type: ['Ref:Groups', 'Ref:Performance', 'DateTime:Asia/Vladivostok',
-          'Numeric', 'Numeric', 'Ref:Students', 'Text', 'Bool', 'Numeric',
-          'Ref:Sprints', 'Text', 'Text', 'Text', 'Text'],
-        visibleCol: [22, 21, 0, 0, 0, 20, 0, 0, 0, 23, 0, 0, 0, 0],
-        isFormula: [false, false, false, true, false, false, false, false, true, false, false, false, false, false] };
-    if (name === 'All_att') return summary;
-    if (name === 'Attendance')
-      return attendance;
-    if (name === 'Students')
+      return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+        parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4],
+        colId: ['group2', 'performance', 'datetime', 'wage', 'count',
+          'students', 'weekday', 'notes', 'group3', 'sprint', 'Name', 'Name', 'Name'],
+        type: ['Ref:Groups', 'RefList:Performance', 'DateTime:Asia/Vladivostok',
+          'Numeric', 'Numeric', 'Ref:FolksBase', 'Text', 'Text', 'RefList:Groups',
+          'Choice', 'Text', 'Text', 'Text'],
+        visibleCol: [22, 21, 0, 0, 0, 20, 0, 0, 22, 0, 0, 0, 0],
+        isFormula: [false, false, false, false, false, false, true, false, false, false, false, false, false] };
+    if (name === 'All_att_summary_performance') return summary;
+    if (name === 'All_att') return attendance;
+    if (name === 'FolksBase')
       return { id: [21, 22], Name: ['A. Student', 'B. Student'] };
     if (name === 'Performance') return { id: [7, 8], Name: ['VP', 'TR'] };
     if (name === 'Groups') return { id: [31], Name: ['Relentless'] };
-    if (name === 'Sprints') return { id: [41], Name: ['Sprint 07'] };
     if (name === 'Expenses') {
       if (expenses instanceof Error) throw expenses;
       return expenses;
@@ -122,7 +121,7 @@ const month = label => cards().find(card => card.dataset.groupLabel === label);
 async function main() {
   // Grist delivers options, records, and metadata independently.
   onOptions({ sortMode: 'alpha-asc',
-    columnOrder: ['datetime', 'wage', 'salary_received', 'performance', 'group'] },
+    columnOrder: ['datetime', 'wage', 'salary_received', 'performance', 'group2'] },
   { accessLevel: 'full' });
   onRecords(records);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
@@ -138,31 +137,26 @@ async function main() {
     .map(cell => cell.dataset.column);
   assert(headers.includes('datetime'), 'monthly date is missing from the row columns');
   assert.deepEqual(headers.slice(0, 5),
-    ['datetime', 'wage', 'salary_received', 'performance', 'group'],
+    ['datetime', 'wage', 'salary_received', 'performance', 'group2'],
     'saved column order changed when new fields arrived');
-  for (const column of ['students', 'weekday', 'notes', 'count', 'performance', 'group', 'sprint'])
+  for (const column of ['students', 'weekday', 'notes', 'count', 'performance', 'group2', 'group3', 'sprint'])
     assert(headers.includes(column), `${column} is missing from the row columns`);
-  assert(doc.querySelector('[data-cell-id="1"][data-cell-col="group"]')
+  assert(doc.querySelector('[data-cell-id="1"][data-cell-col="group2"]')
     .textContent.includes('Relentless'), 'reference display text was replaced by a row ID');
-  assert.equal(doc.querySelector('[data-cell-col="count"]').getAttribute('data-cell-writable'), 'false');
+  assert.equal(doc.querySelector('[data-cell-col="weekday"]').getAttribute('data-cell-writable'), 'false');
   assert(doc.querySelector('[data-edit-col="datetime"]'), 'class DateTime is not editable');
-  assert(doc.querySelector('[data-edit-col="weekday"]'), 'class text is not editable');
+  assert(!doc.querySelector('[data-edit-col="weekday"]'), 'formula weekday became editable');
   assert(doc.querySelector('[data-edit-col="students"]'), 'class reference is not editable');
-  assert(doc.querySelector('[data-edit-col="rate"]'), 'writable number is not editable');
-  assert(!doc.querySelector('[data-edit-col="wage"]'), 'formula wage became editable');
-  const weekdayCell = doc.querySelector('[data-cell-id="1"][data-cell-col="weekday"]');
-  weekdayCell.click();
-  weekdayCell.click();
-  assert.equal(doc.getElementById('cell-editor').hidden, false);
-  doc.getElementById('cell-editor-text').value = 'Wed';
-  doc.getElementById('btn-editor-save').click();
-  await waitFor(() => calls.updates.some(update => update.fields?.weekday === 'Wed'));
-  await waitFor(() => doc.getElementById('cell-editor').hidden);
+  assert(doc.querySelector('[data-edit-col="count"]'), 'writable number is not editable');
+  assert(doc.querySelector('[data-edit-col="wage"]'), 'writable wage is not editable');
   const notesCell = doc.querySelector('[data-cell-id="1"][data-cell-col="notes"]');
   notesCell.click();
   notesCell.click();
-  await waitFor(() => calls.updates.some(update => update.fields?.notes === false));
-  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="notes"]') !== notesCell);
+  assert.equal(doc.getElementById('cell-editor').hidden, false);
+  doc.getElementById('cell-editor-text').value = 'Updated note';
+  doc.getElementById('btn-editor-save').click();
+  await waitFor(() => calls.updates.some(update => update.fields?.notes === 'Updated note'));
+  await waitFor(() => doc.getElementById('cell-editor').hidden);
   const studentCell = doc.querySelector('[data-cell-id="1"][data-cell-col="students"]');
   studentCell.click();
   studentCell.click();
@@ -181,6 +175,25 @@ async function main() {
   doc.getElementById('btn-redo').click();
   await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="students"]')
     ?.textContent.includes('B. Student'));
+  const teacherCell = doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]');
+  teacherCell.click();
+  teacherCell.click();
+  await waitFor(() => [...doc.querySelectorAll('.salary-ref-option')]
+    .some(option => option.textContent.includes('TR')));
+  [...doc.querySelectorAll('.salary-ref-option')]
+    .find(option => option.textContent.includes('TR')).click();
+  assert.equal(doc.getElementById('salary-ref-save').hidden, false);
+  doc.getElementById('salary-ref-save').click();
+  await waitFor(() => calls.updates.some(update => update.id === 1
+    && JSON.stringify(update.fields?.performance) === JSON.stringify(['L', 7, 8])));
+  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]')
+    ?.textContent.includes('VP, TR'));
+  doc.getElementById('btn-undo').click();
+  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]')
+    ?.textContent.trim() === 'VP');
+  doc.getElementById('btn-redo').click();
+  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]')
+    ?.textContent.includes('VP, TR'));
   assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
   assert.equal(month('August 2026').querySelector('[data-column="wage"] .column-name').textContent, 'income');
   assert.equal(month('August 2026').querySelector('[data-column="salary_received"] .column-name').textContent, 'expenses');
@@ -290,6 +303,11 @@ async function main() {
   onRecords([{ id: 94, group: ['L'], performance: 'VP' }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent.includes('has no Attendance rows'));
   assert.equal(cards().length, 0);
+  // A summary widget may report its source table ID while onRecords carries group links.
+  selectedSourceId = 'All_att';
+  onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
+  assert(month('August 2026').querySelector('[data-expense-id="13"]'));
   console.log('PASS salaries: complete Attendance columns, editing, linked payments, VLAT months, refresh, cache keys');
   win.close();
 }

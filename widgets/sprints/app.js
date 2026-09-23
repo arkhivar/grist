@@ -78,7 +78,7 @@
         && !(typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)) return null;
     if (isDateTimeColumnType(type)) return 'datetime';
     if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editReferences
-        && columnBaseType(type) === 'Ref') return 'reference';
+        && ['Ref', 'RefList'].includes(columnBaseType(type))) return 'reference';
     if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editAllWritableText
         && (isTextColumnType(type) || columnBaseType(type) === 'Choice')) return 'text';
     if (editableColumns.has(col) && isTextColumnType(type)) return 'text';
@@ -1481,8 +1481,12 @@
       const id = Number(record.id);
       if (byId.has(id)) {
         const value = byId.get(id);
-        record[col] = columnBaseType(columnTypes[col]) === 'Ref'
-          && typeof salaryRefDisplay === 'function' ? salaryRefDisplay(col, value) : value;
+        const type = columnBaseType(columnTypes[col]);
+        record[col] = type === 'Ref' && typeof salaryRefDisplay === 'function'
+          ? salaryRefDisplay(col, value)
+          : type === 'RefList' && typeof salaryRefDisplay === 'function'
+            ? salaryGroupIds(value).map(refId => salaryRefDisplay(col, refId)).join(', ')
+            : value;
       }
     });
   }

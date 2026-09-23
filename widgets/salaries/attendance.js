@@ -23,7 +23,7 @@ function salaryTableOperations() {
 async function salaryFetchClassRecord(recordId) {
   const table = await grist.docApi.fetchTable(WIDGET_CONFIG.classTableId);
   const index = (table.id || []).findIndex(id => Number(id) === Number(recordId));
-  if (index < 0) throw new Error(`Attendance record ${recordId} is unavailable`);
+  if (index < 0) throw new Error(`Class record ${recordId} is unavailable`);
   return Object.fromEntries(Object.entries(table).map(([col, values]) =>
     [col, Array.isArray(values) ? values[index] : undefined]));
 }
@@ -33,6 +33,7 @@ const salaryRefSearch = document.getElementById('salary-ref-search');
 const salaryRefOptions = document.getElementById('salary-ref-options');
 const salaryRefStatus = document.getElementById('salary-ref-status');
 const salaryRefClear = document.getElementById('salary-ref-clear');
+const salaryRefSave = document.getElementById('salary-ref-save');
 let salaryRefContext = null;
 let salaryRefRequest = 0;
 let salaryRefSaving = false;
@@ -52,6 +53,7 @@ function closeSalaryRefEditor() {
   salaryRefSearch.value = '';
   salaryRefOptions.replaceChildren();
   salaryRefStatus.textContent = '';
+  salaryRefSave.hidden = true;
 }
 
 function positionSalaryRefEditor() {
@@ -83,15 +85,23 @@ function renderSalaryRefOptions() {
   const query = salaryRefSearch.value.trim().toLocaleLowerCase();
   const matches = salaryRefContext.choices.filter(choice =>
     choice.label.toLocaleLowerCase().includes(query) || String(choice.id).includes(query));
+  const isList = salaryRefContext.isList;
+  salaryRefOptions.setAttribute('aria-multiselectable', String(isList));
   salaryRefOptions.replaceChildren();
   matches.slice(0, 80).forEach(choice => {
     const option = document.createElement('button');
     option.type = 'button';
     option.className = 'salary-ref-option';
     option.setAttribute('role', 'option');
-    option.setAttribute('aria-selected', String(choice.id === salaryRefContext.currentId));
+    option.setAttribute('aria-selected', String(isList
+      ? salaryRefContext.draftIds.has(choice.id) : choice.id === salaryRefContext.currentId));
     option.textContent = `${choice.label}  #${choice.id}`;
-    option.addEventListener('click', () => saveSalaryRef(choice.id, choice.label));
+    option.addEventListener('click', () => {
+      if (!isList) { saveSalaryRef(choice.id, choice.label); return; }
+      if (salaryRefContext.draftIds.has(choice.id)) salaryRefContext.draftIds.delete(choice.id);
+      else salaryRefContext.draftIds.add(choice.id);
+      renderSalaryRefOptions();
+    });
     salaryRefOptions.appendChild(option);
   });
   salaryRefStatus.textContent = matches.length > 80
@@ -131,8 +141,10 @@ async function openSalaryRefEditor(idStr, col, anchor) {
   const request = salaryRefRequest;
   salaryRefContext = {
     recordId: validRecordId(idStr), col, anchor, choices: [], currentId: 0,
+    isList: columnTypes[col]?.startsWith('RefList:'), currentIds: [], draftIds: new Set(),
   };
   salaryRefEditor.hidden = false;
+  salaryRefSave.hidden = !salaryRefContext.isList;
   anchor?.setAttribute('aria-expanded', 'true');
   salaryRefStatus.textContent = 'Loading records…';
   positionSalaryRefEditor();
@@ -144,7 +156,12 @@ async function openSalaryRefEditor(idStr, col, anchor) {
     ]);
     if (request !== salaryRefRequest || !salaryRefContext) return;
     salaryRefContext.choices = choices;
-    salaryRefContext.currentId = Number(normalizeTypedCell(raw[col])) || 0;
+    if (salaryRefContext.isList) {
+      salaryRefContext.currentIds = salaryGroupIds(raw[col]);
+      salaryRefContext.draftIds = new Set(salaryRefContext.currentIds);
+    } else {
+      salaryRefContext.currentId = Number(normalizeTypedCell(raw[col])) || 0;
+    }
     renderSalaryRefOptions();
   } catch (error) {
     if (request === salaryRefRequest)
@@ -178,13 +195,53 @@ async function saveSalaryRef(id, label) {
   }
 }
 
+async function saveSalaryRefList() {
+  if (!salaryRefContext?.isList || cellHistoryBusy || salaryRefSaving) return;
+  const { recordId, col, currentIds, draftIds } = salaryRefContext;
+  const nextIds = [...draftIds];
+  if (currentIds.length === nextIds.length
+      && currentIds.every((id, index) => id === nextIds[index])) {
+    closeSalaryRefEditor();
+    return;
+  }
+  salaryRefSaving = true;
+  salaryRefSearch.disabled = true;
+  salaryRefClear.disabled = true;
+  salaryRefSave.disabled = true;
+  salaryRefStatus.textContent = 'Saving…';
+  try {
+    await salaryTableOperations().update({ id: recordId, fields: { [col]: ['L', ...nextIds] } },
+      { parseStrings: false });
+    const record = allRecords.find(item => Number(item.id) === recordId);
+    if (record) record[col] = nextIds.map(id => salaryRefDisplay(col, id)).join(', ');
+    rememberCellHistory('Edit references', col, [{ id: recordId,
+      before: ['L', ...currentIds], after: ['L', ...nextIds] }]);
+    closeSalaryRefEditor();
+    render();
+    requestAnimationFrame(focusSelectedCell);
+  } catch (error) {
+    salaryRefStatus.textContent = actionErrorMessage('Edit references', error);
+  } finally {
+    salaryRefSaving = false;
+    salaryRefSearch.disabled = false;
+    salaryRefClear.disabled = false;
+    salaryRefSave.disabled = false;
+  }
+}
+
 salaryRefSearch.addEventListener('input', renderSalaryRefOptions);
 salaryRefSearch.addEventListener('keydown', event => {
   if (event.key !== 'Enter') return;
   const first = salaryRefOptions.querySelector('.salary-ref-option');
   if (first) { event.preventDefault(); first.click(); }
 });
-salaryRefClear.addEventListener('click', () => saveSalaryRef(0, ''));
+salaryRefClear.addEventListener('click', () => {
+  if (salaryRefContext?.isList) {
+    salaryRefContext.draftIds.clear();
+    renderSalaryRefOptions();
+  } else saveSalaryRef(0, '');
+});
+salaryRefSave.addEventListener('click', saveSalaryRefList);
 document.addEventListener('pointerdown', event => {
   if (!salaryRefEditor.hidden && !salaryRefEditor.contains(event.target)
       && !salaryRefContext?.anchor?.contains(event.target)) closeSalaryRefEditor();

@@ -75,10 +75,12 @@ npm test      # discovers and runs every tests/*.test.js suite
 ## Salaries widget
 
 `salaries.html` uses the shared grouped-table app. Linked `All_att` summary
-rows supply `group` RefLists of original `Attendance` row IDs. The widget reads
-those Attendance rows with `fetchTable`, displays their fields, and writes class
-edits to `Attendance`. It reads `Expenses` with `fetchTable`,
-matches raw `performance` Reference IDs against the selected class rows, and
+rows supply `group` RefLists of original `All_att` row IDs (`Attendance` is the
+display label; `All_att` is the table ID). The widget reads those class rows
+with `fetchTable`, displays their fields, and writes class edits to `All_att`.
+It reads `Expenses` with `fetchTable`,
+matches raw `performance` Reference IDs from the selected summary rows against
+Expenses (`All_att.performance` is a RefList), and
 groups payments using `Expenses.date` in Vladivostok time. Every expense with
 a teacher reference counts as salary received. Month headers show the signed
 `wage` subtotal and `amount` payment subtotal over their columns; class and
@@ -87,7 +89,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.28)
+## Current state (v7.29)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -121,8 +123,9 @@ payments.
 - Payment rows have selector grips with single, additive, and range selection;
   they stay read-only and cannot be dragged or acted on as Attendance records.
   Clicking the sole selected grip again clears selection in both widgets.
-- Salaries follows the selected `All_att.group` links to Attendance rows,
+- Salaries follows the selected summary `group` links to `All_att` class rows,
   retaining Select By filtering and expanded Reference labels. Writable Text,
   Choice, Numeric/Int, DateTime, Bool, and Reference columns have in-widget
-  editing; formula columns remain read-only. Saved column order survives options
+  editing; Reference List columns use multi-select editing. Formula columns
+  remain read-only. Saved column order survives options
   arriving before records.

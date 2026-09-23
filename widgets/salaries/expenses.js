@@ -1,9 +1,10 @@
 // Salary payments are read from Expenses and matched by the raw Performance
-// reference ID. The linked All_att group lists select original Attendance rows.
+// reference ID. Linked summary group lists select original All_att class rows.
 let salaryPaymentsByMonth = new Map();
 let salaryPaymentsLoaded = false;
 let salaryPaymentRequest = 0;
 let salaryClassColumnsRequest = 0;
+let salarySelectedTeacherIds = new Set();
 const selectedSalaryExpenseIds = new Set();
 let salaryExpenseAnchorId = null;
 const salaryRefreshButton = document.getElementById('btn-refresh-payments');
@@ -62,7 +63,9 @@ function salaryColumnLabel(col) {
 function salaryPaymentRowsHtml(cols, key, classRecords) {
   const payments = salaryPaymentRowsFor(key);
   const dateColumn = parseGroupBy(groupBy).col;
-  const teacherLabel = classRecords[0]?.performance ?? allRecords[0]?.performance ?? '';
+  const teacherLabel = salarySelectedTeacherIds.size
+    ? [...salarySelectedTeacherIds].map(id => salaryRefDisplay('performance', id)).join(', ')
+    : classRecords[0]?.performance ?? allRecords[0]?.performance ?? '';
   return payments.map(row => `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
     + ` title="Salary payment from Expenses #${esc(row.id)}">`
     + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`
@@ -144,9 +147,15 @@ function salaryRawRef(value) {
 function salaryGroupIds(value) {
   if (!Array.isArray(value)) return [];
   if (value[0] === 'l') return salaryGroupIds(value[1]);
-  if (value[0] === 'r') return salaryGroupIds(value[2]);
+  if (value[0] === 'r')
+    return (Array.isArray(value[2]) ? value[2] : []).map(salaryRawRef).filter(id => id != null);
   if (value[0] !== 'L') return [];
   return value.slice(1).map(salaryRawRef).filter(id => id != null);
+}
+
+function salaryReferenceIds(value) {
+  const single = salaryRawRef(value);
+  return single == null ? salaryGroupIds(value) : [single];
 }
 
 function salaryDisplayClassCell(col, value) {
@@ -169,13 +178,21 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
   ++salaryPaymentRequest;
   salaryPaymentsByMonth = new Map();
   salaryPaymentsLoaded = false;
+  salarySelectedTeacherIds = new Set();
   salaryPaymentStatus.textContent = selectedRecords.length ? 'Loading classes…' : 'No teacher selected';
   if (!selectedRecords.length) { apply([]); return; }
   try {
     const sourceId = await grist.selectedTable.getTableId();
     await getWritableColumnIds();
+    // Some Grist builds report the source table ID for a summary section.
+    // The selected records still carry the summary's group RefList in that case.
+    const linkedRows = sourceId === WIDGET_CONFIG.classTableId
+      && selectedRecords.some(row => salaryGroupIds(row.group).length);
     const [source, classes] = await Promise.all([
-      sourceId === WIDGET_CONFIG.classTableId ? null : grist.docApi.fetchTable(sourceId),
+      linkedRows ? { id: selectedRecords.map(row => row.id),
+        group: selectedRecords.map(row => row.group),
+        performance: selectedRecords.map(row => row.performance) }
+        : sourceId === WIDGET_CONFIG.classTableId ? null : grist.docApi.fetchTable(sourceId),
       grist.docApi.fetchTable(WIDGET_CONFIG.classTableId),
     ]);
     if (request !== salaryClassColumnsRequest) return;
@@ -186,10 +203,14 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
       if (!Array.isArray(source.id) || !Array.isArray(source.group))
         throw new Error(`${sourceId}.group must link to Attendance rows`);
       const sourceById = new Map(source.id.map((id, index) => [Number(id), index]));
+      const teacherIds = new Set();
       classIds = selectedRecords.flatMap(row => {
         const index = sourceById.get(Number(row.id));
+        if (index != null && Array.isArray(source.performance))
+          salaryReferenceIds(source.performance[index]).forEach(id => teacherIds.add(id));
         return index == null ? [] : salaryGroupIds(source.group[index]);
       });
+      salarySelectedTeacherIds = teacherIds;
     }
     const selectedIds = new Set(classIds.filter(id => id != null));
     if (source && !selectedIds.size)
@@ -198,6 +219,15 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
       columnTypes[col].startsWith('Ref:') || columnTypes[col].startsWith('RefList:'));
     await Promise.allSettled(refCols.map(col => salaryRefChoices(col)));
     if (request !== salaryClassColumnsRequest) return;
+    if (source && !salarySelectedTeacherIds.size) {
+      const labels = salaryRefLabels.get('performance');
+      selectedRecords.forEach(row => {
+        const label = String(row.performance ?? '');
+        labels?.forEach((value, id) => {
+          if (value === label) salarySelectedTeacherIds.add(id);
+        });
+      });
+    }
     const cols = Object.keys(columnTypes).filter(col => Array.isArray(classes[col]));
     const records = classes.id.flatMap((id, index) => {
       if (!selectedIds.has(Number(id))) return [];
@@ -242,11 +272,10 @@ async function salaryRefreshPayments() {
         || !Array.isArray(expenses.date) || !Array.isArray(expenses.amount))
       throw new Error(`${WIDGET_CONFIG.expensesTableId} must have performance, date, and amount columns`);
 
-    const teacherIds = new Set();
-    classes.id.forEach((id, index) => {
-      if (!classIds.has(Number(id))) return;
-      const teacherId = salaryRawRef(classes.performance[index]);
-      if (teacherId != null) teacherIds.add(teacherId);
+    const teacherIds = new Set(salarySelectedTeacherIds);
+    if (!teacherIds.size) classes.id.forEach((id, index) => {
+      if (classIds.has(Number(id)))
+        salaryReferenceIds(classes.performance[index]).forEach(teacherId => teacherIds.add(teacherId));
     });
     if (!teacherIds.size)
       throw new Error(`No Performance reference found in the selected ${selectedTableId} classes`);
