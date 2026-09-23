@@ -967,6 +967,8 @@
 
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
+    const restoreNumberFocus = document.activeElement === cellEditorNumber;
+    const numberSelection = [cellEditorNumber.selectionStart, cellEditorNumber.selectionEnd];
     refreshRowSortControls();
     if (typeof closeRowContextMenu === 'function') closeRowContextMenu(false);
     const restoreCellFocus = content.contains(document.activeElement)
@@ -976,6 +978,10 @@
     });
 
     if (!groupBy || allRecords.length === 0) {
+      if (editingCell?.kind === 'number') {
+        cellEditorDialog.insertBefore(cellEditorNumber, cellEditorDateTimePanel);
+        closeFieldEditor();
+      }
       emptyState.style.display = '';
       // No known column (never saw data): dedicated message.
       const noData = !groupBy && allColumns.length === 0;
@@ -1062,7 +1068,16 @@
     });
     startPendingRowAnimations();
     refreshCellRange();
-    if (restoreCellFocus) focusSelectedCell();
+    if (editingCell && editingCell.kind === 'number') {
+      const cell = findDataCell(editingCell.recordId, editingCell.col);
+      if (cell && editKindForColumn(editingCell.col) === 'number') {
+        attachInlineNumber(cell);
+        if (restoreNumberFocus) {
+          cellEditorNumber.focus({ preventScroll: true });
+          cellEditorNumber.setSelectionRange(...numberSelection);
+        }
+      } else if (!btnEditorSave.disabled) closeFieldEditor();
+    } else if (restoreCellFocus) focusSelectedCell();
     scheduleGroupSumAlignment();
     refreshBoolSection();
   }
@@ -1774,7 +1789,7 @@
     const contentHtml = editKind
       ? `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
         + ` aria-label="${esc(editLabelForKind(editKind))}: ${colAttr}"`
-        + ` aria-haspopup="dialog" aria-expanded="false">`
+        + (editKind === 'number' ? '>' : ` aria-haspopup="dialog" aria-expanded="false">`)
         + `<span class="cell-edit-value">${rendered}</span></button>`
       : rendered;
     return `<td class="${classes}" data-cell-id="${id}" data-cell-col="${colAttr}"`
@@ -1968,7 +1983,7 @@
   }
 
   function positionFieldEditorPopover() {
-    if (!editingCell) return;
+    if (!editingCell || editingCell.kind === 'number') return;
     const anchor = editingCell.anchorEl;
     if (!anchor || !anchor.isConnected) {
       closeFieldEditor();
@@ -1983,8 +1998,8 @@
       return;
     }
     const dialogRect = cellEditorDialog.getBoundingClientRect();
-    const fallbackWidth = editingCell.kind === 'datetime' ? 456 : editingCell.kind === 'number' ? 310 : 480;
-    const fallbackHeight = editingCell.kind === 'datetime' ? 330 : editingCell.kind === 'number' ? 108 : 220;
+    const fallbackWidth = editingCell.kind === 'datetime' ? 456 : 480;
+    const fallbackHeight = editingCell.kind === 'datetime' ? 330 : 220;
     const dialogWidth = dialogRect.width || Math.min(fallbackWidth, window.innerWidth - margin * 2);
     const dialogHeight = dialogRect.height || Math.min(fallbackHeight, window.innerHeight - margin * 2);
     let left = anchorRect.left;
@@ -1999,7 +2014,31 @@
     cellEditorDialog.style.top = `${Math.round(top)}px`;
   }
 
-  function openFieldEditor(idStr, col, anchorEl = null) {
+  function attachInlineNumber(cell) {
+    cell.classList.add('cell-number-editing');
+    cell.appendChild(cellEditorNumber);
+    editingCell.anchorEl = cell.querySelector('.cell-edit-btn');
+  }
+
+  // The second click chooses a caret position in the existing value. Measure
+  // its monospace glyph using the actual input font, not a guessed pixel size.
+  function positionNumberCaret(clientX) {
+    const input = cellEditorNumber;
+    const style = getComputedStyle(input);
+    const measure = document.createElement('span');
+    measure.style.cssText = `position:fixed;visibility:hidden;white-space:pre;font:${style.font}`;
+    measure.textContent = '0';
+    document.body.appendChild(measure);
+    const width = measure.getBoundingClientRect().width;
+    measure.remove();
+    const offset = clientX - input.getBoundingClientRect().left - parseFloat(style.paddingLeft) + input.scrollLeft;
+    const position = width ? Math.max(0, Math.min(input.value.length, Math.round(offset / width))) : input.value.length;
+    input.setSelectionRange(position, position);
+  }
+
+  function openFieldEditor(idStr, col, anchorEl = null, initialText = null, clientX = null) {
+    if (cellHistoryBusy || btnEditorSave.disabled) return;
+    if (editingCell?.kind === 'number') return;
     const kind = editKindForColumn(col);
     if (!kind) return;
     const recordId = validRecordId(idStr);
@@ -2021,49 +2060,56 @@
     datePickerGrid.setAttribute('aria-label', `${T.editDateTime}: ${col}`);
     cellEditorError.hidden = true;
     cellEditorError.textContent = '';
+    cellEditorNumber.removeAttribute('aria-invalid');
+    if (isNumber) {
+      cellEditorNumber.value = initialText == null ? value : initialText;
+      cellEditorNumber.hidden = false;
+      attachInlineNumber(anchorEl.closest('td.data-cell'));
+      setEditorBusy(false);
+      cellEditorNumber.focus({ preventScroll: true });
+      cellEditorNumber.setSelectionRange(cellEditorNumber.value.length, cellEditorNumber.value.length);
+      if (clientX != null) positionNumberCaret(clientX);
+      return;
+    }
     cellEditorDialog.classList.toggle('date-mode', isDateTime);
-    cellEditorDialog.classList.toggle('number-mode', isNumber);
     cellEditor.classList.add('popover-mode');
     datePickerFooterActions.hidden = !isDateTime;
     cellEditorDialog.removeAttribute('aria-modal');
     cellEditorDialog.removeAttribute('aria-labelledby');
     cellEditorDialog.setAttribute('aria-label', editorLabel);
     if (anchorEl) anchorEl.setAttribute('aria-expanded', 'true');
-    cellEditorText.hidden = isDateTime || isNumber;
-    cellEditorNumber.hidden = !isNumber;
+    cellEditorText.hidden = isDateTime;
+    cellEditorNumber.hidden = true;
     cellEditorDateTimePanel.hidden = !isDateTime;
     if (isDateTime) {
       setDateTimePickerValue(value);
       cellEditorCount.textContent = 'VLAT';
-    } else if (isNumber) {
-      cellEditorNumber.value = value;
-      cellEditorCount.textContent = cellColumnType(col) === 'Int' ? 'Whole number' : 'Number';
     } else {
-      cellEditorText.value = value;
+      cellEditorText.value = initialText == null ? value : initialText;
       updateEditorCharacterCount();
     }
     setEditorBusy(false);
     cellEditor.hidden = false;
     positionFieldEditorPopover();
-    requestAnimationFrame(() => {
-      if (isDateTime) {
-        focusDateTimePicker();
-      } else if (isNumber) {
-        cellEditorNumber.focus();
-        cellEditorNumber.select();
-      } else {
-        cellEditorText.focus();
-        cellEditorText.setSelectionRange(value.length, value.length);
-      }
-    });
+    // Focus synchronously so fast typing cannot lose the second character.
+    if (isDateTime) {
+      focusDateTimePicker();
+    } else {
+      cellEditorText.focus();
+      cellEditorText.setSelectionRange(cellEditorText.value.length, cellEditorText.value.length);
+    }
   }
 
   function closeFieldEditor() {
     if (btnEditorSave.disabled) return;
     const anchor = editingCell && editingCell.anchorEl;
-    if (anchor && anchor.isConnected) anchor.setAttribute('aria-expanded', 'false');
+    const numberCell = cellEditorNumber.closest('td');
+    if (numberCell) numberCell.classList.remove('cell-number-editing');
+    cellEditorDialog.insertBefore(cellEditorNumber, cellEditorDateTimePanel);
+    cellEditorNumber.removeAttribute('aria-invalid');
+    if (anchor && anchor.isConnected && anchor.hasAttribute('aria-expanded')) anchor.setAttribute('aria-expanded', 'false');
     cellEditor.hidden = true;
-    cellEditorDialog.classList.remove('date-mode', 'number-mode');
+    cellEditorDialog.classList.remove('date-mode');
     cellEditor.classList.remove('popover-mode');
     datePickerFooterActions.hidden = true;
     cellEditorError.hidden = true;
@@ -2099,12 +2145,17 @@
       cellEditorError.textContent = kind === 'number' ? err.message.replace('Paste requires', 'Enter') : err.message;
       cellEditorError.hidden = false;
       if (kind === 'datetime') focusDateTimePicker();
-      else if (kind === 'number') cellEditorNumber.focus();
-      return;
+      else if (kind === 'number') {
+        cellEditorNumber.setAttribute('aria-invalid', 'true');
+        showToast(cellEditorError.textContent);
+        cellEditorNumber.focus();
+      }
+      return false;
     }
     if (nextValue === originalValue) {
       closeFieldEditor();
-      return;
+      if (kind === 'text') focusSelectedCell();
+      return true;
     }
     setEditorBusy(true);
     cellEditorError.hidden = true;
@@ -2132,14 +2183,22 @@
       setEditorBusy(false);
       closeFieldEditor();
       render();
+      if (kind === 'text') focusSelectedCell();
+      return true;
     } catch (err) {
       const message = actionErrorMessage(action, err);
       cellEditorError.textContent = message;
       cellEditorError.hidden = false;
       setEditorBusy(false);
       if (kind === 'datetime') focusDateTimePicker();
-      else if (kind === 'number') cellEditorNumber.focus();
+      else if (kind === 'number') {
+        cellEditorNumber.setAttribute('aria-invalid', 'true');
+        showToast(message);
+        selectDataCell(cellEditorNumber.closest('td'), false);
+        cellEditorNumber.focus();
+      }
       else cellEditorText.focus();
+      return false;
     } finally {
       cellHistoryBusy = false;
       updateCellHistoryControls();
@@ -2528,6 +2587,7 @@
   }
 
   content.addEventListener('click', (e) => {
+    if (isClipboardInput(e.target)) return;
     if (e.target.closest('.cell-fill-handle')) return;
     const addButton = e.target.closest('.group-add-row[data-group-key]');
     if (addButton && content.contains(addButton) && !addButton.disabled) {
@@ -2553,10 +2613,11 @@
     selectDataCell(cell, true, e.shiftKey);
     const editBtn = cell.querySelector('button[data-edit-id][data-edit-col]');
     if (wasSelected && !e.shiftKey && editBtn && !editBtn.disabled)
-      openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn);
+      openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn, null, e.detail ? e.clientX : null);
   });
 
   content.addEventListener('pointerdown', (e) => {
+    if (isClipboardInput(e.target)) return;
     if (e.button !== 0 && e.button !== 2) return;
     if (e.target.closest('.cell-fill-handle')) return;
     const cell = e.target.closest('td.data-cell');
@@ -2626,8 +2687,16 @@
   });
 
   content.addEventListener('keydown', (e) => {
+    if (isClipboardInput(e.target) || e.isComposing) return;
     const cell = e.target.closest('td.data-cell');
     if (!cell || !selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol)) return;
+    const kind = editKindForColumn(cell.dataset.cellCol);
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 && (kind === 'number' || kind === 'text')) {
+      e.preventDefault();
+      selectDataCell(cell);
+      openFieldEditor(cell.dataset.cellId, cell.dataset.cellCol, cell.querySelector('.cell-edit-btn'), e.key);
+      return;
+    }
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       if (moveSelectedCell(e.key, e.shiftKey)) e.preventDefault();
       return;
@@ -2664,6 +2733,17 @@
   updateCellHistoryControls();
 
   document.addEventListener('click', (e) => {
+    if (editingCell && editingCell.kind === 'number') {
+      if (!cellEditorNumber.closest('td')?.contains(e.target)) {
+        saveFieldEditor();
+        // Validation is synchronous: do not leave an invalid draft behind.
+        if (editingCell && !btnEditorSave.disabled) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+      return;
+    }
     if (cellEditor.hidden || !cellEditor.classList.contains('popover-mode')) return;
     const anchor = editingCell && editingCell.anchorEl;
     if (cellEditorDialog.contains(e.target) || (anchor && anchor.contains(e.target))) return;
@@ -2686,12 +2766,26 @@
     } else if (e.key === 'Escape') {
       e.preventDefault();
       closeFieldEditor();
+      focusSelectedCell();
     }
   }
   cellEditorText.addEventListener('keydown', onEditorKeydown);
-  cellEditorNumber.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); saveFieldEditor(); }
-    else onEditorKeydown(e);
+  cellEditorNumber.addEventListener('keydown', async (e) => {
+    if (e.isComposing) return;
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      const direction = e.key === 'Tab' ? (e.shiftKey ? 'ArrowLeft' : 'ArrowRight') : null;
+      if (await saveFieldEditor()) {
+        if (direction) moveSelectedCell(direction);
+        focusSelectedCell();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFieldEditor();
+      focusSelectedCell();
+    }
   });
   cellEditorDateTimePanel.addEventListener('keydown', onEditorKeydown);
   datePickerPrev.addEventListener('click', () => shiftDatePickerMonth(-1));

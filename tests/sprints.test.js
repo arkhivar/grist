@@ -890,25 +890,30 @@ function openEditor(rowId, col) {
   click(cell);
 }
 
-await test('M: number popover validates Int values, saves numbers, and supports undo/redo', async () => {
+function numberKey(key, options = {}) {
+  const event = new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options });
+  doc.getElementById('cell-editor-number').dispatchEvent(event);
+  return event;
+}
+
+await test('M: inline number validates Int values, saves numbers, and supports undo/redo', async () => {
   openEditor(1, 'count');
   const input = doc.getElementById('cell-editor-number');
   assert(!input.hidden, 'numeric input hidden');
-  assert(doc.getElementById('cell-editor-text').hidden, 'text editor leaked into number editor');
-  assert(doc.getElementById('cell-editor-datetime-panel').hidden, 'calendar leaked into number editor');
-  assert(doc.getElementById('cell-editor-dialog').classList.contains('number-mode'), 'compact numeric mode missing');
+  assert(doc.getElementById('cell-editor').hidden, 'number opened a popover');
+  assertEq(input.closest('td'), cellEl(1, 'count'), 'number input is not inside the cell');
   const original = input.value;
   const before = calls.update.length;
   for (const invalid of ['1.5', 'NaN', 'Infinity', '0xff']) {
     input.value = invalid;
-    click(doc.getElementById('btn-editor-save'));
+    numberKey('Enter');
     await flush();
     assertEq(calls.update.length, before, 'invalid number saved');
-    assert(!doc.getElementById('cell-editor-error').hidden, 'validation feedback missing');
+    assertEq(input.getAttribute('aria-invalid'), 'true', 'validation feedback missing');
   }
   input.value = '-825';
   input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'number save');
+  await waitFor(() => calls.update.length === before + 1 && input.hidden, 'number save');
   assertEq(calls.update[before][0].fields.count, -825, 'number was saved as text');
   assertEq(cellText(1, 'count'), '-825', 'number rendering');
   click(doc.getElementById('btn-undo'));
@@ -925,14 +930,14 @@ await test('M: Numeric allows decimals and empty values; formula numbers stay re
   const input = doc.getElementById('cell-editor-number');
   let before = calls.update.length;
   input.value = '-12.75';
-  click(doc.getElementById('btn-editor-save'));
-  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'decimal save');
+  numberKey('Enter');
+  await waitFor(() => calls.update.length === before + 1 && input.hidden, 'decimal save');
   assertEq(calls.update[before][0].fields.rate, -12.75, 'decimal value');
   openEditor(1, 'rate');
   input.value = '';
   before = calls.update.length;
-  click(doc.getElementById('btn-editor-save'));
-  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'number clear');
+  numberKey('Enter');
+  await waitFor(() => calls.update.length === before + 1 && input.hidden, 'number clear');
   assertEq(calls.update[before][0].fields.rate, null, 'empty number became zero');
   assert(!cellEl(1, 'total').querySelector('.cell-edit-btn'), 'formula cell got an editor');
   assert(cellEl(1, 'total').title.includes('Read-only'), 'read-only explanation missing');
@@ -944,20 +949,20 @@ await test('M: number cancel and Grist errors do not lose the entered value', as
   const input = doc.getElementById('cell-editor-number');
   const before = calls.update.length;
   input.value = '99';
-  click(doc.getElementById('btn-editor-cancel'));
+  numberKey('Escape');
   assertEq(calls.update.length, before, 'Cancel saved a value');
   openEditor(1, 'count');
   const originalUpdate = win.grist.selectedTable.update;
   win.grist.selectedTable.update = async () => { throw new Error('Number edit denied by ACL'); };
   try {
     input.value = '99';
-    click(doc.getElementById('btn-editor-save'));
+    numberKey('Enter');
     await waitFor(() => !doc.getElementById('btn-editor-save').disabled, 'failed numeric save');
     assertEq(input.value, '99', 'failed save lost draft');
     assert(doc.getElementById('cell-editor-error').textContent.includes('Number edit denied by ACL'), 'real API error hidden');
   } finally {
     win.grist.selectedTable.update = originalUpdate;
-    click(doc.getElementById('btn-editor-cancel'));
+    numberKey('Escape');
   }
 });
 
@@ -1123,8 +1128,8 @@ await test('N: editing the sorted field repositions the row and undo restores it
   openEditor(1, 'count');
   doc.getElementById('cell-editor-number').value = '-20';
   const before = calls.update.length;
-  click(doc.getElementById('btn-editor-save'));
-  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'sorted number edit');
+  numberKey('Enter');
+  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor-number').hidden, 'sorted number edit');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,2,3,4,5]', 'edited row did not move');
   click(doc.getElementById('btn-undo'));
   await waitFor(() => calls.update.length === before + 2 && !doc.getElementById('btn-redo').disabled, 'sorted edit undo');
@@ -1220,6 +1225,116 @@ await test('O: notifications reuse one toast, reset dismissal, and keep errors a
     win.setTimeout = originalSetTimeout;
     win.clearTimeout = originalClearTimeout;
   }
+});
+
+// ── P. Spreadsheet-style typing ─────────────────────────────
+function cellKey(id, col, key, options = {}) {
+  const event = new win.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options });
+  cellEl(id, col).dispatchEvent(event);
+  return event;
+}
+
+await test('P: typing replaces a selected number inline; Escape restores it without a write', async () => {
+  onRecordsCb(RECORDS);
+  cellKey(1, 'count', 'Escape');
+  click(cellEl(1, 'count'));
+  const before = calls.update.length;
+  const original = cellText(1, 'count');
+  const key = cellKey(1, 'count', '-');
+  const input = doc.getElementById('cell-editor-number');
+  assert(key.defaultPrevented, 'typed key would also trigger native button behavior');
+  assertEq(input.value, '-', 'typing appended to old value');
+  assertEq(doc.activeElement, input, 'next keystroke would miss input');
+  assert(doc.getElementById('cell-editor').hidden, 'number opened a popup');
+  numberKey('Escape');
+  assertEq(cellText(1, 'count'), original, 'Escape altered number');
+  assertEq(calls.update.length, before, 'typing or cancel wrote to Grist');
+  assertEq(doc.activeElement, cellEl(1, 'count'), 'Escape lost cell focus');
+});
+
+await test('P: inline arrows, clipboard and pointer selection remain native', async () => {
+  const original = cellText(1, 'count');
+  openEditor(1, 'count');
+  const input = doc.getElementById('cell-editor-number');
+  assertEq(input.value, original, 'second click replaced existing number');
+  assert(!numberKey('ArrowLeft').defaultPrevented, 'arrow intercepted');
+  assert(!numberKey('z', { ctrlKey: true }).defaultPrevented, 'native text undo intercepted');
+  const copy = clipboardEvent('copy', {});
+  input.dispatchEvent(copy);
+  assert(!copy.defaultPrevented, 'copy intercepted inside input');
+  const paste = clipboardEvent('paste', { 'text/plain': '75' });
+  input.dispatchEvent(paste);
+  assert(!paste.defaultPrevented, 'paste intercepted inside input');
+  const pointer = new win.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 });
+  input.dispatchEvent(pointer);
+  assert(!pointer.defaultPrevented, 'caret click intercepted by cell range selection');
+  const context = new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+  input.dispatchEvent(context);
+  assert(!context.defaultPrevented, 'text context menu replaced by row actions');
+  numberKey('Escape');
+});
+
+await test('P: Tab saves and moves; clicking another cell saves without losing its selection', async () => {
+  openEditor(1, 'count');
+  const input = doc.getElementById('cell-editor-number');
+  input.value = '123';
+  let before = calls.update.length;
+  numberKey('Tab');
+  await waitFor(() => input.hidden && calls.update.length === before + 1, 'Tab save');
+  assertEq(doc.activeElement, cellEl(1, 'performance'), 'Tab did not move right');
+  openEditor(1, 'count');
+  input.value = '456';
+  before = calls.update.length;
+  click(cellEl(2, 'count'));
+  await waitFor(() => input.hidden && calls.update.length === before + 1, 'outside click save');
+  assertEq(calls.update[before][0].fields.count, 456, 'outside click saved wrong value');
+  assert(cellEl(2, 'count').classList.contains('cell-selected'), 'save lost destination selection');
+});
+
+await test('P: Grist refresh preserves the numeric draft, focus and caret', async () => {
+  openEditor(1, 'count');
+  const input = doc.getElementById('cell-editor-number');
+  input.value = '-789';
+  input.setSelectionRange(2, 3);
+  onRecordsCb(RECORDS.map(record => ({ ...record })));
+  assertEq(doc.getElementById('cell-editor-number'), input, 'refresh replaced input');
+  assertEq(input.closest('td'), cellEl(1, 'count'), 'refresh detached input');
+  assertEq(input.value, '-789', 'refresh lost draft');
+  assertEq(doc.activeElement, input, 'refresh lost focus');
+  assertEq(input.selectionStart, 2, 'refresh lost caret start');
+  assertEq(input.selectionEnd, 3, 'refresh lost caret end');
+  numberKey('Escape');
+});
+
+await test('P: formula cells and keyboard modifiers never start replacement editing', async () => {
+  onRecordsCb(RECORDS.map(record => ({ ...record, total: 8.5 })));
+  click(cellEl(1, 'total'));
+  cellKey(1, 'total', '9');
+  assert(doc.getElementById('cell-editor-number').hidden, 'formula became editable');
+  click(cellEl(1, 'count'));
+  for (const options of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { isComposing: true }]) {
+    cellKey(1, 'count', 'a', options);
+    assert(doc.getElementById('cell-editor-number').hidden, 'shortcut began a draft');
+  }
+});
+
+await test('P: typing opens long text with the first character; second click preserves contents', async () => {
+  onOptionsCb({ editableColumns: JSON.stringify(['performance']) }, { accessLevel: 'full' });
+  onRecordsCb(RECORDS);
+  click(cellEl(1, 'performance'));
+  cellKey(1, 'performance', 'H');
+  const text = doc.getElementById('cell-editor-text');
+  assert(!doc.getElementById('cell-editor').hidden, 'text editor did not open');
+  assertEq(text.value, 'H', 'first character lost or appended');
+  assertEq(doc.activeElement, text, 'fast follow-up typing would be lost');
+  text.value = 'Hello\nworld';
+  const before = calls.update.length;
+  text.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'typed text save');
+  assertEq(calls.update[before][0].fields.performance, 'Hello\nworld', 'text draft not saved');
+  openEditor(1, 'performance');
+  assertEq(text.value, 'Hello\nworld', 'second click replaced existing text');
+  click(doc.getElementById('btn-editor-cancel'));
 });
 
 // ── Summary ──────────────────────────────────────────────────

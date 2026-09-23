@@ -435,6 +435,7 @@
   }
 
   content.addEventListener('contextmenu', (e) => {
+    if (isClipboardInput(e.target)) return;
     const anchor = e.target.closest('td.data-cell, .row-grip[data-id]');
     if (!anchor) return;
     e.preventDefault();
@@ -462,6 +463,7 @@
   window.addEventListener('resize', () => closeRowContextMenu(false));
   document.addEventListener('scroll', () => closeRowContextMenu(false), true);
   content.addEventListener('keydown', (e) => {
+    if (isClipboardInput(e.target)) return;
     if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return;
     const anchor = e.target.closest('td.data-cell, .row-grip[data-id]');
     if (!anchor) return;

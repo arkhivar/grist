@@ -2,6 +2,18 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.20 — 2026-09-23
+
+- Replace the number popover with in-cell editing. Typing replaces a selected
+  value; a second click positions the caret in the existing number. Enter or
+  an outside click saves, Tab saves and moves across cells, and Escape cancels.
+- Open enabled Text editors immediately on typing, preserving the first
+  character; second-click editing retains the existing text.
+- Keep numeric validation, API error feedback, and session Undo/Redo. Preserve
+  numeric drafts and caret positions through record refreshes, and leave
+  native input selection, clipboard, and arrow-key behavior intact.
+- Add six typing regression checks and adapt numeric editor coverage.
+
 ## v7.19 — 2026-09-23
 
 - Move notifications to a compact, click-through bottom-right toast outside

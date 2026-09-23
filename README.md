@@ -26,8 +26,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
   a cell to edit long, multi-line notes and emoji content without leaving the widget
 - **DateTime editor** — click any visible, writable DateTime cell to choose its
   Vladivostok (VLAT) date and time without finding the record in the source table
-- **Number editor** — writable Int/Numeric cells open a compact number popover
-  on the second click, with validation, Enter-to-save, and session Undo/Redo
+- **In-cell number editing** — type to replace a selected Int/Numeric value,
+  or click again to place the caret; validation, Enter/Tab-to-save, and session Undo/Redo
 - **Spreadsheet-style cells** — click once to select, click again to edit,
   use arrow keys to move, Ctrl/Cmd+C and Ctrl/Cmd+V to copy/paste compatible
   typed values, drag the blue fill handle vertically, or undo/redo widget cell
@@ -157,7 +157,8 @@ listed Text column can be enabled or disabled independently. Visible, writable
 DateTime columns are enabled automatically.
 
 Click an enabled Text cell once to select it and a second time to open a
-compact, non-blocking editor beside that cell. The table remains interactive
+compact, non-blocking editor beside that cell. Typing in a selected cell also
+opens the editor, replacing its contents with the typed text. The table remains interactive
 and scrollable underneath it, while the
 textarea scrolls independently for longer notes. It preserves emoji,
 whitespace, and line breaks and includes a live character count. Save with the
@@ -182,8 +183,11 @@ Saving uses `grist.selectedTable.update()` and reports the real
 failure inline as well as in Diagnostics.
 
 Writable **Int** and **Numeric** cells are enabled automatically: select a cell,
-then click again (or Enter/F2) to open its compact number editor. Enter saves;
-Escape/Cancel discards changes. Int fields require whole numbers; Numeric fields
+then type to replace its value directly in the cell, with no popover. A second
+click places the caret in the existing number; Enter/F2 also starts editing.
+Enter or clicking elsewhere saves; Tab/Shift+Tab saves and moves across cells,
+and Escape discards changes. Invalid input stays editable with a red outline
+and an error toast. Int fields require whole numbers; Numeric fields
 accept decimals, and clearing either saves an empty value. These edits use the
 same session Undo/Redo as other cell edits. Formula numbers have a read-only
 tooltip: edit their source fields or formula in Grist rather than overwriting

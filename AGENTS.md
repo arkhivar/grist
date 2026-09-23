@@ -84,7 +84,7 @@ a Teachers table, with a Text/Choice initials column as fallback.
 rate column, expense amount column, teacher marker type, and whether expenses
 render as rows inside month groups or only contribute to totals.
 
-## Current state (v7.19)
+## Current state (v7.20)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -100,8 +100,12 @@ render as rows inside month groups or only contribute to totals.
 - Right-click menus target whole rows covered by a cell range or grip selection;
   duplicate/delete reuse existing API helpers (not session-undoable yet).
   Menu deletion takes one click; inline and bottom-bar deletion remain two-step.
-- Writable Int/Numeric cells have compact editors and session history; numeric
-  formula cells remain read-only. Header totals align to the column content edge.
+- Writable Int/Numeric cells edit in place: typing replaces, second click
+  places the caret, Enter/click-away saves, Tab saves and moves, Escape cancels.
+  Preserve drafts across render() and keep native input events out of cell-range
+  handlers. Enabled Text cells open their popover on typing or second click.
+  Session history remains supported; formulas stay read-only. Header totals
+  align to the column content edge.
 - DateTime display/edit/clipboard and calendar grouping use Asia/Vladivostok;
   storage stays UTC. Use dateTimeWallDate/formatDateTimeSec/parseDateTimeWallSec
   for local clock conversion; keep Date-only fields on their existing UTC path.
@@ -109,4 +113,4 @@ render as rows inside month groups or only contribute to totals.
   option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
-- Test suite: `tests/sprints.test.js`, 53 checks, green.
+- Test suite: `tests/sprints.test.js`, 59 checks, green.
