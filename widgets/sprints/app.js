@@ -43,6 +43,7 @@
   }
 
   function editableTextCandidates() {
+    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editAllWritableText) return [];
     const groupCol = parseGroupBy(groupBy).col;
     return allColumns.filter(col =>
       col !== groupCol &&
@@ -57,7 +58,7 @@
   function editableDateTimeCandidates() {
     const groupCol = parseGroupBy(groupBy).col;
     return allColumns.filter(col =>
-      col !== groupCol &&
+      (col !== groupCol || (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)) &&
       writableColumnIds.includes(col) &&
       isDateTimeColumnType(writableColumnTypes[col]));
   }
@@ -68,8 +69,13 @@
     if (!writableColumnIds.includes(col)) return null;
     const type = writableColumnTypes[col];
     if (isNumericColumnType(type)) return 'number';
-    if (col === parseGroupBy(groupBy).col) return null;
+    if (col === parseGroupBy(groupBy).col
+        && !(typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)) return null;
     if (isDateTimeColumnType(type)) return 'datetime';
+    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editReferences
+        && columnBaseType(type) === 'Ref') return 'reference';
+    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editAllWritableText
+        && (isTextColumnType(type) || columnBaseType(type) === 'Choice')) return 'text';
     if (editableColumns.has(col) && isTextColumnType(type)) return 'text';
     return null;
   }
@@ -106,7 +112,9 @@
     }
     const textCandidates = editableTextCandidates();
     const automaticCandidates = editableDateTimeCandidates().concat(allColumns.filter(col =>
-      writableColumnIds.includes(col) && isNumericColumnType(writableColumnTypes[col])));
+      writableColumnIds.includes(col) && (isNumericColumnType(writableColumnTypes[col])
+        || (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editAllWritableText
+          && ['Text', 'Choice'].includes(columnBaseType(writableColumnTypes[col]))))));
     if (!textCandidates.length && !automaticCandidates.length) {
       const msg = document.createElement('span');
       msg.className = 'editable-col-empty';
@@ -143,7 +151,8 @@
       const text = document.createElement('span');
       text.textContent = col;
       const badge = document.createElement('small');
-      badge.textContent = isNumericColumnType(writableColumnTypes[col]) ? 'Number · automatic' : T.editableAuto;
+      badge.textContent = isNumericColumnType(writableColumnTypes[col]) ? 'Number · automatic'
+        : isDateTimeColumnType(writableColumnTypes[col]) ? T.editableAuto : 'Text · automatic';
       text.appendChild(badge);
       label.appendChild(cb);
       label.appendChild(text);
@@ -277,6 +286,8 @@
   }
 
   function reconcileColumnOrder() {
+    // Options and records arrive independently. Keep saved order until columns exist.
+    if (!allColumns.length) return;
     const known = new Set(allColumns);
     const received = allColumns.length && typeof WIDGET_CONFIG !== 'undefined'
       ? WIDGET_CONFIG.receivedColumn : null;
@@ -785,7 +796,7 @@
     render();
   });
 
-  grist.onRecords((records) => {
+  function applyIncomingRecords(records, refreshSalaryPayments = true) {
     allRecords = records || [];
     // Prune the selection: drop ids missing from the new records
     if (selectedIds.size > 0) {
@@ -813,7 +824,13 @@
     if (settingsPanel.classList.contains('open')) refreshEditableColumnsSection();
     if (settingsPanel.classList.contains('open')) refreshDiag();
     render();
-    if (typeof salaryRefreshPayments === 'function') salaryRefreshPayments();
+    if (refreshSalaryPayments && typeof salaryRefreshPayments === 'function') salaryRefreshPayments();
+  }
+
+  grist.onRecords((records) => {
+    if (typeof salaryLoadClassColumns === 'function')
+      salaryLoadClassColumns(records || [], expanded => applyIncomingRecords(expanded, false));
+    applyIncomingRecords(records);
   });
 
   buildBoolButtons();
@@ -1058,6 +1075,7 @@
           : `Source: ${table}. Check the Select By link and choose a teacher in Grist.`;
       }
       statsbar.classList.remove('visible');
+      if (typeof salaryReanchorRefEditor === 'function') salaryReanchorRefEditor();
       return;
     }
 
@@ -1147,6 +1165,7 @@
     } else if (restoreCellFocus) focusSelectedCell();
     scheduleGroupSumAlignment();
     refreshBoolSection();
+    if (typeof salaryReanchorRefEditor === 'function') salaryReanchorRefEditor();
   }
 
   function gripIconHtml() {
@@ -1452,7 +1471,11 @@
     const byId = new Map(changes.map(change => [change.id, change[side]]));
     allRecords.forEach(record => {
       const id = Number(record.id);
-      if (byId.has(id)) record[col] = byId.get(id);
+      if (byId.has(id)) {
+        const value = byId.get(id);
+        record[col] = columnBaseType(columnTypes[col]) === 'Ref'
+          && typeof salaryRefDisplay === 'function' ? salaryRefDisplay(col, value) : value;
+      }
     });
   }
 
@@ -1706,7 +1729,8 @@
       applyCellChangesLocally(col, changes, 'after');
       rememberCellHistory(action, col, changes);
       recordActionDiagnostic(action, 'ok', detail);
-      showToast(action === 'Fill' ? `${changes.length} cells filled` : 'Cell pasted', 'success');
+      showToast(action === 'Fill' ? `${changes.length} cells filled`
+        : action === 'Toggle checkbox' ? 'Checkbox updated' : 'Cell pasted', 'success');
       render();
       requestAnimationFrame(focusSelectedCell);
     } catch (err) {
@@ -1853,7 +1877,9 @@
     const colAttr = esc(col);
     const isSelected = selectedCellMatches(rec.id, col);
     const isWritable = isWritableCellColumn(col);
-    const classes = ['data-cell', editKind ? 'cell-editable' : '', isSelected ? 'cell-selected' : '']
+    const boolEditable = typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editBoolOnSecondClick
+      && isWritable && cellColumnType(col) === 'Bool';
+    const classes = ['data-cell', editKind || boolEditable ? 'cell-editable' : '', isSelected ? 'cell-selected' : '']
       .filter(Boolean).join(' ');
     const contentHtml = editKind
       ? `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
@@ -2110,6 +2136,10 @@
     if (editingCell?.kind === 'number') return;
     const kind = editKindForColumn(col);
     if (!kind) return;
+    if (kind === 'reference') {
+      if (typeof openSalaryRefEditor === 'function') openSalaryRefEditor(idStr, col, anchorEl);
+      return;
+    }
     const recordId = validRecordId(idStr);
     const rec = allRecords.find(r => Number(r.id) === recordId);
     if (!rec) return;
@@ -2680,6 +2710,14 @@
     }
     const wasSelected = !cellRangeEnd && selectedCellMatches(cell.dataset.cellId, cell.dataset.cellCol);
     selectDataCell(cell, true, e.shiftKey);
+    if (wasSelected && !e.shiftKey && typeof WIDGET_CONFIG !== 'undefined'
+        && WIDGET_CONFIG.editBoolOnSecondClick && isWritableCellColumn(cell.dataset.cellCol)
+        && cellColumnType(cell.dataset.cellCol) === 'Bool') {
+      const record = allRecords.find(item => String(item.id) === cell.dataset.cellId);
+      if (record) writeCellValues('Toggle checkbox', [cell.dataset.cellId], cell.dataset.cellCol,
+        !Boolean(record[cell.dataset.cellCol]));
+      return;
+    }
     const editBtn = cell.querySelector('button[data-edit-id][data-edit-col]');
     if (wasSelected && !e.shiftKey && editBtn && !editBtn.disabled)
       openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn, null, e.detail ? e.clientX : null);
@@ -2771,11 +2809,27 @@
       return;
     }
     if (e.key === 'Enter' || e.key === 'F2') {
+      if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editBoolOnSecondClick
+          && isWritableCellColumn(cell.dataset.cellCol) && cellColumnType(cell.dataset.cellCol) === 'Bool') {
+        e.preventDefault();
+        const record = allRecords.find(item => String(item.id) === cell.dataset.cellId);
+        if (record) writeCellValues('Toggle checkbox', [cell.dataset.cellId], cell.dataset.cellCol,
+          !Boolean(record[cell.dataset.cellCol]));
+        return;
+      }
       const editBtn = cell.querySelector('button[data-edit-id][data-edit-col]');
       if (editBtn && !editBtn.disabled) {
         e.preventDefault();
         openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn);
       }
+      return;
+    }
+    if (e.key === ' ' && typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editBoolOnSecondClick
+        && isWritableCellColumn(cell.dataset.cellCol) && cellColumnType(cell.dataset.cellCol) === 'Bool') {
+      e.preventDefault();
+      const record = allRecords.find(item => String(item.id) === cell.dataset.cellId);
+      if (record) writeCellValues('Toggle checkbox', [cell.dataset.cellId], cell.dataset.cellCol,
+        !Boolean(record[cell.dataset.cellCol]));
       return;
     }
     if (e.key === 'Escape') {

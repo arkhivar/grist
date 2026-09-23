@@ -3,6 +3,7 @@
 let salaryPaymentsByMonth = new Map();
 let salaryPaymentsLoaded = false;
 let salaryPaymentRequest = 0;
+let salaryClassColumnsRequest = 0;
 const selectedSalaryExpenseIds = new Set();
 let salaryExpenseAnchorId = null;
 const salaryRefreshButton = document.getElementById('btn-refresh-payments');
@@ -138,6 +139,33 @@ content.addEventListener('click', event => {
 function salaryRawRef(value) {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+async function salaryLoadClassColumns(selectedRecords, apply) {
+  const request = ++salaryClassColumnsRequest;
+  if (!selectedRecords.length) return;
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const fetched = await grist.viewApi.fetchSelectedTable({
+        format: 'rows', includeColumns: 'normal', expandRefs: true,
+      });
+      if (request !== salaryClassColumnsRequest) return;
+      if (!Array.isArray(fetched)) throw new Error('Selected Attendance rows are unavailable');
+      const byId = new Map(fetched.map(row => [String(row.id), row]));
+      if (byId.size === selectedRecords.length
+          && selectedRecords.every(row => byId.has(String(row.id)))) {
+        // The full selected-table read supplies expanded Reference labels as well as hidden columns.
+        apply(selectedRecords.map(row => ({ ...row, ...byId.get(String(row.id)) })));
+        return;
+      }
+      // The linked selection can settle just after onRecords; retry once.
+      if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    throw new Error('Selected Attendance rows changed while loading');
+  } catch (error) {
+    if (request !== salaryClassColumnsRequest) return;
+    showToast(`Load Attendance columns failed: ${error.message || String(error)}`);
+  }
 }
 
 async function salaryRefreshPayments() {

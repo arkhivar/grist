@@ -85,14 +85,13 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.26)
+## Current state (v7.27)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
   actions, drag between groups, inline text/DateTime editing, adjustable
   columns, diagnostics panel).
-- `index.html` gallery lists the family; `salaries.html` is a clear
-  coming-soon page rather than an empty endpoint.
+- `index.html` gallery lists both active widgets.
 - Footer creation inherits the common visible student via a typed, unexpanded
   source record, as well as the clicked sprint. Grist's outer Select By filter
   does not automatically supply fields for custom-widget AddRecord actions.
@@ -120,3 +119,8 @@ payments.
 - Payment rows have selector grips with single, additive, and range selection;
   they stay read-only and cannot be dragged or acted on as Attendance records.
   Clicking the sole selected grip again clears selection in both widgets.
+- Salaries fetches all normal columns from Grist's selected Attendance rows,
+  retaining Select By filtering and expanded Reference labels. Writable Text,
+  Choice, Numeric/Int, DateTime, Bool, and Reference columns have in-widget
+  editing; formula columns remain read-only. Saved column order survives options
+  arriving before records.

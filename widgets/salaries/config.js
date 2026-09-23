@@ -4,7 +4,9 @@ const WIDGET_CONFIG = {
   monthlyOnly: true,
   sumColumns: ['wage'],
   showGroupingColumn: true,
-  hiddenDisplayColumns: ['group'],
+  editAllWritableText: true,
+  editBoolOnSecondClick: true,
+  editReferences: true,
   expensesTableId: 'Expenses',
   receivedColumn: 'salary_received',
 };

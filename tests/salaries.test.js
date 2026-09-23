@@ -12,7 +12,7 @@ const html = read('salaries.html');
 const version = /WIDGET_VERSION = '([^']+)'/.exec(read('shared/core.js'))[1];
 const assets = [...html.matchAll(/(?:src|href)="([^"]+\?v=([^"]+))"/g)]
   .filter(match => !match[1].startsWith('https://'));
-assert.equal(assets.length, 7);
+assert.equal(assets.length, 8);
 assert(assets.every(match => match[2] === version), 'salaries asset versions differ');
 assert(html.includes('widgets/salaries/config.js'));
 
@@ -25,7 +25,8 @@ const win = dom.window;
 const doc = win.document;
 let onOptions;
 let onRecords;
-const calls = { ready: [], options: [] };
+let selectedRecordsForFetch = [];
+const calls = { ready: [], options: [], updates: [] };
 let expenses = {
   id: [11, 12, 13, 14],
   performance: [7, 7, 8, 7],
@@ -35,19 +36,46 @@ let expenses = {
 win.grist = {
   ready(options) { calls.ready.push(options); },
   onOptions(callback) { onOptions = callback; },
-  onRecords(callback) { onRecords = callback; },
+  onRecords(callback) { onRecords = records => {
+    selectedRecordsForFetch = records;
+    callback(records);
+  }; },
   setOption(key, value) { calls.options.push([key, value]); },
-  selectedTable: { getTableId: async () => 'Attendance' },
+  selectedTable: {
+    getTableId: async () => 'Attendance',
+    update: async update => { calls.updates.push(update); },
+  },
+  viewApi: {
+    fetchSelectedTable: async options => {
+      assert.equal(options.includeColumns, 'normal');
+      assert.equal(options.format, 'rows');
+      return selectedRecordsForFetch.map(record => ({
+        ...record,
+        students: 'A. Student', weekday: 'Tue', notes: true,
+        count: -100, sprint: 'Sprint 07', group: 'Relentless',
+      }));
+    },
+    fetchSelectedRecord: async id => ({
+      id, students: ['R', 'A. Student', 21], performance: ['R', 'VP', 7],
+    }),
+  },
   docApi: { fetchTable: async name => {
     if (name === '_grist_Tables')
-      return { id: [1], tableId: ['Attendance'] };
+      return { id: [1, 2], tableId: ['Attendance', 'Students'] };
     if (name === '_grist_Tables_column')
-      return { id: [10, 11, 12, 13, 14], parentId: [1, 1, 1, 1, 1],
-        colId: ['group', 'performance', 'datetime', 'wage', 'rate'],
-        type: ['Ref:Attendance', 'Ref:Teachers', 'DateTime:Asia/Vladivostok', 'Numeric', 'Numeric'],
-        isFormula: [false, false, false, true, false] };
+      return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+        colId: ['group', 'performance', 'datetime', 'wage', 'rate',
+          'students', 'weekday', 'notes', 'count', 'sprint', 'Name'],
+        type: ['Ref:Attendance', 'Ref:Teachers', 'DateTime:Asia/Vladivostok',
+          'Numeric', 'Numeric', 'Ref:Students', 'Text', 'Bool', 'Numeric',
+          'Ref:Sprints', 'Text'],
+        visibleCol: [0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0],
+        isFormula: [false, false, false, true, false, false, false, false, true, false, false] };
     if (name === 'Attendance')
       return { id: [1, 2, 3, 4, 5, 6], performance: [7, 7, 7, 7, 7, 8] };
+    if (name === 'Students')
+      return { id: [21, 22], Name: ['A. Student', 'B. Student'] };
     if (name === 'Expenses') {
       if (expenses instanceof Error) throw expenses;
       return expenses;
@@ -62,6 +90,7 @@ win.eval([
   'widgets/salaries/expenses.js',
   'widgets/sprints/app.js',
   'widgets/sprints/actions.js',
+  'widgets/salaries/attendance.js',
 ].map(read).join('\n;\n'));
 
 const records = [
@@ -82,9 +111,12 @@ const month = label => cards().find(card => card.dataset.groupLabel === label);
 
 async function main() {
   // Grist delivers options, records, and metadata independently.
-  onOptions({ sortMode: 'alpha-asc' }, { accessLevel: 'full' });
+  onOptions({ sortMode: 'alpha-asc',
+    columnOrder: ['datetime', 'wage', 'salary_received', 'performance', 'group'] },
+  { accessLevel: 'full' });
   onRecords(records);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
+  await waitFor(() => doc.querySelector('[data-column="students"]'));
   assert.equal(calls.ready[0].requiredAccess, 'full');
   assert(calls.options.some(([key, value]) => key === 'groupBy' && value === 'datetime::month'));
   assert.equal(doc.getElementById('group-select').value, 'datetime::month');
@@ -95,7 +127,50 @@ async function main() {
   const headers = [...month('August 2026').querySelectorAll('tfoot th[data-column]')]
     .map(cell => cell.dataset.column);
   assert(headers.includes('datetime'), 'monthly date is missing from the row columns');
-  assert(!headers.includes('group'), 'Attendance reference IDs should be hidden');
+  assert.deepEqual(headers.slice(0, 5),
+    ['datetime', 'wage', 'salary_received', 'performance', 'group'],
+    'saved column order changed when new fields arrived');
+  for (const column of ['students', 'weekday', 'notes', 'count', 'performance', 'group', 'sprint'])
+    assert(headers.includes(column), `${column} is missing from the row columns`);
+  assert(doc.querySelector('[data-cell-id="1"][data-cell-col="group"]')
+    .textContent.includes('Relentless'), 'reference display text was replaced by a row ID');
+  assert.equal(doc.querySelector('[data-cell-col="count"]').getAttribute('data-cell-writable'), 'false');
+  assert(doc.querySelector('[data-edit-col="datetime"]'), 'class DateTime is not editable');
+  assert(doc.querySelector('[data-edit-col="weekday"]'), 'class text is not editable');
+  assert(doc.querySelector('[data-edit-col="students"]'), 'class reference is not editable');
+  assert(doc.querySelector('[data-edit-col="rate"]'), 'writable number is not editable');
+  assert(!doc.querySelector('[data-edit-col="wage"]'), 'formula wage became editable');
+  const weekdayCell = doc.querySelector('[data-cell-id="1"][data-cell-col="weekday"]');
+  weekdayCell.click();
+  weekdayCell.click();
+  assert.equal(doc.getElementById('cell-editor').hidden, false);
+  doc.getElementById('cell-editor-text').value = 'Wed';
+  doc.getElementById('btn-editor-save').click();
+  await waitFor(() => calls.updates.some(update => update.fields?.weekday === 'Wed'));
+  await waitFor(() => doc.getElementById('cell-editor').hidden);
+  const notesCell = doc.querySelector('[data-cell-id="1"][data-cell-col="notes"]');
+  notesCell.click();
+  notesCell.click();
+  await waitFor(() => calls.updates.some(update => update.fields?.notes === false));
+  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="notes"]') !== notesCell);
+  const studentCell = doc.querySelector('[data-cell-id="1"][data-cell-col="students"]');
+  studentCell.click();
+  studentCell.click();
+  await waitFor(() => [...doc.querySelectorAll('.salary-ref-option')]
+    .some(option => option.textContent.includes('B. Student')));
+  [...doc.querySelectorAll('.salary-ref-option')]
+    .find(option => option.textContent.includes('B. Student')).click();
+  await waitFor(() => calls.updates.some(update => update.fields?.students === 22));
+  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="students"]')
+    ?.textContent.includes('B. Student'));
+  assert(doc.querySelector('[data-cell-id="1"][data-cell-col="students"]').textContent.includes('B. Student'));
+  doc.getElementById('btn-undo').click();
+  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="students"]')
+    ?.textContent.includes('A. Student'));
+  assert(calls.updates.some(update => update.fields?.students === 21));
+  doc.getElementById('btn-redo').click();
+  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="students"]')
+    ?.textContent.includes('B. Student'));
   assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
   assert.equal(month('August 2026').querySelector('[data-column="wage"] .column-name').textContent, 'income');
   assert.equal(month('August 2026').querySelector('[data-column="salary_received"] .column-name').textContent, 'expenses');
@@ -174,6 +249,18 @@ async function main() {
   assert(month('August 2026').querySelector('[data-expense-id="13"]'));
   assert.equal(expenseGrip(13).getAttribute('aria-pressed'), 'false', 'teacher change leaves no stale selection');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);
+  const fetchSelectedTable = win.grist.viewApi.fetchSelectedTable;
+  let releaseOldFetch;
+  win.grist.viewApi.fetchSelectedTable = options => {
+    win.grist.viewApi.fetchSelectedTable = fetchSelectedTable;
+    return new Promise(resolve => { releaseOldFetch = resolve; });
+  };
+  onRecords(records.slice(0, 1));
+  onRecords([{ id: 6, group: 4000, performance: 'TR', datetime: '2026-08-15T03:00:00Z', wage: 200, rate: 10 }]);
+  releaseOldFetch([{ ...records[0], students: 'Wrong teacher' }]);
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment'
+    && doc.querySelector('[data-cell-id="6"][data-cell-col="students"]'));
+  assert(!doc.querySelector('[data-cell-id="1"]'), 'stale teacher fetch replaced the latest selection');
   onRecords([]);
   assert.equal(cards().length, 0);
   assert(doc.querySelector('.empty-title').textContent.includes('No classes'));
@@ -190,7 +277,7 @@ async function main() {
   onOptions({ groupBy: 'datetime::month' }, { accessLevel: 'full' });
   await tick();
   assert.equal(doc.querySelector('.empty-title').textContent, 'No Date/DateTime column available');
-  console.log('PASS salaries: one aligned class/payment grid, VLAT months, income/expenses totals, refresh, cache keys');
+  console.log('PASS salaries: complete Attendance columns, editing, linked payments, VLAT months, refresh, cache keys');
   win.close();
 }
 
