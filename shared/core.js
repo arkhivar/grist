@@ -104,7 +104,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.34';
+  const WIDGET_VERSION = '7.35';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -302,6 +302,43 @@
     return String(s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;')
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  const REFERENCE_LABELS = Symbol('referenceLabels');
+
+  function setReferenceDisplay(record, col, labels) {
+    if (!Object.prototype.hasOwnProperty.call(record, REFERENCE_LABELS)) {
+      Object.defineProperty(record, REFERENCE_LABELS, {
+        value: Object.create(null), enumerable: false,
+      });
+    }
+    const items = labels.filter(label => label != null && label !== '')
+      .map(label => String(label));
+    record[REFERENCE_LABELS][col] = items;
+    record[col] = items.join(', ');
+  }
+
+  function renderReferencePills(labels) {
+    const items = (Array.isArray(labels) ? labels : [labels])
+      .filter(label => label != null && label !== '' && label !== 0)
+      .map(label => String(label));
+    if (!items.length)
+      return `<span class="cell-null" aria-label="${T.cellEmpty}">—</span>`;
+    return '<span class="cell-ref-list">' + items.map(label =>
+      `<span class="cell-ref-pill" title="${esc(label)}">${esc(label)}</span>`).join('')
+      + '</span>';
+  }
+
+  function referenceDisplayLabels(value, isList = false) {
+    if (value == null || value === '' || value === 0) return [];
+    if (!Array.isArray(value)) return [String(value)];
+    if (value[0] === 'l') return referenceDisplayLabels(value[1], true);
+    if (value[0] === 'r') return referenceDisplayLabels(value[2], true);
+    if (value[0] === 'L')
+      return value.slice(1).flatMap(item => referenceDisplayLabels(item));
+    if (value[0] === 'R') return referenceDisplayLabels(value[2]);
+    return isList ? value.flatMap(item => referenceDisplayLabels(item))
+      : [String(value)];
   }
 
   // ── 6b. Dates: detection, parsing, bucketing ─────────────

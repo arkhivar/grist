@@ -37,7 +37,7 @@ const attendance = {
     null, null, Date.parse('2026-08-15T03:00:00Z') / 1000],
   performance: [['L', 7], ['L', 7, 8], ['L', 7], ['L', 7], ['L', 7], ['L', 8]],
   group2: [31, 31, 31, 31, 31, 31],
-  group3: [null, null, null, null, null, null],
+  group3: [['L', 31, 32], null, null, null, null, null],
   students: [21, 21, 21, 21, 21, 21],
   weekday: ['Tue', 'Sat', 'Fri', '', '', 'Sat'],
   notes: ['First note', '', '', '', '', ''],
@@ -88,7 +88,7 @@ win.grist = {
     if (name === 'FolksBase')
       return { id: [21, 22], Name: ['A. Student', 'B. Student'] };
     if (name === 'Performance') return { id: [7, 8], Name: ['VP', 'TR'] };
-    if (name === 'Groups') return { id: [31], Name: ['Relentless'] };
+    if (name === 'Groups') return { id: [31, 32], Name: ['Relentless', 'North, <Team>'] };
     if (name === 'Expenses') {
       if (expenses instanceof Error) throw expenses;
       return expenses;
@@ -117,6 +117,9 @@ async function waitFor(condition) {
 }
 const cards = () => [...doc.querySelectorAll('.group')];
 const month = label => cards().find(card => card.dataset.groupLabel === label);
+const refPills = (id, col) => [...doc.querySelectorAll(
+  `[data-cell-id="${id}"][data-cell-col="${col}"] .cell-ref-pill`)]
+  .map(pill => pill.textContent);
 
 async function main() {
   // Grist delivers options, records, and metadata independently.
@@ -153,6 +156,19 @@ async function main() {
     assert(headers.includes(column), `${column} is missing from the row columns`);
   assert(doc.querySelector('[data-cell-id="1"][data-cell-col="group2"]')
     .textContent.includes('Relentless'), 'reference display text was replaced by a row ID');
+  assert.deepEqual(refPills(1, 'group2'), ['Relentless'], 'single Reference needs one pill');
+  assert.deepEqual(refPills(1, 'students'), ['A. Student'], 'linked student needs one pill');
+  assert.deepEqual(refPills(1, 'group3'), ['Relentless', 'North, <Team>'],
+    'Reference List labels with commas must stay separate pills');
+  const group3Cell = doc.querySelector('[data-cell-id="1"][data-cell-col="group3"]');
+  assert(group3Cell.querySelector('.cell-ref-list'), 'Reference List has no pill container');
+  assert(!group3Cell.querySelector('team'), 'Reference label was parsed as HTML');
+  assert.equal(doc.querySelector('[data-cell-id="2"][data-cell-col="group3"] .cell-ref-pill'), null,
+    'empty Reference List gained a pill');
+  assert(doc.querySelector('[data-cell-id="2"][data-cell-col="group3"] .cell-null'),
+    'empty Reference List lost its empty-cell marker');
+  assert.equal(doc.querySelector('[data-cell-id="1"][data-cell-col="notes"] .cell-ref-pill'), null,
+    'plain text was rendered as a linked record');
   assert.equal(doc.querySelector('[data-cell-col="weekday"]').getAttribute('data-cell-writable'), 'false');
   assert(doc.querySelector('[data-edit-col="datetime"]'), 'class DateTime is not editable');
   assert(!doc.querySelector('[data-edit-col="weekday"]'), 'formula weekday became editable');
@@ -177,14 +193,16 @@ async function main() {
   await waitFor(() => calls.updates.some(update => update.fields?.students === 22));
   await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="students"]')
     ?.textContent.includes('B. Student'));
-  assert(doc.querySelector('[data-cell-id="1"][data-cell-col="students"]').textContent.includes('B. Student'));
+  assert.deepEqual(refPills(1, 'students'), ['B. Student'], 'edited Reference lost its pill');
   doc.getElementById('btn-undo').click();
   await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="students"]')
     ?.textContent.includes('A. Student'));
+  assert.deepEqual(refPills(1, 'students'), ['A. Student'], 'undo lost the Reference pill');
   assert(calls.updates.some(update => update.fields?.students === 21));
   doc.getElementById('btn-redo').click();
   await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="students"]')
     ?.textContent.includes('B. Student'));
+  assert.deepEqual(refPills(1, 'students'), ['B. Student'], 'redo lost the Reference pill');
   const teacherCell = doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]');
   teacherCell.click();
   teacherCell.click();
@@ -196,14 +214,16 @@ async function main() {
   doc.getElementById('salary-ref-save').click();
   await waitFor(() => calls.updates.some(update => update.id === 1
     && JSON.stringify(update.fields?.performance) === JSON.stringify(['L', 7, 8])));
-  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]')
-    ?.textContent.includes('VP, TR'));
+  await waitFor(() => refPills(1, 'performance').length === 2);
+  assert.deepEqual(refPills(1, 'performance'), ['VP', 'TR'],
+    'edited Reference List needs separate pills');
   doc.getElementById('btn-undo').click();
-  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]')
-    ?.textContent.trim() === 'VP');
+  await waitFor(() => refPills(1, 'performance').length === 1);
+  assert.deepEqual(refPills(1, 'performance'), ['VP'], 'undo lost Reference List pill');
   doc.getElementById('btn-redo').click();
-  await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]')
-    ?.textContent.includes('VP, TR'));
+  await waitFor(() => refPills(1, 'performance').length === 2);
+  assert.deepEqual(refPills(1, 'performance'), ['VP', 'TR'],
+    'redo lost separate Reference List pills');
   assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
   assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'income');
   assert.equal(doc.querySelector('#column-strip [data-column="salary_received"] .column-name').textContent, 'expenses');
@@ -221,11 +241,26 @@ async function main() {
   assert(!doc.querySelector('.salary-payments-heading'));
   const payment = month('August 2026').querySelector('.salary-payment-row');
   const dateIndex = headers.indexOf('datetime') + 1;
+  const performanceIndex = headers.indexOf('performance') + 1;
   const receivedIndex = headers.indexOf('salary_received') + 1;
   assert(payment.cells[dateIndex].textContent.includes('2026-08-01 00:30'));
   assert.equal(payment.cells[receivedIndex].textContent, '100');
+  assert.deepEqual([...payment.cells[performanceIndex].querySelectorAll('.cell-ref-pill')]
+    .map(pill => pill.textContent), ['VP'], 'payment teacher needs a linked-record pill');
+  assert.equal(payment.cells[performanceIndex].querySelector('[data-edit-kind]'), null,
+    'payment teacher became editable');
   assert.equal(payment.querySelectorAll('td.data-cell').length, 0, 'payment rows entered class edit history');
   assert.equal(payment.closest('table'), month('August 2026').querySelector('[data-record-id="1"]').closest('table'));
+  onRecords([records[0], { id: 92, group: ['L', 6], performance: 'TR' }]);
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '4 payments'
+    && month('August 2026')?.querySelector('[data-expense-id="13"]'));
+  const paymentTeacher = id => [...doc.querySelector(`[data-expense-id="${id}"]`)
+    .cells[performanceIndex].querySelectorAll('.cell-ref-pill')].map(pill => pill.textContent);
+  assert.deepEqual(paymentTeacher(11), ['VP'], 'VP payment picked up another selected teacher');
+  assert.deepEqual(paymentTeacher(13), ['TR'], 'TR payment picked up another selected teacher');
+  onRecords(records);
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments'
+    && !doc.querySelector('[data-expense-id="13"]'));
   const expenseGrip = id => doc.querySelector(`.salary-expense-grip[data-expense-id="${id}"]`);
   assert(expenseGrip(11), 'payment row has no selector grip');
   assert.equal(expenseGrip(11).hasAttribute('data-id'), false, 'payment grip can trigger class actions');
@@ -283,6 +318,9 @@ async function main() {
   onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
   assert(month('August 2026').querySelector('[data-expense-id="13"]'));
+  const teacherPayment = month('August 2026').querySelector('[data-expense-id="13"]');
+  assert.deepEqual([...teacherPayment.cells[performanceIndex].querySelectorAll('.cell-ref-pill')]
+    .map(pill => pill.textContent), ['TR'], 'payment pill shows a different teacher');
   const classScroll = month('August 2026').querySelector('.scroll-inner');
   classScroll.scrollLeft = 64;
   classScroll.dispatchEvent(new win.Event('scroll'));

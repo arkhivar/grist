@@ -13,6 +13,7 @@
       --accent:       #2563eb;
       --group-stripe: #fafaf9;
       --hover-row:    #f0f6ff;
+      --ref-pill-bg:  #e9eef6;
       --focus-ring:   0 0 0 2px rgba(37,99,235,.35);
       --radius:       5px;
       --shadow:       0 1px 2px rgba(0,0,0,.06), 0 1px 4px rgba(0,0,0,.04);
@@ -499,6 +500,17 @@
 
     .cell-null { color: var(--muted); font-style: italic; font-size: 11px; }
     .cell-num  { font-family: var(--mono); font-size: 11px; }
+    .cell-ref-list {
+      display: inline-flex; align-items: center; gap: 4px;
+      max-width: 100%; overflow: hidden; vertical-align: middle;
+    }
+    .cell-ref-pill {
+      display: inline-block; min-width: 0; max-width: 100%;
+      padding: 1px 6px; border-radius: 4px;
+      background: var(--ref-pill-bg); color: var(--text);
+      line-height: 1.35; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
     .rec-table tbody td.cell-editable { padding: 0; }
     .cell-edit-btn {
       display: flex; align-items: flex-start; gap: 7px;

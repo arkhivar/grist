@@ -233,6 +233,56 @@ await test('A5: ordinary text and plain numbers are untouched', async () => {
   assertEq(countCell.textContent, '-1425', 'plain number (no thousand separator)');
 });
 
+await test('A5a: Reference metadata gives a linked label a pill without boxing text', async () => {
+  const refDom = new JSDOM(html, {
+    url: 'https://arkhivar.github.io/grist/sprints.html',
+    runScripts: 'outside-only', pretendToBeVisual: true,
+  });
+  const refWin = refDom.window;
+  const refDoc = refWin.document;
+  let refOnRecords;
+  let refOnOptions;
+  try {
+    refWin.grist = {
+      ready() {},
+      onRecords(callback) { refOnRecords = callback; },
+      onOptions(callback) { refOnOptions = callback; },
+      setOption() {},
+      selectedTable: { getTableId: async () => 'RefTable' },
+      docApi: { fetchTable: async name => {
+        if (name === '_grist_Tables') return { id: [1], tableId: ['RefTable'] };
+        if (name === '_grist_Tables_column') return {
+          id: [10, 11, 12], parentId: [1, 1, 1],
+          colId: ['students', 'performance', 'sprint'],
+          type: ['Ref:Students', 'Text', 'Choice'],
+          isFormula: [false, false, false],
+        };
+        throw new Error(`Unexpected table ${name}`);
+      } },
+      viewApi: {},
+    };
+    refWin.eval(read('shared/core.js') + '\n;\n'
+      + read('widgets/sprints/app.js') + '\n;\n'
+      + read('widgets/sprints/actions.js'));
+    const linkedRecord = { id: 101, students: 'A. Student', performance: 'ordinary text', sprint: 'Sprint 1' };
+    refOnRecords([linkedRecord]);
+    refOnOptions({}, { accessLevel: 'full' });
+    await waitFor(() => refDoc.querySelectorAll('#editable-col-list .editable-col-option').length > 0,
+      'reference metadata');
+    refOnRecords([linkedRecord]);
+    const refCell = refDoc.querySelector('[data-cell-id="101"][data-cell-col="students"]');
+    const textCell = refDoc.querySelector('[data-cell-id="101"][data-cell-col="performance"]');
+    assert(refCell, 'linked student cell missing');
+    assertEq(refCell.querySelector('.cell-ref-pill')?.textContent, 'A. Student',
+      'Reference label has no pill');
+    assert(textCell, 'plain text cell missing');
+    assert(!textCell.querySelector('.cell-ref-pill'), 'plain text was boxed as a Reference');
+    assertEq(textCell.textContent, 'ordinary text', 'plain text changed');
+  } finally {
+    refWin.close();
+  }
+});
+
 // ── B. Selection (grip model) ────────────────────────────────
 await test('B6: plain grip click selects one row and clears previous selection', async () => {
   click(grip(1));

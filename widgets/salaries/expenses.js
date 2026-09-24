@@ -60,12 +60,9 @@ function salaryColumnLabel(col) {
   return col;
 }
 
-function salaryPaymentRowsHtml(cols, key, classRecords) {
+function salaryPaymentRowsHtml(cols, key) {
   const payments = salaryPaymentRowsFor(key);
   const dateColumn = parseGroupBy(groupBy).col;
-  const teacherLabel = salarySelectedTeacherIds.size
-    ? [...salarySelectedTeacherIds].map(id => salaryRefDisplay('performance', id)).join(', ')
-    : classRecords[0]?.performance ?? allRecords[0]?.performance ?? '';
   return payments.map(row => `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
     + ` title="Salary payment from Expenses #${esc(row.id)}">`
     + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`
@@ -76,7 +73,8 @@ function salaryPaymentRowsHtml(cols, key, classRecords) {
     + cols.map(col => {
       if (col === dateColumn)
         return `<td class="salary-payment-date"><span class="cell-num">${esc(row.dateLabel)}</span></td>`;
-      if (col === 'performance') return `<td>${esc(teacherLabel)}</td>`;
+      if (col === 'performance')
+        return `<td>${renderReferencePills(salaryRefDisplay('performance', row.performanceId))}</td>`;
       if (col === WIDGET_CONFIG.receivedColumn)
         return `<td class="salary-payment-amount"><span class="cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
       return '<td></td>';
@@ -158,16 +156,20 @@ function salaryReferenceIds(value) {
   return single == null ? salaryGroupIds(value) : [single];
 }
 
-function salaryDisplayClassCell(col, value) {
+function salaryDisplayClassCell(col, value, record) {
   if (Array.isArray(value) && value[0] === 'l')
-    return salaryDisplayClassCell(col, value[1]);
+    return salaryDisplayClassCell(col, value[1], record);
   const type = columnTypes[col] || '';
   if (type.startsWith('Ref:')) {
     const id = salaryRawRef(value);
-    return id == null ? '' : salaryRefDisplay(col, id);
+    setReferenceDisplay(record, col, id == null ? [] : [salaryRefDisplay(col, id)]);
+    return record[col];
   }
-  if (type.startsWith('RefList:'))
-    return salaryGroupIds(value).map(id => salaryRefDisplay(col, id)).join(', ');
+  if (type.startsWith('RefList:')) {
+    setReferenceDisplay(record, col,
+      salaryGroupIds(value).map(id => salaryRefDisplay(col, id)));
+    return record[col];
+  }
   if (Array.isArray(value) && (value[0] === 'D' || value[0] === 'd'))
     return value[1];
   return value;
@@ -232,7 +234,7 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
     const records = classes.id.flatMap((id, index) => {
       if (!selectedIds.has(Number(id))) return [];
       const record = { id: Number(id) };
-      cols.forEach(col => { record[col] = salaryDisplayClassCell(col, classes[col][index]); });
+      cols.forEach(col => { record[col] = salaryDisplayClassCell(col, classes[col][index], record); });
       return [record];
     });
     apply(records);
@@ -282,12 +284,13 @@ async function salaryRefreshPayments() {
 
     const months = new Map();
     expenses.id.forEach((id, index) => {
-      if (!teacherIds.has(salaryRawRef(expenses.performance[index]))) return;
+      const performanceId = salaryRawRef(expenses.performance[index]);
+      if (!teacherIds.has(performanceId)) return;
       const sec = parseDateValueSec(expenses.date[index]);
       const key = sec == null ? '\x00__empty__'
         : String(bucketStartMs(dateTimeWallDate(sec).getTime() / 1000, 'month'));
       const row = {
-        id, sec,
+        id, sec, performanceId,
         dateLabel: sec == null ? '—' : formatDateTimeSec(sec),
         amount: expenses.amount[index] == null || expenses.amount[index] === ''
           ? null : Number(expenses.amount[index]),

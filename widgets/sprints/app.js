@@ -1276,7 +1276,7 @@
       + `${cols.map(c => renderTableCell(rec, c)).join('')}`
       + `<td class="row-actions">${rowActionsHtml(rec)}</td></tr>`;
     }).join('') + (typeof salaryPaymentRowsHtml === 'function'
-      ? salaryPaymentRowsHtml(cols, group.key, group.records) : '');
+      ? salaryPaymentRowsHtml(cols, group.key) : '');
     return `<div class="scroll-inner" tabindex="0"><table class="rec-table"`
       + ` style="width:${getTableWidth(cols)}px">`
       + `${buildColGroup(cols)}
@@ -1549,11 +1549,13 @@
       if (byId.has(id)) {
         const value = byId.get(id);
         const type = columnBaseType(columnTypes[col]);
-        record[col] = type === 'Ref' && typeof salaryRefDisplay === 'function'
-          ? salaryRefDisplay(col, value)
-          : type === 'RefList' && typeof salaryRefDisplay === 'function'
-            ? salaryGroupIds(value).map(refId => salaryRefDisplay(col, refId)).join(', ')
-            : value;
+        if (type === 'Ref' && typeof salaryRefDisplay === 'function') {
+          const refId = salaryRawRef(value);
+          setReferenceDisplay(record, col, refId == null ? [] : [salaryRefDisplay(col, refId)]);
+        } else if (type === 'RefList' && typeof salaryRefDisplay === 'function') {
+          setReferenceDisplay(record, col,
+            salaryGroupIds(value).map(refId => salaryRefDisplay(col, refId)));
+        } else record[col] = value;
       }
     });
   }
@@ -1950,7 +1952,7 @@
 
   function renderTableCell(rec, col) {
     const rendered = typeof WIDGET_CONFIG !== 'undefined' && col === WIDGET_CONFIG.receivedColumn
-      ? '' : renderCell(rec[col], col);
+      ? '' : renderCell(rec[col], col, rec);
     const editKind = editKindForColumn(col);
     const id = esc(String(rec.id));
     const colAttr = esc(col);
@@ -3067,7 +3069,13 @@
   btnEditorCancel.addEventListener('click', closeFieldEditor);
   btnEditorSave.addEventListener('click', saveFieldEditor);
 
-  function renderCell(val, col) {
+  function renderCell(val, col, record) {
+    const type = columnBaseType(columnTypes[col] || writableColumnTypes[col]);
+    if (type === 'Ref' || type === 'RefList') {
+      const labels = record?.[REFERENCE_LABELS]?.[col]
+        ?? referenceDisplayLabels(val, type === 'RefList');
+      return renderReferencePills(labels);
+    }
     if (val == null || val === '')
       return `<span class="cell-null" aria-label="${T.cellEmpty}">—</span>`;
     if (val === true || val === false) {

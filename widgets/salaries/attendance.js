@@ -181,7 +181,7 @@ async function saveSalaryRef(id, label) {
     await salaryTableOperations().update({ id: recordId, fields: { [col]: id } },
       { parseStrings: false });
     const record = allRecords.find(item => Number(item.id) === recordId);
-    if (record) record[col] = label;
+    if (record) setReferenceDisplay(record, col, id ? [label] : []);
     rememberCellHistory('Edit reference', col, [{ id: recordId, before: currentId, after: id }]);
     closeSalaryRefEditor();
     render();
@@ -213,7 +213,8 @@ async function saveSalaryRefList() {
     await salaryTableOperations().update({ id: recordId, fields: { [col]: ['L', ...nextIds] } },
       { parseStrings: false });
     const record = allRecords.find(item => Number(item.id) === recordId);
-    if (record) record[col] = nextIds.map(id => salaryRefDisplay(col, id)).join(', ');
+    if (record) setReferenceDisplay(record, col,
+      nextIds.map(id => salaryRefDisplay(col, id)));
     rememberCellHistory('Edit references', col, [{ id: recordId,
       before: ['L', ...currentIds], after: ['L', ...nextIds] }]);
     closeSalaryRefEditor();
