@@ -303,8 +303,20 @@ async function main() {
   assert(!doc.getElementById('btn-expand') && !doc.getElementById('btn-collapse'),
     'obsolete toolbar expand/collapse buttons remain');
   assert(groupToggle(), 'group toggle is missing from the fixed header grip cell');
+  const groupCaret = cards()[0].querySelector('.group-header .chevron');
+  const toggleCaret = groupToggle().querySelector('svg');
+  assert.equal(toggleCaret.querySelectorAll('polyline').length, 1,
+    'fixed-strip toggle should use one caret, not a double chevron');
+  assert(!toggleCaret.querySelector('path'), 'fixed-strip toggle still has the old double chevron');
+  assert.equal(toggleCaret.querySelector('polyline').getAttribute('points'),
+    groupCaret.querySelector('polyline').getAttribute('points'), 'toggle and group caret geometry');
+  assert.equal(toggleCaret.getAttribute('viewBox'), groupCaret.getAttribute('viewBox'),
+    'toggle and group caret viewport');
+  assert.equal(toggleCaret.getAttribute('stroke-width'), groupCaret.getAttribute('stroke-width'),
+    'toggle and group caret stroke');
   assert(cards().every(card => !card.classList.contains('collapsed')),
     'salary groups should start open');
+  assert(!groupToggle().classList.contains('all-collapsed'), 'initial toggle should show the collapse action');
   assert.equal(groupToggle().getAttribute('aria-label'), 'Collapse all');
   assert.equal(groupToggle().title, 'Collapse all');
   try {
@@ -313,6 +325,7 @@ async function main() {
       'salary toggle did not collapse every month');
     assert(cards().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'false'),
       'collapsed months still announce expanded bodies');
+    assert(groupToggle().classList.contains('all-collapsed'), 'collapsed toggle should show the expand action');
     assert.equal(groupToggle().getAttribute('aria-label'), 'Expand all');
     assert.equal(groupToggle().title, 'Expand all');
     groupToggle().click();
@@ -320,6 +333,7 @@ async function main() {
       'salary toggle did not expand every month');
     assert(cards().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'true'),
       'expanded months still announce collapsed bodies');
+    assert(!groupToggle().classList.contains('all-collapsed'), 'expanded toggle should show the collapse action');
     month('August 2026').querySelector('.group-header').click();
     assert(cards().some(card => card.classList.contains('collapsed'))
       && cards().some(card => !card.classList.contains('collapsed')),

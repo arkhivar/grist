@@ -448,6 +448,13 @@
       + ` aria-label="${esc(T.resizeColumn)} ${esc(col)}"></span></th>`;
   }
 
+  function groupChevronHtml() {
+    return `<svg class="chevron" viewBox="0 0 24 24" fill="none"`
+      + ` stroke="currentColor" stroke-width="2.5" stroke-linecap="round"`
+      + ` stroke-linejoin="round" aria-hidden="true" focusable="false">`
+      + `<polyline points="6 9 12 15 18 9"/></svg>`;
+  }
+
   function renderColumnStrip(cols) {
     columnStrip.hidden = false;
     const tableWidth = getTableWidth(cols);
@@ -456,10 +463,7 @@
       + `<caption>Record columns</caption><thead><tr>`
       + `<th scope="col" class="col-grip"><button id="btn-toggle-groups"`
       + ` class="group-toggle-all" type="button" aria-label="${esc(T.collapseAll)}"`
-      + ` title="${esc(T.collapseAll)}"><svg viewBox="0 0 24 24" fill="none"`
-      + ` stroke="currentColor" stroke-width="2" stroke-linecap="round"`
-      + ` stroke-linejoin="round" aria-hidden="true" focusable="false">`
-      + `<path d="m5 10 7-6 7 6M5 18l7-6 7 6"/></svg></button></th>`
+      + ` title="${esc(T.collapseAll)}">${groupChevronHtml()}</button></th>`
       + cols.map(col => buildColumnFooter(col)).join('')
       + `<th class="col-actions" aria-hidden="true"></th>`
       + `</tr></thead></table></div>`;
@@ -1175,12 +1179,7 @@
       header.setAttribute('aria-expanded', String(!isCollapsed));
       header.setAttribute('aria-controls', bodyId);
       header.innerHTML = `
-        <svg class="chevron" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true" focusable="false">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
+        ${groupChevronHtml()}
         <span class="${labelCls}">${labelTxt}</span>
         <span class="group-badge"
               aria-label="${group.records.length}\u00a0${group.records.length === 1 ? T.record : T.records}"

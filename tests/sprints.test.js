@@ -378,7 +378,19 @@ await test('D11a: one fixed-strip toggle collapses or expands every group', asyn
   assert(!doc.getElementById('btn-expand') && !doc.getElementById('btn-collapse'),
     'obsolete toolbar expand/collapse buttons remain');
   assert(toggle(), 'group toggle is missing from the fixed header grip cell');
+  const groupCaret = groups()[0].querySelector('.group-header .chevron');
+  const toggleCaret = toggle().querySelector('svg');
+  assertEq(toggleCaret.querySelectorAll('polyline').length, 1,
+    'fixed-strip toggle should use one caret, not a double chevron');
+  assert(!toggleCaret.querySelector('path'), 'fixed-strip toggle still has the old double chevron');
+  assertEq(toggleCaret.querySelector('polyline').getAttribute('points'),
+    groupCaret.querySelector('polyline').getAttribute('points'), 'toggle and group caret geometry');
+  assertEq(toggleCaret.getAttribute('viewBox'), groupCaret.getAttribute('viewBox'),
+    'toggle and group caret viewport');
+  assertEq(toggleCaret.getAttribute('stroke-width'), groupCaret.getAttribute('stroke-width'),
+    'toggle and group caret stroke');
   assert(groups().every(card => !card.classList.contains('collapsed')), 'groups should start open');
+  assert(!toggle().classList.contains('all-collapsed'), 'initial toggle should show the collapse action');
   assertEq(toggle().getAttribute('aria-label'), 'Collapse all', 'initial toggle action');
   assertEq(toggle().title, 'Collapse all', 'initial toggle tooltip');
   try {
@@ -386,12 +398,14 @@ await test('D11a: one fixed-strip toggle collapses or expands every group', asyn
     assert(groups().every(card => card.classList.contains('collapsed')), 'toggle did not collapse all groups');
     assert(groups().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'false'),
       'collapsed groups still announce expanded bodies');
+    assert(toggle().classList.contains('all-collapsed'), 'collapsed toggle should show the expand action');
     assertEq(toggle().getAttribute('aria-label'), 'Expand all', 'collapsed toggle action');
     assertEq(toggle().title, 'Expand all', 'collapsed toggle tooltip');
     click(toggle());
     assert(groups().every(card => !card.classList.contains('collapsed')), 'toggle did not expand all groups');
     assert(groups().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'true'),
       'expanded groups still announce collapsed bodies');
+    assert(!toggle().classList.contains('all-collapsed'), 'expanded toggle should show the collapse action');
     click(groups()[0].querySelector('.group-header'));
     assert(groups().some(card => card.classList.contains('collapsed'))
       && groups().some(card => !card.classList.contains('collapsed')), 'individual header did not create mixed state');
