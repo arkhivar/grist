@@ -6,8 +6,8 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.33">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.33">
+  <link rel="stylesheet" href="shared/base.css?v=7.34">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.34">
 </head>
 <body>
 <div id="app">
@@ -147,6 +147,11 @@
     </div>
   </main>
 
+  <div class="column-scrollbar scroll-inner" id="column-scrollbar" tabindex="0"
+       aria-label="Scroll columns horizontally" hidden>
+    <div class="column-scrollbar-width"></div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div id="sel-bar" role="toolbar">
@@ -218,11 +223,11 @@
   </div>
 </div>
 
-<script src="widgets/salaries/config.js?v=7.33"></script>
-<script src="shared/core.js?v=7.33"></script>
-<script src="widgets/salaries/expenses.js?v=7.33"></script>
-  <script src="widgets/sprints/app.js?v=7.33"></script>
-  <script src="widgets/sprints/actions.js?v=7.33"></script>
-  <script src="widgets/salaries/attendance.js?v=7.33"></script>
+<script src="widgets/salaries/config.js?v=7.34"></script>
+<script src="shared/core.js?v=7.34"></script>
+<script src="widgets/salaries/expenses.js?v=7.34"></script>
+  <script src="widgets/sprints/app.js?v=7.34"></script>
+  <script src="widgets/sprints/actions.js?v=7.34"></script>
+  <script src="widgets/salaries/attendance.js?v=7.34"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.33">
+  <link rel="stylesheet" href="shared/base.css?v=7.34">
 </head>
 <body>
 <div id="app">
@@ -143,6 +143,11 @@
     </div>
   </main>
 
+  <div class="column-scrollbar scroll-inner" id="column-scrollbar" tabindex="0"
+       aria-label="Scroll columns horizontally" hidden>
+    <div class="column-scrollbar-width"></div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div id="sel-bar" role="toolbar">
@@ -204,8 +209,8 @@
   <button type="button" role="menuitem" tabindex="-1" class="row-command-danger" data-row-command="delete"><span aria-hidden="true">×</span><span class="row-command-label">Delete rows</span></button>
 </div>
 
-<script src="shared/core.js?v=7.33"></script>
-  <script src="widgets/sprints/app.js?v=7.33"></script>
-  <script src="widgets/sprints/actions.js?v=7.33"></script>
+<script src="shared/core.js?v=7.34"></script>
+  <script src="widgets/sprints/app.js?v=7.34"></script>
+  <script src="widgets/sprints/actions.js?v=7.34"></script>
 </body>
 </html>

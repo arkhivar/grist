@@ -136,9 +136,9 @@ async function main() {
   const headers = [...doc.querySelectorAll('#column-strip thead th[data-column]')]
     .map(cell => cell.dataset.column);
   assert(doc.querySelector('.toolbar #statsbar.visible'), 'salary counts were not moved into the toolbar');
-  assert(doc.querySelector('#column-strip > .column-scrollbar + .column-header-scroll'),
-    'the scrollbar should have its own track above the column labels');
-  assert.equal(doc.querySelector('#column-strip .column-scrollbar-width').style.width,
+  assert(doc.querySelector('#content + #column-scrollbar:not([hidden])'),
+    'the scrollbar should sit below the scrolling view');
+  assert.equal(doc.querySelector('#column-scrollbar .column-scrollbar-width').style.width,
     doc.querySelector('#column-strip .rec-table').style.width,
     'the salary scrollbar does not cover every displayed column');
   assert.equal(doc.querySelectorAll('.group tfoot .column-name').length, 0,
@@ -286,15 +286,19 @@ async function main() {
   const classScroll = month('August 2026').querySelector('.scroll-inner');
   classScroll.scrollLeft = 64;
   classScroll.dispatchEvent(new win.Event('scroll'));
-  assert.equal(doc.querySelector('#column-strip .scroll-inner').scrollLeft, 64,
-    'salary header does not track a month table scroll');
+  const bottomScroll = doc.getElementById('column-scrollbar');
   const headerScroll = doc.querySelector('#column-strip .scroll-inner');
-  headerScroll.scrollLeft = 24;
-  headerScroll.dispatchEvent(new win.Event('scroll'));
-  assert.equal(classScroll.scrollLeft, 24, 'salary month does not track the header scrollbar');
+  assert.equal(headerScroll.scrollLeft, 64,
+    'salary header does not track a month table scroll');
+  assert.equal(bottomScroll.scrollLeft, 64, 'bottom scrollbar does not track a month table scroll');
+  bottomScroll.scrollLeft = 24;
+  bottomScroll.dispatchEvent(new win.Event('scroll'));
+  assert.equal(headerScroll.scrollLeft, 24, 'salary header does not track the bottom scrollbar');
+  assert.equal(classScroll.scrollLeft, 24, 'salary month does not track the bottom scrollbar');
   doc.querySelector('.toolbar').dispatchEvent(new win.WheelEvent('wheel',
     { bubbles: true, cancelable: true, shiftKey: true, deltaY: 40 }));
-  assert.equal(headerScroll.scrollLeft, 64, 'Shift+wheel over the toolbar cannot reveal columns');
+  assert.equal(bottomScroll.scrollLeft, 64, 'Shift+wheel over the toolbar cannot reveal columns');
+  assert.equal(headerScroll.scrollLeft, 64, 'salary header did not follow Shift+wheel');
   assert.equal(classScroll.scrollLeft, 64, 'salary rows did not follow Shift+wheel over the toolbar');
   assert.equal(expenseGrip(13).getAttribute('aria-pressed'), 'false', 'teacher change leaves no stale selection');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);

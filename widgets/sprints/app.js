@@ -386,6 +386,20 @@
     return saveColumnWidths();
   }
 
+  const groupedApp = document.getElementById('app');
+  const columnScrollbar = document.getElementById('column-scrollbar');
+
+  function syncColumnScrollbarWidth() {
+    const headerScroller = columnStrip.querySelector('.column-header-scroll');
+    if (headerScroller && !columnScrollbar.hidden)
+      columnScrollbar.style.width = `${headerScroller.clientWidth}px`;
+  }
+
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(syncColumnScrollbarWidth).observe(columnStrip);
+  }
+  window.addEventListener('resize', syncColumnScrollbarWidth);
+
   function applyColumnWidthsToDOM() {
     document.querySelectorAll('.rec-table').forEach(table => {
       const cols = [...table.querySelectorAll('col[data-column]')];
@@ -397,9 +411,10 @@
       table.style.width =
         `${SELECT_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + dataWidth}px`;
     });
-    const scrollWidth = columnStrip.querySelector('.column-scrollbar-width');
+    const scrollWidth = columnScrollbar.querySelector('.column-scrollbar-width');
     const headerTable = columnStrip.querySelector('.rec-table');
     if (scrollWidth && headerTable) scrollWidth.style.width = headerTable.style.width;
+    syncColumnScrollbarWidth();
     scheduleGroupSumAlignment();
   }
 
@@ -436,16 +451,16 @@
   function renderColumnStrip(cols) {
     columnStrip.hidden = false;
     const tableWidth = getTableWidth(cols);
-    columnStrip.innerHTML = `<div class="column-scrollbar scroll-inner" tabindex="0"`
-      + ` aria-label="Scroll columns"><div class="column-scrollbar-width"`
-      + ` style="width:${tableWidth}px"></div></div>`
-      + `<div class="column-header-scroll scroll-inner"><table class="rec-table"`
+    columnStrip.innerHTML = `<div class="column-header-scroll scroll-inner"><table class="rec-table"`
       + ` style="width:${tableWidth}px">${buildColGroup(cols)}`
       + `<caption>Record columns</caption><thead><tr>`
       + `<th class="col-grip" aria-hidden="true"></th>`
       + cols.map(col => buildColumnFooter(col)).join('')
       + `<th class="col-actions" aria-hidden="true"></th>`
       + `</tr></thead></table></div>`;
+    columnScrollbar.hidden = false;
+    columnScrollbar.querySelector('.column-scrollbar-width').style.width = `${tableWidth}px`;
+    syncColumnScrollbarWidth();
   }
 
   function buildGroupSums(records, cols) {
@@ -1107,6 +1122,7 @@
       statsbar.classList.remove('visible');
       columnStrip.hidden = true;
       columnStrip.replaceChildren();
+      columnScrollbar.hidden = true;
       if (typeof salaryReanchorRefEditor === 'function') salaryReanchorRefEditor();
       return;
     }
@@ -1182,7 +1198,8 @@
       card.appendChild(body);
       content.appendChild(card);
     });
-    document.querySelectorAll('.scroll-inner').forEach(scroller => {
+    syncColumnScrollbarWidth();
+    groupedApp.querySelectorAll('.scroll-inner').forEach(scroller => {
       scroller.scrollLeft = sharedTableScrollLeft;
     });
     startPendingRowAnimations();
@@ -1413,23 +1430,23 @@
     if (Math.abs(scroller.scrollLeft - sharedTableScrollLeft) < 1) return;
     sharedTableScrollLeft = scroller.scrollLeft;
     syncingTableScroll = true;
-    content.querySelectorAll('.scroll-inner').forEach(other => {
+    groupedApp.querySelectorAll('.scroll-inner').forEach(other => {
       if (other !== scroller) other.scrollLeft = sharedTableScrollLeft;
     });
     syncingTableScroll = false;
     scheduleGroupSumAlignment();
   }
 
-  content.addEventListener('scroll', e => syncHorizontalScroll(e.target), true);
+  groupedApp.addEventListener('scroll', e => syncHorizontalScroll(e.target), true);
 
   // Shift+wheel and horizontal trackpad gestures scroll the shared strip from
   // anywhere in the widget, including the toolbar and group headers.
   document.addEventListener('wheel', e => {
-    if (!app.contains(e.target)) return;
+    if (!groupedApp.contains(e.target)) return;
     const delta = e.deltaX || (e.shiftKey ? e.deltaY : 0);
     if (!delta) return;
-    const stripScroller = columnStrip.querySelector('.column-scrollbar');
-    if (!stripScroller) return;
+    const stripScroller = columnScrollbar;
+    if (stripScroller.hidden) return;
     const unit = e.deltaMode === 1 ? 16
       : e.deltaMode === 2 ? stripScroller.clientWidth : 1;
     const previous = stripScroller.scrollLeft;

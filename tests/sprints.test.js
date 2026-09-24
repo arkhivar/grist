@@ -302,6 +302,8 @@ await test('D11: sums stay in the group header when expanded and collapsed', asy
   assert(!card.querySelector('tfoot .footer-aggregate'), 'sum remains in footer');
   assert(!card.querySelector('tfoot .column-name'), 'footer labels are still repeated');
   assert(doc.querySelector('#column-strip thead .column-name'), 'fixed column headers missing');
+  assert(doc.querySelector('#content + #column-scrollbar:not([hidden])'),
+    'the only horizontal scrollbar should sit below the scrolling view');
   assert(doc.querySelector('.toolbar #statsbar.visible'), 'record counts were not moved into the toolbar');
   assertEq(sum.textContent, '-2850', 'sum of -1425 + -1425');
   click(card.querySelector('.group-header'));
@@ -672,7 +674,7 @@ await test('J24: resized column width is saved to and restored from Grist option
     'column widths were not saved as a native options object');
   const savedWidth = widthSave[1].students;
   assert(Number.isFinite(savedWidth), 'saved students width is not numeric');
-  assertEq(doc.querySelector('#column-strip .column-scrollbar-width').style.width,
+  assertEq(doc.querySelector('#column-scrollbar .column-scrollbar-width').style.width,
     doc.querySelector('#column-strip .rec-table').style.width,
     'scrollbar width did not follow a column resize');
 
@@ -1040,16 +1042,20 @@ await test('M: header sums align to the fixed header, including after horizontal
     card.querySelector('.scroll-inner').dispatchEvent(new win.Event('scroll'));
     await new Promise(resolve => win.requestAnimationFrame(resolve));
     assertEq(sum.style.left, '180px', 'sum did not follow horizontal scroll');
-    assertEq(doc.querySelector('#column-strip .scroll-inner').scrollLeft, 120,
-      'fixed header did not follow group horizontal scroll');
+    const bottomScroll = doc.getElementById('column-scrollbar');
     const headerScroll = doc.querySelector('#column-strip .scroll-inner');
-    headerScroll.scrollLeft = 48;
-    headerScroll.dispatchEvent(new win.Event('scroll'));
+    assertEq(headerScroll.scrollLeft, 120,
+      'fixed header did not follow group horizontal scroll');
+    assertEq(bottomScroll.scrollLeft, 120, 'bottom scrollbar did not follow group horizontal scroll');
+    bottomScroll.scrollLeft = 48;
+    bottomScroll.dispatchEvent(new win.Event('scroll'));
+    assertEq(headerScroll.scrollLeft, 48, 'header did not follow the bottom scrollbar');
     assertEq(card.querySelector('.scroll-inner').scrollLeft, 48,
-      'group did not follow the fixed header scrollbar');
+      'group did not follow the bottom scrollbar');
     const horizontalWheel = new win.WheelEvent('wheel',
       { bubbles: true, cancelable: true, deltaX: 36 });
     card.querySelector('.scroll-inner').dispatchEvent(horizontalWheel);
+    assertEq(bottomScroll.scrollLeft, 84, 'horizontal row gesture did not move the bottom scrollbar');
     assertEq(headerScroll.scrollLeft, 84, 'horizontal row gesture did not move the header');
     assertEq(card.querySelector('.scroll-inner').scrollLeft, 84,
       'horizontal row gesture did not reveal the same columns');

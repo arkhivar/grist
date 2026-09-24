@@ -89,7 +89,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.33)
+## Current state (v7.34)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -118,11 +118,12 @@ payments.
 - Both widgets share one sticky column strip above the group cards. Column
   names, drag reordering, keyboard reordering, and resize handles live there;
   group footers keep only the add-row control. Horizontal scrolling and header
-  totals align with the strip. The strip holds the only visible horizontal
-  scrollbar above the labels; group tables follow it without extra horizontal
-  bars. Horizontal wheel and Shift+wheel gestures anywhere in the widget move
-  that scrollbar too, keeping offscreen columns reachable. The strip and group
-  cards align with the content edges. Counts sit in the toolbar.
+  totals align with the strip. The only visible horizontal scrollbar stays at
+  the bottom of the widget viewport; its width follows the header's usable
+  width, and group tables follow it without extra horizontal bars. Horizontal
+  wheel and Shift+wheel gestures anywhere in the widget move that scrollbar.
+  The strip and group cards align with the content edges. Counts sit in the
+  toolbar.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 61 checks, green.
