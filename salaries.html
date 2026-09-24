@@ -6,8 +6,8 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.39">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.39">
+  <link rel="stylesheet" href="shared/base.css?v=7.40">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.40">
 </head>
 <body>
 <div id="app">
@@ -66,6 +66,16 @@
       <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
       <button class="btn" id="btn-refresh-payments" type="button" title="Reload payments from Expenses">Refresh payments</button>
       <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
+      <button class="btn-icon" id="btn-columns" type="button"
+              aria-label="Show, hide, or move columns" title="Show, hide, or move columns"
+              aria-expanded="false" aria-controls="column-control">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <path d="M9 4v16M15 4v16M3 10h18"/>
+        </svg>
+      </button>
       <span class="version-badge" id="version-badge" title="Widget version"></span>
       <button class="btn-icon" id="btn-settings" type="button"
               aria-label="Display settings" aria-expanded="false" aria-controls="settings-panel">
@@ -130,6 +140,11 @@
     </div>
 
   </div>
+
+  <section class="column-control" id="column-control" aria-label="Columns" hidden>
+    <h2 class="column-control-title">Columns</h2>
+    <div class="column-control-list" id="column-control-list"></div>
+  </section>
 
   <main class="content" id="content" aria-label="Record groups">
     <div class="column-strip" id="column-strip" aria-label="Class columns" hidden></div>
@@ -221,11 +236,11 @@
   </div>
 </div>
 
-<script src="widgets/salaries/config.js?v=7.39"></script>
-<script src="shared/core.js?v=7.39"></script>
-<script src="widgets/salaries/expenses.js?v=7.39"></script>
-  <script src="widgets/sprints/app.js?v=7.39"></script>
-  <script src="widgets/sprints/actions.js?v=7.39"></script>
-  <script src="widgets/salaries/attendance.js?v=7.39"></script>
+<script src="widgets/salaries/config.js?v=7.40"></script>
+<script src="shared/core.js?v=7.40"></script>
+<script src="widgets/salaries/expenses.js?v=7.40"></script>
+  <script src="widgets/sprints/app.js?v=7.40"></script>
+  <script src="widgets/sprints/actions.js?v=7.40"></script>
+  <script src="widgets/salaries/attendance.js?v=7.40"></script>
 </body>
 </html>

@@ -5,6 +5,8 @@
       expandAll:       'Expand all',
       collapseAll:     'Collapse all',
       settingsLabel:   'Display settings',
+      columnsLabel:    'Show, hide, or move columns',
+      columnMoveHint:  'Drag to move; Alt+Up or Alt+Down to reorder',
       undo:            'Undo',
       redo:            'Redo',
       nothingToUndo:   'Nothing to undo',
@@ -18,8 +20,8 @@
       sectionBool:     'True / false display',
       sectionEditable: 'Editable fields',
       sectionColumns:  'Column layout',
-      columnLayoutHint: 'Drag footer columns to reorder. Drag a footer edge to resize; double-click the edge to reset that column.',
-      resetColumns:    'Reset widths & order',
+      columnLayoutHint: 'Use the Columns button to show, hide, or move fields. Drag a header edge to resize; double-click the edge to reset its width.',
+      resetColumns:    'Reset column layout',
       resizeColumn:    'Resize column',
       reorderColumn:   'Drag to reorder column',
       editableHint:    'Choose Text fields. Writable number and DateTime fields are enabled automatically.',
@@ -104,7 +106,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.39';
+  const WIDGET_VERSION = '7.40';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -156,6 +158,7 @@
   let writableColumnTypes = {};
   let columnTypes = {};
   let columnOrder = [];
+  let columnVisibility = {};
   let columnWidths = {};
   let editableColumns = new Set();
   let editableColumnsConfigured = false;
@@ -185,6 +188,9 @@
   const emptyState    = document.getElementById('empty-state');
   const settingsPanel = document.getElementById('settings-panel');
   const btnSettings   = document.getElementById('btn-settings');
+  const btnColumns    = document.getElementById('btn-columns');
+  const columnControl = document.getElementById('column-control');
+  const columnControlList = document.getElementById('column-control-list');
   const btnUndo       = document.getElementById('btn-undo');
   const btnRedo       = document.getElementById('btn-redo');
   const boolRow       = document.getElementById('bool-row');
@@ -221,6 +227,8 @@
     document.querySelector('label[for="group-select"]').textContent = T.groupBy;
     document.querySelector('label[for="sort-select"]').textContent  = T.sortBy;
     document.getElementById('btn-settings').setAttribute('aria-label', T.settingsLabel);
+    btnColumns.setAttribute('aria-label', T.columnsLabel);
+    btnColumns.title = T.columnsLabel;
     document.querySelector('.history-controls').setAttribute('aria-label', `${T.undo} / ${T.redo}`);
     document.querySelector('#group-select option').textContent      = T.chooseCol;
     const sortOpts = document.querySelectorAll('#sort-select option');

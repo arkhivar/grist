@@ -4,6 +4,7 @@
     btnSettings.classList.toggle('active', isOpen);
     btnSettings.setAttribute('aria-expanded', String(isOpen));
     if (isOpen) {
+      closeColumnControl();
       refreshBoolSection();
       refreshEditableColumnsSection();
       refreshDiag();
@@ -238,8 +239,10 @@
   btnResetColumns.addEventListener('click', () => {
     columnOrder = [...allColumns];
     columnWidths = {};
+    columnVisibility = {};
     sharedTableScrollLeft = 0;
     saveColumnLayout();
+    saveColumnVisibility();
     render();
   });
 
@@ -309,11 +312,16 @@
 
   function orderedDisplayColumns(groupCol) {
     reconcileColumnOrder();
+    return columnOrder.filter(col => isColumnVisible(col, groupCol));
+  }
+
+  function isColumnVisible(col, groupCol) {
     const config = typeof WIDGET_CONFIG === 'undefined' ? null : WIDGET_CONFIG;
-    const hidden = config?.hiddenDisplayColumns || [];
-    return columnOrder.filter(col => (allColumns.includes(col)
-      || (config?.receivedColumn && col === config.receivedColumn))
-      && !hidden.includes(col) && (config?.showGroupingColumn || col !== groupCol));
+    if (!allColumns.includes(col) && col !== config?.receivedColumn) return false;
+    if (Object.prototype.hasOwnProperty.call(columnVisibility, col)
+        && typeof columnVisibility[col] === 'boolean') return columnVisibility[col];
+    return !(config?.hiddenDisplayColumns || []).includes(col)
+      && (config?.showGroupingColumn || col !== groupCol);
   }
 
   function defaultColumnWidth(col) {
@@ -373,12 +381,22 @@
     return columnLayoutSaveQueue;
   }
 
+  let pendingColumnOrderSaves = 0;
   function saveColumnOrder() {
-    return queueColumnLayoutOption('columnOrder', columnOrder, 'Save column order');
+    pendingColumnOrderSaves++;
+    return queueColumnLayoutOption('columnOrder', columnOrder, 'Save column order')
+      .finally(() => { pendingColumnOrderSaves--; });
   }
 
   function saveColumnWidths() {
     return queueColumnLayoutOption('columnWidths', columnWidths, 'Save column widths');
+  }
+
+  let pendingColumnVisibilitySaves = 0;
+  function saveColumnVisibility() {
+    pendingColumnVisibilitySaves++;
+    return queueColumnLayoutOption('columnVisibility', columnVisibility, 'Save column visibility')
+      .finally(() => { pendingColumnVisibilitySaves--; });
   }
 
   function saveColumnLayout() {
@@ -797,7 +815,8 @@
           editableColumns = new Set();
         }
       }
-      if (Object.prototype.hasOwnProperty.call(opts, 'columnOrder')) {
+      if (Object.prototype.hasOwnProperty.call(opts, 'columnOrder')
+          && !pendingColumnOrderSaves) {
         try {
           const value = typeof opts.columnOrder === 'string'
             ? JSON.parse(opts.columnOrder)
@@ -807,6 +826,21 @@
             : [];
         } catch (_) {
           columnOrder = [];
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(opts, 'columnVisibility')
+          && !pendingColumnVisibilitySaves) {
+        try {
+          const value = typeof opts.columnVisibility === 'string'
+            ? JSON.parse(opts.columnVisibility) : opts.columnVisibility;
+          columnVisibility = {};
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            Object.entries(value).forEach(([col, visible]) => {
+              if (typeof visible === 'boolean') columnVisibility[col] = visible;
+            });
+          }
+        } catch (_) {
+          columnVisibility = {};
         }
       }
       if (Object.prototype.hasOwnProperty.call(opts, 'columnWidths')) {
@@ -1103,6 +1137,10 @@
 
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
+    if (!columnControl.hidden) {
+      renderColumnControlList();
+      positionColumnControl();
+    }
     const restoreNumberFocus = document.activeElement === cellEditorNumber;
     const numberSelection = [cellEditorNumber.selectionStart, cellEditorNumber.selectionEnd];
     refreshRowSortControls();
@@ -1185,7 +1223,7 @@
               aria-label="${group.records.length}\u00a0${group.records.length === 1 ? T.record : T.records}"
         >${group.records.length}</span>
         ${typeof salaryGroupTotalsHtml === 'function'
-          ? salaryGroupTotalsHtml(group) : buildGroupSums(group.records, displayCols)}`;
+          ? salaryGroupTotalsHtml(group, displayCols) : buildGroupSums(group.records, displayCols)}`;
 
       header.addEventListener('click', () => {
         if (collapsed.has(group.key)) {
@@ -1788,6 +1826,178 @@
     if (focus) focusSelectedCell();
     return true;
   }
+
+  function renderColumnControlList() {
+    if (columnControl.hidden) return;
+    reconcileColumnOrder();
+    const focused = columnControlList.contains(document.activeElement)
+      ? document.activeElement : null;
+    const focusedRow = focused?.closest('.column-control-row');
+    const focusColumn = focusedRow?.dataset.column;
+    const focusGrip = focused?.classList.contains('column-control-grip');
+    const scrollTop = columnControlList.scrollTop;
+    const groupCol = parseGroupBy(groupBy).col;
+    const columns = columnOrder.filter(col => allColumns.includes(col)
+      || col === (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.receivedColumn));
+    const visibleCount = columns.filter(col => isColumnVisible(col, groupCol)).length;
+    columnControlList.innerHTML = columns.length ? columns.map(col => {
+      const label = typeof salaryColumnLabel === 'function' ? salaryColumnLabel(col) : col;
+      const visible = isColumnVisible(col, groupCol);
+      return `<div class="column-control-row" data-column="${esc(col)}" data-visible="${visible}">`
+        + `<button class="column-control-grip" type="button" draggable="true"`
+        + ` aria-label="Move ${esc(label)}" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"`
+        + ` title="${esc(T.columnMoveHint)}">${gripIconHtml()}</button>`
+        + `<span class="column-control-name" title="${esc(col)}">${esc(label)}</span>`
+        + `<input class="column-control-toggle" type="checkbox"`
+        + ` aria-label="Show ${esc(label)}" ${visible ? 'checked' : ''}`
+        + ` ${visible && visibleCount === 1 ? 'disabled' : ''}></div>`;
+    }).join('') : '<div class="column-control-empty">Columns appear when records load.</div>';
+    columnControlList.scrollTop = scrollTop;
+    if (focusColumn) {
+      const row = [...columnControlList.querySelectorAll('.column-control-row')]
+        .find(item => item.dataset.column === focusColumn);
+      row?.querySelector(focusGrip ? '.column-control-grip' : '.column-control-toggle')
+        ?.focus({ preventScroll: true });
+    }
+  }
+
+  function positionColumnControl() {
+    if (columnControl.hidden) return;
+    const button = btnColumns.getBoundingClientRect();
+    const panel = columnControl.getBoundingClientRect();
+    const width = panel.width || 300;
+    const height = panel.height || 250;
+    columnControl.style.right = `${Math.max(8, Math.min(window.innerWidth - button.right,
+      window.innerWidth - width - 8))}px`;
+    columnControl.style.top = `${Math.max(8, Math.min(button.bottom + 5,
+      window.innerHeight - height - 8))}px`;
+  }
+
+  function closeColumnControl(restoreFocus = false) {
+    if (columnControl.hidden) return;
+    columnControl.hidden = true;
+    btnColumns.classList.remove('active');
+    btnColumns.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) btnColumns.focus({ preventScroll: true });
+  }
+
+  btnColumns.addEventListener('click', () => {
+    if (!columnControl.hidden) { closeColumnControl(); return; }
+    settingsPanel.classList.remove('open');
+    btnSettings.classList.remove('active');
+    btnSettings.setAttribute('aria-expanded', 'false');
+    columnControl.hidden = false;
+    btnColumns.classList.add('active');
+    btnColumns.setAttribute('aria-expanded', 'true');
+    renderColumnControlList();
+    positionColumnControl();
+  });
+
+  document.addEventListener('click', e => {
+    if (!columnControl.hidden && !columnControl.contains(e.target)
+        && !btnColumns.contains(e.target)) closeColumnControl();
+  });
+  document.addEventListener('keydown', e => {
+    if (!columnControl.hidden && e.key === 'Escape') {
+      e.preventDefault();
+      closeColumnControl(true);
+    }
+  });
+  window.addEventListener('resize', positionColumnControl);
+
+  columnControlList.addEventListener('change', e => {
+    const toggle = e.target.closest('.column-control-toggle');
+    if (!toggle) return;
+    const col = toggle.closest('.column-control-row')?.dataset.column;
+    if (!col) return;
+    const visible = toggle.checked;
+    const groupCol = parseGroupBy(groupBy).col;
+    if (!visible && orderedDisplayColumns(groupCol).length <= 1) {
+      toggle.checked = true;
+      return;
+    }
+    if (editingCell?.col === col) {
+      if (btnEditorSave.disabled) { toggle.checked = !visible; return; }
+      closeFieldEditor();
+    }
+    if (typeof salaryRefContext !== 'undefined' && salaryRefContext?.col === col)
+      closeSalaryRefEditor();
+    if (!visible && (selectedCell?.col === col || cellRangeEnd?.col === col)) {
+      selectedCell = null;
+      cellRangeEnd = null;
+    }
+    columnVisibility[col] = visible;
+    saveColumnVisibility();
+    render();
+  });
+
+  function moveColumnInControl(source, target, after) {
+    reconcileColumnOrder();
+    if (source === target || !columnOrder.includes(source) || !columnOrder.includes(target))
+      return false;
+    columnOrder.splice(columnOrder.indexOf(source), 1);
+    columnOrder.splice(columnOrder.indexOf(target) + (after ? 1 : 0), 0, source);
+    saveColumnOrder();
+    render();
+    return true;
+  }
+
+  let draggedControlColumn = null;
+  function clearColumnControlDrop() {
+    columnControlList.querySelectorAll('.dragging, .drop-before, .drop-after')
+      .forEach(row => row.classList.remove('dragging', 'drop-before', 'drop-after'));
+  }
+  columnControlList.addEventListener('dragstart', e => {
+    const grip = e.target.closest('.column-control-grip');
+    if (!grip) { e.preventDefault(); return; }
+    draggedControlColumn = grip.closest('.column-control-row')?.dataset.column || null;
+    if (!draggedControlColumn) { e.preventDefault(); return; }
+    grip.closest('.column-control-row').classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', draggedControlColumn);
+    }
+  });
+  columnControlList.addEventListener('dragover', e => {
+    const row = e.target.closest('.column-control-row');
+    if (!draggedControlColumn || !row || row.dataset.column === draggedControlColumn) return;
+    e.preventDefault();
+    columnControlList.querySelectorAll('.drop-before, .drop-after')
+      .forEach(item => item.classList.remove('drop-before', 'drop-after'));
+    const rect = row.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    row.classList.add(after ? 'drop-after' : 'drop-before');
+    row.dataset.dropAfter = String(after);
+  });
+  columnControlList.addEventListener('drop', e => {
+    const row = e.target.closest('.column-control-row');
+    if (!draggedControlColumn || !row) return;
+    e.preventDefault();
+    const source = draggedControlColumn;
+    draggedControlColumn = null;
+    const target = row.dataset.column;
+    const after = row.dataset.dropAfter === 'true';
+    clearColumnControlDrop();
+    moveColumnInControl(source, target, after);
+  });
+  columnControlList.addEventListener('dragend', () => {
+    draggedControlColumn = null;
+    clearColumnControlDrop();
+  });
+  columnControlList.addEventListener('keydown', e => {
+    const grip = e.target.closest('.column-control-grip');
+    if (!grip || !e.altKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    const col = grip.closest('.column-control-row')?.dataset.column;
+    const index = columnOrder.indexOf(col);
+    const target = columnOrder[index + (e.key === 'ArrowDown' ? 1 : -1)];
+    if (target && moveColumnInControl(col, target, e.key === 'ArrowDown')) {
+      const moved = [...columnControlList.querySelectorAll('.column-control-row')]
+        .find(row => row.dataset.column === col);
+      if (typeof moved?.scrollIntoView === 'function')
+        moved.scrollIntoView({ block: 'nearest' });
+    }
+  });
 
   function clearSelectedCell() {
     selectedCell = null;

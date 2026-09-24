@@ -1498,6 +1498,103 @@ await test('Q: fixed header supports saved keyboard reordering', async () => {
   assertEq(doc.activeElement.dataset.column, 'students', 'header focus was lost after reorder');
 });
 
+await test('R: toolbar column control hides, restores, and persists a column', async () => {
+  const button = doc.getElementById('btn-columns');
+  const panel = doc.getElementById('column-control');
+  assert(button && panel, 'toolbar column control is missing');
+  assert(panel.hidden, 'column control should start closed');
+  click(button);
+  assert(!panel.hidden, 'column control did not open');
+  assertEq(button.getAttribute('aria-expanded'), 'true', 'open control is not announced');
+  assert(!panel.querySelector('input[type="search"]'), 'column search was not requested');
+  assert(panel.querySelectorAll('.column-control-row').length >= 8,
+    'column control omits available fields');
+
+  const row = panel.querySelector('.column-control-row[data-column="count"]');
+  const toggle = row?.querySelector('.column-control-toggle');
+  assert(toggle && toggle.checked, 'count is not shown as enabled');
+  const saveCount = calls.setOption.length;
+  toggle.click();
+  await waitFor(() => calls.setOption.slice(saveCount).some(([key]) => key === 'columnVisibility'),
+    'column visibility save');
+  const saved = calls.setOption.slice(saveCount)
+    .find(([key]) => key === 'columnVisibility')[1];
+  assertEq(saved.count, false, 'hidden column was not persisted');
+  assert(!doc.querySelector('#column-strip th[data-column="count"]'),
+    'hidden column remains in fixed header');
+  assert(!doc.querySelector('.group-sum[data-column="count"]'),
+    'hidden numeric subtotal remains in group header');
+  assert(!doc.querySelector('td[data-cell-col="count"]'),
+    'hidden column remains in group rows');
+  assert(panel.querySelector('.column-control-row[data-column="count"]'),
+    'hidden column disappeared from the control');
+
+  onOptionsCb({ columnVisibility: saved }, { accessLevel: 'full' });
+  onRecordsCb(RECORDS);
+  assert(!doc.querySelector('#column-strip th[data-column="count"]'),
+    'saved hidden state did not survive Grist refresh');
+  const restore = panel.querySelector('.column-control-row[data-column="count"] .column-control-toggle');
+  assert(restore && !restore.checked, 'hidden switch is not off');
+  restore.click();
+  assert(doc.querySelector('#column-strip th[data-column="count"]'),
+    'restored column did not return to fixed header');
+  assert(doc.querySelector('.group-sum[data-column="count"]'),
+    'restored numeric subtotal did not return');
+  assert(doc.querySelector('td[data-cell-col="count"]'),
+    'restored column did not return to rows');
+  click(button);
+  assert(panel.hidden, 'second toolbar click did not close column control');
+  assertEq(button.getAttribute('aria-expanded'), 'false', 'closed control is still announced as open');
+});
+
+await test('R: hidden columns can be reordered with keyboard and drag grips', async () => {
+  const button = doc.getElementById('btn-columns');
+  const panel = doc.getElementById('column-control');
+  click(button);
+  const rowOrder = () => [...panel.querySelectorAll('.column-control-row')]
+    .map(row => row.dataset.column);
+  const before = rowOrder();
+  const index = before.indexOf('sprint');
+  assert(index > 0, 'the grouped sprint field is missing from column control');
+  assert(!panel.querySelector('.column-control-row[data-column="sprint"] .column-control-toggle').checked,
+    'grouped sprint field should start hidden');
+  const saveCount = calls.setOption.length;
+  const grip = panel.querySelector('.column-control-row[data-column="sprint"] .column-control-grip');
+  assert(grip, 'column moving grip is missing');
+  grip.focus();
+  grip.dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true,
+  }));
+  await waitFor(() => calls.setOption.slice(saveCount).some(([key]) => key === 'columnOrder'),
+    'hidden column order save');
+  const after = rowOrder();
+  assertEq(after[index - 1], 'sprint', 'hidden column did not move up');
+  assertEq(after[index], before[index - 1], 'adjacent column did not move down');
+  assert(!doc.querySelector('#column-strip th[data-column="sprint"]'),
+    'reordering exposed a hidden grouped field');
+  assertEq(doc.activeElement.closest('.column-control-row')?.dataset.column,
+    'sprint', 'keyboard moving grip lost focus');
+  const saved = calls.setOption.slice(saveCount).find(([key]) => key === 'columnOrder')[1];
+  assertEq(saved[index - 1], 'sprint', 'hidden reorder was not persisted');
+
+  const dragged = panel.querySelector('.column-control-row[data-column="sprint"] .column-control-grip');
+  const dropTarget = panel.querySelector(`.column-control-row[data-column="${before[index - 1]}"]`);
+  const dragSaveCount = calls.setOption.length;
+  dropTarget.getBoundingClientRect = () => ({ top: 10, height: 20 });
+  dragged.dispatchEvent(new win.Event('dragstart', { bubbles: true, cancelable: true }));
+  dropTarget.dispatchEvent(new win.MouseEvent('dragover', {
+    bubbles: true, cancelable: true, clientY: 25,
+  }));
+  dropTarget.dispatchEvent(new win.MouseEvent('drop', { bubbles: true, cancelable: true }));
+  await waitFor(() => calls.setOption.slice(dragSaveCount).some(([key]) => key === 'columnOrder'),
+    'grip drag order save');
+  assertEq(JSON.stringify(rowOrder()), JSON.stringify(before),
+    'dragging the grip did not restore the original order');
+  assert(!panel.querySelector('.column-control-row[data-column="sprint"] .column-control-toggle').checked,
+    'dragging toggled a hidden column');
+  click(button);
+});
+
 // ── Summary ──────────────────────────────────────────────────
 console.log(`===== ${passed} passed, ${failed} failed =====`);
 process.exitCode = failed ? 1 : 0;

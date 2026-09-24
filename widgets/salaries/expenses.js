@@ -34,7 +34,7 @@ function salaryAddPaymentGroups(groups) {
   }
 }
 
-function salaryGroupTotalsHtml(group) {
+function salaryGroupTotalsHtml(group, displayCols) {
   const wage = sumColumn(group.records, 'wage');
   const payments = salaryPaymentRowsFor(group.key);
   const received = payments.reduce((total, row) =>
@@ -44,13 +44,15 @@ function salaryGroupTotalsHtml(group) {
   const matched = salaryPaymentsLoaded && wage != null
     && Math.abs(Math.abs(wage) - received) < 0.005;
   return '<span class="group-sums">'
-    + `<span class="group-sum salary-income-sum" data-column="wage"`
+    + (displayCols.includes('wage') ? `<span class="group-sum salary-income-sum" data-column="wage"`
     + ` title="Class income: ${esc(incomeLabel)}" aria-label="Class income: ${esc(incomeLabel)}">${esc(incomeLabel)}</span>`
-    + `<span class="group-sum salary-received-sum${matched ? ' salary-matched' : ''}"`
+    : '')
+    + (displayCols.includes(WIDGET_CONFIG.receivedColumn)
+      ? `<span class="group-sum salary-received-sum${matched ? ' salary-matched' : ''}"`
     + ` data-column="${esc(WIDGET_CONFIG.receivedColumn)}"`
     + ` title="Salary received: ${esc(receivedLabel)}${matched ? ' · amounts match' : ''}"`
     + ` aria-label="Salary received: ${esc(receivedLabel)}${matched ? '; amounts match' : ''}">`
-    + `${esc(receivedLabel)}</span>`
+    + `${esc(receivedLabel)}</span>` : '')
     + '</span>';
 }
 

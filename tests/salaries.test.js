@@ -124,11 +124,56 @@ const refPills = (id, col) => [...doc.querySelectorAll(
 async function main() {
   // Grist delivers options, records, and metadata independently.
   onOptions({ sortMode: 'alpha-asc',
-    columnOrder: ['datetime', 'wage', 'salary_received', 'performance', 'group2'] },
+    columnOrder: ['datetime', 'wage', 'salary_received', 'performance', 'group2'],
+    columnVisibility: { salary_received: false } },
   { accessLevel: 'full' });
   onRecords(records);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
   await waitFor(() => doc.querySelector('[data-column="students"]'));
+  assert(!doc.querySelector('#column-strip th[data-column="salary_received"]'),
+    'visibility option delivered before records did not hide expenses');
+  assert(!month('August 2026').querySelector('.group-sum[data-column="salary_received"]'),
+    'hidden expenses subtotal still floats in the month header');
+  const columnsButton = doc.getElementById('btn-columns');
+  const columnsPanel = doc.getElementById('column-control');
+  assert(columnsButton && columnsPanel, 'salary toolbar column control is missing');
+  columnsButton.click();
+  assert(!columnsPanel.hidden && columnsButton.getAttribute('aria-expanded') === 'true',
+    'salary column control did not open');
+  assert(!columnsPanel.querySelector('input[type="search"]'), 'column search was not requested');
+  const receivedRow = () => columnsPanel.querySelector('.column-control-row[data-column="salary_received"]');
+  assert(receivedRow(), 'synthetic expenses column is missing from the control');
+  assert(receivedRow().textContent.includes('expenses'), 'synthetic column lacks its salary label');
+  assert.equal(receivedRow().querySelector('.column-control-toggle').checked, false);
+  const controlOrder = () => [...columnsPanel.querySelectorAll('.column-control-row')]
+    .map(row => row.dataset.column);
+  const beforeOrder = controlOrder();
+  const receivedPosition = beforeOrder.indexOf('salary_received');
+  assert(receivedPosition >= 0 && receivedPosition < beforeOrder.length - 1,
+    'hidden expenses column cannot be moved down');
+  const orderSaveCount = calls.options.length;
+  receivedRow().querySelector('.column-control-grip').dispatchEvent(new win.KeyboardEvent('keydown',
+    { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => calls.options.slice(orderSaveCount).some(([key]) => key === 'columnOrder'));
+  assert.equal(controlOrder()[receivedPosition + 1], 'salary_received',
+    'hidden expenses column did not move down');
+  assert(!doc.querySelector('#column-strip th[data-column="salary_received"]'),
+    'moving a hidden column made it visible');
+  const movedGrip = receivedRow().querySelector('.column-control-grip');
+  movedGrip.dispatchEvent(new win.KeyboardEvent('keydown',
+    { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }));
+  await waitFor(() => controlOrder()[receivedPosition] === 'salary_received');
+  const visibilitySaveCount = calls.options.length;
+  const receivedToggle = receivedRow().querySelector('.column-control-toggle');
+  receivedToggle.click();
+  await waitFor(() => calls.options.slice(visibilitySaveCount)
+    .some(([key, value]) => key === 'columnVisibility' && value.salary_received === true));
+  assert(doc.querySelector('#column-strip th[data-column="salary_received"]'),
+    'restored expenses column is absent from the fixed header');
+  assert(month('August 2026').querySelector('.group-sum[data-column="salary_received"]'),
+    'restored expenses subtotal is absent from the month header');
+  columnsButton.click();
+  assert(columnsPanel.hidden, 'salary column control did not close');
   assert.equal(calls.ready[0].requiredAccess, 'full');
   assert(calls.options.some(([key, value]) => key === 'groupBy' && value === 'datetime::month'));
   assert.equal(doc.getElementById('group-select').value, 'datetime::month');
