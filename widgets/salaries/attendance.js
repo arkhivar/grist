@@ -109,13 +109,13 @@ function renderSalaryRefOptions() {
   positionSalaryRefEditor();
 }
 
-async function salaryRefChoices(col) {
+async function salaryRefChoices(col, shared = null) {
   const refTable = String(columnTypes[col] || '').split(':')[1];
   if (!refTable) throw new Error(`Reference table is unknown for ${col}`);
   const [tables, columns, table] = await Promise.all([
-    grist.docApi.fetchTable('_grist_Tables'),
-    grist.docApi.fetchTable('_grist_Tables_column'),
-    grist.docApi.fetchTable(refTable),
+    shared?.tables || grist.docApi.fetchTable('_grist_Tables'),
+    shared?.columns || grist.docApi.fetchTable('_grist_Tables_column'),
+    shared?.table || grist.docApi.fetchTable(refTable),
   ]);
   const tableIndex = (tables.tableId || []).indexOf(selectedTableId);
   const tableRef = tables.id?.[tableIndex];
@@ -132,8 +132,23 @@ async function salaryRefChoices(col) {
       ? String(table[labelCol][index]) : String(id),
   }));
   choices.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
-  salaryRefLabels.set(col, new Map(choices.map(choice => [choice.id, choice.label])));
+  if (!shared?.isCurrent || shared.isCurrent())
+    salaryRefLabels.set(col, new Map(choices.map(choice => [choice.id, choice.label])));
   return choices;
+}
+
+async function salaryPreloadRefChoices(cols, isCurrent) {
+  if (!cols.length) return;
+  // Share fetches within this load; opening an editor still reads fresh choices.
+  const tables = grist.docApi.fetchTable('_grist_Tables');
+  const columns = grist.docApi.fetchTable('_grist_Tables_column');
+  const refTables = new Map();
+  await Promise.allSettled(cols.map(col => {
+    const tableId = String(columnTypes[col] || '').split(':')[1];
+    if (tableId && !refTables.has(tableId))
+      refTables.set(tableId, grist.docApi.fetchTable(tableId));
+    return salaryRefChoices(col, { tables, columns, table: refTables.get(tableId), isCurrent });
+  }));
 }
 
 async function openSalaryRefEditor(idStr, col, anchor) {

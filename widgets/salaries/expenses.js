@@ -221,7 +221,7 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
       throw new Error(`${sourceId}.group has no Attendance rows for this selection`);
     const refCols = Object.keys(columnTypes).filter(col =>
       columnTypes[col].startsWith('Ref:') || columnTypes[col].startsWith('RefList:'));
-    await Promise.allSettled(refCols.map(col => salaryRefChoices(col)));
+    await salaryPreloadRefChoices(refCols, () => request === salaryClassColumnsRequest);
     if (request !== salaryClassColumnsRequest) return;
     if (source && !salarySelectedTeacherIds.size) {
       const labels = salaryRefLabels.get('performance');
@@ -249,7 +249,7 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
   }
 }
 
-async function salaryRefreshPayments() {
+async function salaryRefreshPayments(alreadyRendered = false) {
   const request = ++salaryPaymentRequest;
   const classIds = new Set(allRecords.map(record => Number(record.id)));
   salaryPaymentsByMonth = new Map();
@@ -261,26 +261,28 @@ async function salaryRefreshPayments() {
     salaryRefreshButton.disabled = false;
     return;
   }
-  render();
+  if (!alreadyRendered) render();
 
   try {
     await getWritableColumnIds();
+    const teacherIds = new Set(salarySelectedTeacherIds);
     const [classes, expenses] = await Promise.all([
-      grist.docApi.fetchTable(selectedTableId),
+      teacherIds.size ? null : grist.docApi.fetchTable(selectedTableId),
       grist.docApi.fetchTable(WIDGET_CONFIG.expensesTableId),
     ]);
     if (request !== salaryPaymentRequest) return;
-    if (!Array.isArray(classes.id) || !Array.isArray(classes.performance))
-      throw new Error(`${selectedTableId}.performance is unavailable`);
     if (!Array.isArray(expenses.id) || !Array.isArray(expenses.performance)
         || !Array.isArray(expenses.date) || !Array.isArray(expenses.amount))
       throw new Error(`${WIDGET_CONFIG.expensesTableId} must have performance, date, and amount columns`);
 
-    const teacherIds = new Set(salarySelectedTeacherIds);
-    if (!teacherIds.size) classes.id.forEach((id, index) => {
-      if (classIds.has(Number(id)))
-        salaryReferenceIds(classes.performance[index]).forEach(teacherId => teacherIds.add(teacherId));
-    });
+    if (!teacherIds.size) {
+      if (!Array.isArray(classes.id) || !Array.isArray(classes.performance))
+        throw new Error(`${selectedTableId}.performance is unavailable`);
+      classes.id.forEach((id, index) => {
+        if (classIds.has(Number(id)))
+          salaryReferenceIds(classes.performance[index]).forEach(teacherId => teacherIds.add(teacherId));
+      });
+    }
     if (!teacherIds.size)
       throw new Error(`No Performance reference found in the selected ${selectedTableId} classes`);
 

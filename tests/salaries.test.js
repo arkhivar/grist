@@ -26,7 +26,7 @@ const doc = win.document;
 let onOptions;
 let onRecords;
 let selectedSourceId = 'All_att_summary_performance';
-const calls = { ready: [], options: [], updates: [] };
+const calls = { ready: [], options: [], updates: [], fetches: [] };
 let summary = { id: [91, 92, 93, 94], performance: [7, 8, 7, 7], group: [
   ['L', 1, 2, 3], ['L', 6], ['L', 4], ['L', 5],
 ] };
@@ -71,6 +71,7 @@ win.grist = {
     });
     return { retValues: [] };
   }, fetchTable: async name => {
+    calls.fetches.push(name);
     if (name === '_grist_Tables')
       return { id: [1, 2, 3, 4, 5], tableId: ['All_att', 'FolksBase', 'Performance', 'Groups', 'All_att_summary_performance'] };
     if (name === '_grist_Tables_column')
@@ -130,6 +131,18 @@ async function main() {
   onRecords(records);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
   await waitFor(() => doc.querySelector('[data-column="students"]'));
+  const firstLoadFetches = name => calls.fetches.filter(table => table === name).length;
+  assert(firstLoadFetches('_grist_Tables') <= 2,
+    'reference preload repeats table metadata fetches');
+  assert(firstLoadFetches('_grist_Tables_column') <= 2,
+    'reference preload repeats column metadata fetches');
+  for (const table of ['Groups', 'Performance', 'FolksBase'])
+    assert.equal(firstLoadFetches(table), 1,
+      `${table} reference labels should be fetched only once during initial load`);
+  assert.equal(firstLoadFetches('All_att'), 1,
+    'known summary teacher IDs should not require a second Attendance fetch for payments');
+  assert.deepEqual(refPills(1, 'group3'), ['Relentless', 'North, <Team>'],
+    'deduplicated reference preload lost Reference List labels');
   assert(!doc.querySelector('#column-strip th[data-column="salary_received"]'),
     'visibility option delivered before records did not hide expenses');
   assert(!month('August 2026').querySelector('.group-sum[data-column="salary_received"]'),
@@ -478,6 +491,12 @@ async function main() {
   onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
   assert(month('August 2026').querySelector('[data-expense-id="13"]'));
+  const beforeDirectClassFetches = calls.fetches.filter(name => name === 'All_att').length;
+  onRecords([{ id: 6, performance: 'TR' }]);
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment'
+    && doc.querySelector('[data-cell-id="6"][data-cell-col="students"]'));
+  assert.equal(calls.fetches.filter(name => name === 'All_att').length - beforeDirectClassFetches, 2,
+    'direct class selection needs an Attendance fetch to infer the teacher for payments');
   console.log('PASS salaries: complete Attendance columns, editing, linked payments, VLAT months, refresh, cache keys');
   win.close();
 }

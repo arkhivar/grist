@@ -89,7 +89,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.41)
+## Current state (v7.42)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -135,6 +135,11 @@ payments.
   wheel and Shift+wheel gestures anywhere in the widget move that scrollbar.
   The strip and group cards align with the content edges. Counts sit in the
   toolbar.
+- Automatic column widths are measured once per render and date group labels
+  once per distinct bucket. Salary reference labels share metadata and target
+  table fetches within one selection, while editor choices remain fresh.
+  Payment loading skips a second `All_att` fetch when the selected summary
+  already identifies the teacher and avoids an immediate duplicate render.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 65 checks, green.

@@ -284,6 +284,7 @@
   const MAX_COLUMN_WIDTH = 520;
   const SELECT_COLUMN_WIDTH = 46;
   const ACTIONS_COLUMN_WIDTH = 66;
+  const automaticColumnWidths = new Map();
   let sharedTableScrollLeft = 0;
   let syncingTableScroll = false;
   let draggedColumn = null;
@@ -351,9 +352,10 @@
 
   function getColumnWidth(col) {
     const saved = Number(columnWidths[col]);
-    return Number.isFinite(saved)
-      ? clampColumnWidth(saved)
-      : defaultColumnWidth(col);
+    if (Number.isFinite(saved)) return clampColumnWidth(saved);
+    if (!automaticColumnWidths.has(col))
+      automaticColumnWidths.set(col, defaultColumnWidth(col));
+    return automaticColumnWidths.get(col);
   }
 
   function getTableWidth(cols) {
@@ -905,7 +907,8 @@
     if (settingsPanel.classList.contains('open')) refreshEditableColumnsSection();
     if (settingsPanel.classList.contains('open')) refreshDiag();
     render();
-    if (refreshSalaryPayments && typeof salaryRefreshPayments === 'function') salaryRefreshPayments();
+    // The class view is already current; payment loading only needs its final render.
+    if (refreshSalaryPayments && typeof salaryRefreshPayments === 'function') salaryRefreshPayments(true);
   }
 
   grist.onRecords((records) => {
@@ -1102,7 +1105,7 @@
             ? dateTimeWallDate(sec).getTime() / 1000 : sec;
           const ms = bucketStartMs(calendarSec, granularity);
           key     = String(ms);               // the key carries the bucket epoch
-          label   = bucketLabel(ms, granularity);
+          label   = null; // Format once when this bucket is first created.
           sortKey = ms;
           writeValue = raw;
         }
@@ -1111,9 +1114,13 @@
         if (isDateTimeColumnType(columnTypes[col]) && parseDateValueSec(raw) != null)
           label = formatDateTimeSec(parseDateValueSec(raw));
       }
-      if (!map.has(key))
-        map.set(key, { key, label, sortKey, writeValue, records: [] });
-      map.get(key).records.push(rec);
+      let group = map.get(key);
+      if (!group) {
+        if (dateMode && sortKey != null) label = bucketLabel(sortKey, granularity);
+        group = { key, label, sortKey, writeValue, records: [] };
+        map.set(key, group);
+      }
+      group.records.push(rec);
     });
     if (typeof salaryAddPaymentGroups === 'function') salaryAddPaymentGroups(map);
     const groups = Array.from(map.values());
@@ -1137,6 +1144,7 @@
 
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
+    automaticColumnWidths.clear();
     if (!columnControl.hidden) {
       renderColumnControlList();
       positionColumnControl();
