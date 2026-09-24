@@ -6,8 +6,8 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.35">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.35">
+  <link rel="stylesheet" href="shared/base.css?v=7.36">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.36">
 </head>
 <body>
 <div id="app">
@@ -213,9 +213,9 @@
   <button type="button" role="menuitem" tabindex="-1" class="row-command-danger" data-row-command="delete"><span aria-hidden="true">×</span><span class="row-command-label">Delete rows</span></button>
 </div>
 
-<div id="salary-ref-editor" class="salary-ref-editor" role="dialog" aria-label="Edit reference" hidden>
-  <input id="salary-ref-search" type="search" autocomplete="off" placeholder="Search records…" aria-label="Search reference records">
-  <div id="salary-ref-options" class="salary-ref-options" role="listbox"></div>
+<div id="salary-ref-editor" class="salary-ref-editor ref-picker" role="dialog" aria-label="Edit reference" hidden>
+  <input id="salary-ref-search" class="ref-picker-search" type="search" autocomplete="off" placeholder="Search records…" aria-label="Search reference records">
+  <div id="salary-ref-options" class="salary-ref-options ref-picker-options" role="listbox"></div>
   <div class="salary-ref-footer">
     <span id="salary-ref-status" role="status"></span>
     <button id="salary-ref-clear" type="button" class="btn">Clear</button>
@@ -223,11 +223,11 @@
   </div>
 </div>
 
-<script src="widgets/salaries/config.js?v=7.35"></script>
-<script src="shared/core.js?v=7.35"></script>
-<script src="widgets/salaries/expenses.js?v=7.35"></script>
-  <script src="widgets/sprints/app.js?v=7.35"></script>
-  <script src="widgets/sprints/actions.js?v=7.35"></script>
-  <script src="widgets/salaries/attendance.js?v=7.35"></script>
+<script src="widgets/salaries/config.js?v=7.36"></script>
+<script src="shared/core.js?v=7.36"></script>
+<script src="widgets/salaries/expenses.js?v=7.36"></script>
+  <script src="widgets/sprints/app.js?v=7.36"></script>
+  <script src="widgets/sprints/actions.js?v=7.36"></script>
+  <script src="widgets/salaries/attendance.js?v=7.36"></script>
 </body>
 </html>

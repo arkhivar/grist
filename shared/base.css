@@ -68,6 +68,24 @@
     }
     .row-context-menu .row-command-danger { color: #b91c1c; }
 
+    /* Reference pickers keep native controls in the widget's light palette. */
+    .ref-picker, .ref-picker-search, .ref-picker-options { color-scheme: light; }
+    .ref-picker-search {
+      background: var(--surface); color: var(--text); caret-color: var(--text);
+    }
+    .ref-picker-search::placeholder { color: var(--muted); opacity: 1; }
+    .ref-picker-options {
+      background: var(--surface);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) var(--surface);
+    }
+    .ref-picker-options::-webkit-scrollbar { width: 8px; }
+    .ref-picker-options::-webkit-scrollbar-track { background: var(--surface); }
+    .ref-picker-options::-webkit-scrollbar-thumb {
+      background: var(--border-strong); border-radius: 4px;
+    }
+    .ref-picker-options::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
     /* ── Toolbar ── */
     .toolbar {
       display: flex;
