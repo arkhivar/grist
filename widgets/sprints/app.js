@@ -397,6 +397,9 @@
       table.style.width =
         `${SELECT_COLUMN_WIDTH + ACTIONS_COLUMN_WIDTH + dataWidth}px`;
     });
+    const scrollWidth = columnStrip.querySelector('.column-scrollbar-width');
+    const headerTable = columnStrip.querySelector('.rec-table');
+    if (scrollWidth && headerTable) scrollWidth.style.width = headerTable.style.width;
     scheduleGroupSumAlignment();
   }
 
@@ -432,8 +435,12 @@
 
   function renderColumnStrip(cols) {
     columnStrip.hidden = false;
-    columnStrip.innerHTML = `<div class="scroll-inner" tabindex="0"><table class="rec-table"`
-      + ` style="width:${getTableWidth(cols)}px">${buildColGroup(cols)}`
+    const tableWidth = getTableWidth(cols);
+    columnStrip.innerHTML = `<div class="column-scrollbar scroll-inner" tabindex="0"`
+      + ` aria-label="Scroll columns"><div class="column-scrollbar-width"`
+      + ` style="width:${tableWidth}px"></div></div>`
+      + `<div class="column-header-scroll scroll-inner"><table class="rec-table"`
+      + ` style="width:${tableWidth}px">${buildColGroup(cols)}`
       + `<caption>Record columns</caption><thead><tr>`
       + `<th class="col-grip" aria-hidden="true"></th>`
       + cols.map(col => buildColumnFooter(col)).join('')
@@ -1400,8 +1407,7 @@
     moveColumn(th.dataset.column, display[targetIndex], e.key === 'ArrowRight');
   });
 
-  content.addEventListener('scroll', (e) => {
-    const scroller = e.target;
+  function syncHorizontalScroll(scroller) {
     if (!scroller.classList || !scroller.classList.contains('scroll-inner')) return;
     if (syncingTableScroll) return;
     if (Math.abs(scroller.scrollLeft - sharedTableScrollLeft) < 1) return;
@@ -1412,7 +1418,26 @@
     });
     syncingTableScroll = false;
     scheduleGroupSumAlignment();
-  }, true);
+  }
+
+  content.addEventListener('scroll', e => syncHorizontalScroll(e.target), true);
+
+  // Shift+wheel and horizontal trackpad gestures scroll the shared strip from
+  // anywhere in the widget, including the toolbar and group headers.
+  document.addEventListener('wheel', e => {
+    if (!app.contains(e.target)) return;
+    const delta = e.deltaX || (e.shiftKey ? e.deltaY : 0);
+    if (!delta) return;
+    const stripScroller = columnStrip.querySelector('.column-scrollbar');
+    if (!stripScroller) return;
+    const unit = e.deltaMode === 1 ? 16
+      : e.deltaMode === 2 ? stripScroller.clientWidth : 1;
+    const previous = stripScroller.scrollLeft;
+    stripScroller.scrollLeft += delta * unit;
+    if (Math.abs(stripScroller.scrollLeft - previous) < 1) return;
+    e.preventDefault();
+    syncHorizontalScroll(stripScroller);
+  }, { passive: false, capture: true });
 
   // Per-row actions cell: duplicate ⧉ / delete ✕
   // (always visible, dimmed at rest; full opacity on hover / focus).

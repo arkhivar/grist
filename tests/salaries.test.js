@@ -136,6 +136,11 @@ async function main() {
   const headers = [...doc.querySelectorAll('#column-strip thead th[data-column]')]
     .map(cell => cell.dataset.column);
   assert(doc.querySelector('.toolbar #statsbar.visible'), 'salary counts were not moved into the toolbar');
+  assert(doc.querySelector('#column-strip > .column-scrollbar + .column-header-scroll'),
+    'the scrollbar should have its own track above the column labels');
+  assert.equal(doc.querySelector('#column-strip .column-scrollbar-width').style.width,
+    doc.querySelector('#column-strip .rec-table').style.width,
+    'the salary scrollbar does not cover every displayed column');
   assert.equal(doc.querySelectorAll('.group tfoot .column-name').length, 0,
     'month cards still repeat column headers');
   assert(doc.querySelector('#column-strip .column-resize-handle[aria-label="Resize column datetime"]'),
@@ -287,6 +292,10 @@ async function main() {
   headerScroll.scrollLeft = 24;
   headerScroll.dispatchEvent(new win.Event('scroll'));
   assert.equal(classScroll.scrollLeft, 24, 'salary month does not track the header scrollbar');
+  doc.querySelector('.toolbar').dispatchEvent(new win.WheelEvent('wheel',
+    { bubbles: true, cancelable: true, shiftKey: true, deltaY: 40 }));
+  assert.equal(headerScroll.scrollLeft, 64, 'Shift+wheel over the toolbar cannot reveal columns');
+  assert.equal(classScroll.scrollLeft, 64, 'salary rows did not follow Shift+wheel over the toolbar');
   assert.equal(expenseGrip(13).getAttribute('aria-pressed'), 'false', 'teacher change leaves no stale selection');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);
   const fetchTable = win.grist.docApi.fetchTable;

@@ -672,6 +672,9 @@ await test('J24: resized column width is saved to and restored from Grist option
     'column widths were not saved as a native options object');
   const savedWidth = widthSave[1].students;
   assert(Number.isFinite(savedWidth), 'saved students width is not numeric');
+  assertEq(doc.querySelector('#column-strip .column-scrollbar-width').style.width,
+    doc.querySelector('#column-strip .rec-table').style.width,
+    'scrollbar width did not follow a column resize');
 
   onOptionsCb({ columnWidths: { students: savedWidth } }, { accessLevel: 'full' });
   await waitFor(
@@ -1044,6 +1047,13 @@ await test('M: header sums align to the fixed header, including after horizontal
     headerScroll.dispatchEvent(new win.Event('scroll'));
     assertEq(card.querySelector('.scroll-inner').scrollLeft, 48,
       'group did not follow the fixed header scrollbar');
+    const horizontalWheel = new win.WheelEvent('wheel',
+      { bubbles: true, cancelable: true, deltaX: 36 });
+    card.querySelector('.scroll-inner').dispatchEvent(horizontalWheel);
+    assertEq(headerScroll.scrollLeft, 84, 'horizontal row gesture did not move the header');
+    assertEq(card.querySelector('.scroll-inner').scrollLeft, 84,
+      'horizontal row gesture did not reveal the same columns');
+    assert(horizontalWheel.defaultPrevented, 'horizontal row gesture should not scroll the page');
   } finally {
     header.getBoundingClientRect = originalHeaderRect;
     footer.getBoundingClientRect = originalFooterRect;
