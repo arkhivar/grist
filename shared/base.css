@@ -239,9 +239,10 @@
     }
     .column-strip .rec-table thead th.column-header:active { cursor: grabbing; }
     .column-strip .column-name { padding-right: 8px; }
-    .column-strip .column-resize-handle { right: -6px; width: 12px; }
+    .column-strip .column-resize-handle { right: -7px; width: 12px; }
     .column-strip .column-resize-handle::after {
-      top: 4px; bottom: 4px; left: 5px; width: 2px;
+      top: 4px; bottom: 4px; left: 50%; width: 2px;
+      transform: translateX(-50%);
       background: var(--border-strong);
     }
     .column-strip .column-resize-handle:hover::after,
