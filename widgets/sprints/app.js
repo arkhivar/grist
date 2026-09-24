@@ -454,7 +454,12 @@
     columnStrip.innerHTML = `<div class="column-header-scroll scroll-inner"><table class="rec-table"`
       + ` style="width:${tableWidth}px">${buildColGroup(cols)}`
       + `<caption>Record columns</caption><thead><tr>`
-      + `<th class="col-grip" aria-hidden="true"></th>`
+      + `<th scope="col" class="col-grip"><button id="btn-toggle-groups"`
+      + ` class="group-toggle-all" type="button" aria-label="${esc(T.collapseAll)}"`
+      + ` title="${esc(T.collapseAll)}"><svg viewBox="0 0 24 24" fill="none"`
+      + ` stroke="currentColor" stroke-width="2" stroke-linecap="round"`
+      + ` stroke-linejoin="round" aria-hidden="true" focusable="false">`
+      + `<path d="m5 10 7-6 7 6M5 18l7-6 7 6"/></svg></button></th>`
       + cols.map(col => buildColumnFooter(col)).join('')
       + `<th class="col-actions" aria-hidden="true"></th>`
       + `</tr></thead></table></div>`;
@@ -1007,20 +1012,32 @@
     });
   }
 
-  document.getElementById('btn-expand').addEventListener('click', () => {
-    collapsed.clear();
-    document.querySelectorAll('.group.collapsed').forEach(el => {
-      el.classList.remove('collapsed');
-      el.querySelector('.group-header').setAttribute('aria-expanded', 'true');
-    });
-  });
+  function syncGroupToggle() {
+    const button = columnStrip.querySelector('#btn-toggle-groups');
+    if (!button) return;
+    const cards = [...content.querySelectorAll('.group')];
+    const allCollapsed = cards.length > 0 && cards.every(card => card.classList.contains('collapsed'));
+    const label = allCollapsed ? T.expandAll : T.collapseAll;
+    button.disabled = cards.length === 0;
+    button.classList.toggle('all-collapsed', allCollapsed);
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
 
-  document.getElementById('btn-collapse').addEventListener('click', () => {
-    getGroups().forEach(g => collapsed.add(g.key));
-    document.querySelectorAll('.group:not(.collapsed)').forEach(el => {
-      el.classList.add('collapsed');
-      el.querySelector('.group-header').setAttribute('aria-expanded', 'false');
+  columnStrip.addEventListener('click', (event) => {
+    const button = event.target.closest('#btn-toggle-groups');
+    if (!button || !columnStrip.contains(button)) return;
+    const cards = [...content.querySelectorAll('.group')];
+    if (!cards.length) return;
+    const expand = cards.every(card => card.classList.contains('collapsed'));
+    if (expand) collapsed.clear();
+    else getGroups().forEach(group => collapsed.add(group.key));
+    cards.forEach(card => {
+      card.classList.toggle('collapsed', !expand);
+      card.querySelector('.group-header').setAttribute('aria-expanded', String(expand));
     });
+    syncGroupToggle();
+    refreshCellRange();
   });
 
   // ── 13. Grouping ────────────────────────────────────────
@@ -1090,7 +1107,8 @@
       && document.activeElement.closest('td.data-cell');
     const focusedHeader = columnStrip.contains(document.activeElement)
       ? { col: document.activeElement.closest('th[data-column]')?.dataset.column,
-        resize: document.activeElement.classList.contains('column-resize-handle') }
+        resize: document.activeElement.classList.contains('column-resize-handle'),
+        toggle: document.activeElement.id === 'btn-toggle-groups' }
       : null;
     Array.from(content.children).forEach(c => {
       if (c.id !== 'empty-state' && c.id !== 'column-strip') c.remove();
@@ -1181,6 +1199,7 @@
           header.setAttribute('aria-expanded', 'false');
         }
         refreshCellRange();
+        syncGroupToggle();
       });
 
       const body = document.createElement('div');
@@ -1198,6 +1217,7 @@
       card.appendChild(body);
       content.appendChild(card);
     });
+    syncGroupToggle();
     syncColumnScrollbarWidth();
     groupedApp.querySelectorAll('.scroll-inner').forEach(scroller => {
       scroller.scrollLeft = sharedTableScrollLeft;
@@ -1214,7 +1234,9 @@
         }
       } else if (!btnEditorSave.disabled) closeFieldEditor();
     } else if (restoreCellFocus) focusSelectedCell();
-    if (focusedHeader?.col) {
+    if (focusedHeader?.toggle) {
+      columnStrip.querySelector('#btn-toggle-groups')?.focus({ preventScroll: true });
+    } else if (focusedHeader?.col) {
       const header = [...columnStrip.querySelectorAll('th[data-column]')]
         .find(cell => cell.dataset.column === focusedHeader.col);
       (focusedHeader.resize ? header?.querySelector('.column-resize-handle') : header)

@@ -290,6 +290,43 @@ async function main() {
   assert.equal(doc.getElementById('stat-records').textContent, '3');
   assert(doc.getElementById('statsbar').textContent.includes('classes'));
 
+  const groupToggle = () => doc.querySelector('#column-strip th.col-grip #btn-toggle-groups');
+  assert(!doc.getElementById('btn-expand') && !doc.getElementById('btn-collapse'),
+    'obsolete toolbar expand/collapse buttons remain');
+  assert(groupToggle(), 'group toggle is missing from the fixed header grip cell');
+  assert(cards().every(card => !card.classList.contains('collapsed')),
+    'salary groups should start open');
+  assert.equal(groupToggle().getAttribute('aria-label'), 'Collapse all');
+  assert.equal(groupToggle().title, 'Collapse all');
+  try {
+    groupToggle().click();
+    assert(cards().every(card => card.classList.contains('collapsed')),
+      'salary toggle did not collapse every month');
+    assert(cards().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'false'),
+      'collapsed months still announce expanded bodies');
+    assert.equal(groupToggle().getAttribute('aria-label'), 'Expand all');
+    assert.equal(groupToggle().title, 'Expand all');
+    groupToggle().click();
+    assert(cards().every(card => !card.classList.contains('collapsed')),
+      'salary toggle did not expand every month');
+    assert(cards().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'true'),
+      'expanded months still announce collapsed bodies');
+    month('August 2026').querySelector('.group-header').click();
+    assert(cards().some(card => card.classList.contains('collapsed'))
+      && cards().some(card => !card.classList.contains('collapsed')),
+    'individual month header did not create mixed state');
+    assert.equal(groupToggle().getAttribute('aria-label'), 'Collapse all',
+      'mixed-state toggle should offer to collapse all');
+    groupToggle().click();
+    assert(cards().every(card => card.classList.contains('collapsed')),
+      'mixed-state toggle did not collapse the remaining open months');
+  } finally {
+    cards().filter(card => card.classList.contains('collapsed'))
+      .forEach(card => card.querySelector('.group-header').click());
+  }
+  assert(cards().every(card => !card.classList.contains('collapsed')),
+    'toggle check left salary months collapsed');
+
   const header = month('August 2026').querySelector('.group-header');
   header.click();
   assert.equal(header.getAttribute('aria-expanded'), 'false');

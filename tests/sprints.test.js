@@ -362,6 +362,41 @@ await test('D11: sums stay in the group header when expanded and collapsed', asy
   click(card.querySelector('.group-header'));
 });
 
+await test('D11a: one fixed-strip toggle collapses or expands every group', async () => {
+  const groups = () => [...doc.querySelectorAll('.group')];
+  const toggle = () => doc.querySelector('#column-strip th.col-grip #btn-toggle-groups');
+  assert(groups().length > 1, 'the toggle needs multiple groups to exercise mixed state');
+  assert(!doc.getElementById('btn-expand') && !doc.getElementById('btn-collapse'),
+    'obsolete toolbar expand/collapse buttons remain');
+  assert(toggle(), 'group toggle is missing from the fixed header grip cell');
+  assert(groups().every(card => !card.classList.contains('collapsed')), 'groups should start open');
+  assertEq(toggle().getAttribute('aria-label'), 'Collapse all', 'initial toggle action');
+  assertEq(toggle().title, 'Collapse all', 'initial toggle tooltip');
+  try {
+    click(toggle());
+    assert(groups().every(card => card.classList.contains('collapsed')), 'toggle did not collapse all groups');
+    assert(groups().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'false'),
+      'collapsed groups still announce expanded bodies');
+    assertEq(toggle().getAttribute('aria-label'), 'Expand all', 'collapsed toggle action');
+    assertEq(toggle().title, 'Expand all', 'collapsed toggle tooltip');
+    click(toggle());
+    assert(groups().every(card => !card.classList.contains('collapsed')), 'toggle did not expand all groups');
+    assert(groups().every(card => card.querySelector('.group-header').getAttribute('aria-expanded') === 'true'),
+      'expanded groups still announce collapsed bodies');
+    click(groups()[0].querySelector('.group-header'));
+    assert(groups().some(card => card.classList.contains('collapsed'))
+      && groups().some(card => !card.classList.contains('collapsed')), 'individual header did not create mixed state');
+    assertEq(toggle().getAttribute('aria-label'), 'Collapse all', 'mixed-state toggle action');
+    click(toggle());
+    assert(groups().every(card => card.classList.contains('collapsed')),
+      'mixed-state toggle should collapse the remaining open groups');
+  } finally {
+    groups().filter(card => card.classList.contains('collapsed'))
+      .forEach(card => click(card.querySelector('.group-header')));
+  }
+  assert(groups().every(card => !card.classList.contains('collapsed')), 'test left groups collapsed');
+});
+
 await test('D12: group footer plus creates a row seeded with its group value', async () => {
   const card = [...doc.querySelectorAll('.group')]
     .find(c => c.dataset.groupLabel === 'Sprint 13');

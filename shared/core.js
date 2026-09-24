@@ -104,7 +104,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.36';
+  const WIDGET_VERSION = '7.37';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -220,8 +220,6 @@
   function applyI18nToDOM() {
     document.querySelector('label[for="group-select"]').textContent = T.groupBy;
     document.querySelector('label[for="sort-select"]').textContent  = T.sortBy;
-    document.getElementById('btn-expand').textContent               = T.expandAll;
-    document.getElementById('btn-collapse').textContent             = T.collapseAll;
     document.getElementById('btn-settings').setAttribute('aria-label', T.settingsLabel);
     document.querySelector('.history-controls').setAttribute('aria-label', `${T.undo} / ${T.redo}`);
     document.querySelector('#group-select option').textContent      = T.chooseCol;
