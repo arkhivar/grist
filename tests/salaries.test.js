@@ -135,7 +135,14 @@ async function main() {
   assert.deepEqual([...doc.querySelectorAll('#group-select option')].map(option => option.value), ['', 'datetime::month']);
   assert.equal(cards().length, 3);
   assert.equal(cards()[0].dataset.groupLabel, 'July 2026');
-  assert.equal(month('August 2026').querySelector('.group-badge').textContent, '2');
+  const augustHeader = month('August 2026').querySelector('.group-header');
+  const augustBadge = augustHeader.querySelector('.group-badge');
+  assert.equal(augustBadge.textContent, '2');
+  assert.equal(augustHeader.querySelector('.group-label').nextElementSibling, augustBadge,
+    'salary count should follow the month label');
+  assert.equal(augustBadge.nextElementSibling, augustHeader.querySelector('.group-sums'),
+    'salary count should precede the month totals');
+  assert.equal(augustBadge.getAttribute('aria-label'), '2\u00a0classes');
   const headers = [...doc.querySelectorAll('#column-strip thead th[data-column]')]
     .map(cell => cell.dataset.column);
   assert(doc.querySelector('.toolbar #statsbar.visible'), 'salary counts were not moved into the toolbar');
@@ -235,6 +242,8 @@ async function main() {
   assert.equal(month('July 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-50');
   assert(month('July 2026').querySelector('.salary-matched'));
   assert.equal(month('September 2026').querySelector('.group-badge').textContent, '0');
+  assert.equal(month('September 2026').querySelector('.group-badge').getAttribute('aria-label'),
+    '0\u00a0classes', 'payment-only month needs an accessible zero-class count');
   assert.equal(month('September 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '20');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 3);
   assert(!month('August 2026').querySelector('[data-expense-id="13"]'));

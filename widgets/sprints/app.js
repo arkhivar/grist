@@ -1181,10 +1181,10 @@
              aria-hidden="true" focusable="false">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
-        <span class="group-badge"
-              aria-label="${group.records.length}\u00a0${group.records.length > 1 ? T.records : T.record}"
-        >${group.records.length}</span>
         <span class="${labelCls}">${labelTxt}</span>
+        <span class="group-badge"
+              aria-label="${group.records.length}\u00a0${group.records.length === 1 ? T.record : T.records}"
+        >${group.records.length}</span>
         ${typeof salaryGroupTotalsHtml === 'function'
           ? salaryGroupTotalsHtml(group) : buildGroupSums(group.records, displayCols)}`;
 

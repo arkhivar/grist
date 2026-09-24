@@ -351,7 +351,7 @@
     .group.collapsed .chevron { transform: rotate(-90deg); }
 
     .group-label {
-      font-size: 13px; font-weight: 600; flex: 1; min-width: 0;
+      font-size: 13px; font-weight: 600; flex: 0 1 auto; min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .group-label.is-empty { font-weight: 400; font-style: italic; color: var(--muted); }

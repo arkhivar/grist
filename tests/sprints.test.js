@@ -347,6 +347,13 @@ await test('D11: sums stay in the group header when expanded and collapsed', asy
   assert(card, 'group "Sprint 13" not found');
   assert(!card.querySelector('thead'), 'column headers are repeated inside a group');
   assert(!card.querySelector('.group-select-grip'), 'obsolete group select-all grip is still present');
+  const header = card.querySelector('.group-header');
+  const label = header.querySelector('.group-label');
+  const badge = header.querySelector('.group-badge');
+  assertEq(label.nextElementSibling, badge, 'record count should follow the group label');
+  assertEq(badge.nextElementSibling, header.querySelector('.group-sums'),
+    'record count should precede the header totals');
+  assertEq(badge.getAttribute('aria-label'), '2\u00a0records', 'accessible group count');
   const sum = card.querySelector('.group-header .group-sum[data-column="count"]');
   assert(sum, 'numeric sum missing from group header');
   assert(!card.querySelector('tfoot .footer-aggregate'), 'sum remains in footer');
@@ -356,10 +363,12 @@ await test('D11: sums stay in the group header when expanded and collapsed', asy
     'the only horizontal scrollbar should sit below the scrolling view');
   assert(doc.querySelector('.toolbar #statsbar.visible'), 'record counts were not moved into the toolbar');
   assertEq(sum.textContent, '-2850', 'sum of -1425 + -1425');
-  click(card.querySelector('.group-header'));
+  click(badge);
   assert(card.classList.contains('collapsed'), 'group did not collapse');
+  assertEq(header.getAttribute('aria-expanded'), 'false', 'badge click did not update toggle state');
   assertEq(sum.textContent, '-2850', 'collapsed header sum');
-  click(card.querySelector('.group-header'));
+  click(badge);
+  assertEq(header.getAttribute('aria-expanded'), 'true', 'second badge click did not expand the group');
 });
 
 await test('D11a: one fixed-strip toggle collapses or expands every group', async () => {

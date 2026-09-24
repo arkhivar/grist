@@ -89,7 +89,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.37)
+## Current state (v7.38)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -119,6 +119,7 @@ payments.
   names, drag reordering, keyboard reordering, and resize handles live there;
   the grip header cell contains a single expand/collapse-all toggle. Its next
   action follows the visible groups, including mixed open and closed states.
+  Each group header puts its count after the group name, before aligned totals.
   Group footers keep only the add-row control. Horizontal scrolling and header
   totals align with the strip. The only visible horizontal scrollbar stays at
   the bottom of the widget viewport; its width follows the header's usable
