@@ -133,8 +133,13 @@ async function main() {
   assert.equal(cards().length, 3);
   assert.equal(cards()[0].dataset.groupLabel, 'July 2026');
   assert.equal(month('August 2026').querySelector('.group-badge').textContent, '2');
-  const headers = [...month('August 2026').querySelectorAll('tfoot th[data-column]')]
+  const headers = [...doc.querySelectorAll('#column-strip thead th[data-column]')]
     .map(cell => cell.dataset.column);
+  assert(doc.querySelector('.toolbar #statsbar.visible'), 'salary counts were not moved into the toolbar');
+  assert.equal(doc.querySelectorAll('.group tfoot .column-name').length, 0,
+    'month cards still repeat column headers');
+  assert(doc.querySelector('#column-strip .column-resize-handle[aria-label="Resize column datetime"]'),
+    'fixed header has no column resize control');
   assert(headers.includes('datetime'), 'monthly date is missing from the row columns');
   assert.deepEqual(headers.slice(0, 5),
     ['datetime', 'wage', 'salary_received', 'performance', 'group2'],
@@ -195,8 +200,8 @@ async function main() {
   await waitFor(() => doc.querySelector('[data-cell-id="1"][data-cell-col="performance"]')
     ?.textContent.includes('VP, TR'));
   assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
-  assert.equal(month('August 2026').querySelector('[data-column="wage"] .column-name').textContent, 'income');
-  assert.equal(month('August 2026').querySelector('[data-column="salary_received"] .column-name').textContent, 'expenses');
+  assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'income');
+  assert.equal(doc.querySelector('#column-strip [data-column="salary_received"] .column-name').textContent, 'expenses');
   assert(month('August 2026').querySelector('td[data-cell-col="datetime"]').textContent.includes('2026-08-01 00:30'));
   assert(!doc.getElementById('content').textContent.includes('D, '), 'encoded DateTime leaked into class cells');
   assert(!doc.getElementById('content').textContent.includes('L, '), 'encoded RefList leaked into class cells');
@@ -273,6 +278,11 @@ async function main() {
   onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
   assert(month('August 2026').querySelector('[data-expense-id="13"]'));
+  const classScroll = month('August 2026').querySelector('.scroll-inner');
+  classScroll.scrollLeft = 64;
+  classScroll.dispatchEvent(new win.Event('scroll'));
+  assert.equal(doc.querySelector('#column-strip .scroll-inner').scrollLeft, 64,
+    'salary header does not track a month table scroll');
   assert.equal(expenseGrip(13).getAttribute('aria-pressed'), 'false', 'teacher change leaves no stale selection');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);
   const fetchTable = win.grist.docApi.fetchTable;

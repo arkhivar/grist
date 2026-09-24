@@ -89,7 +89,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.29)
+## Current state (v7.30)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -115,6 +115,10 @@ payments.
   for local clock conversion; keep Date-only fields on their existing UTC path.
 - Sort groups and Sort rows are independent. Row sort is a persisted section
   option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
+- Both widgets share one sticky column strip above the group cards. Column
+  names, drag reordering, keyboard reordering, and resize handles live there;
+  group footers keep only the add-row control. Horizontal scrolling and header
+  totals align with the strip. Counts sit in the toolbar.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 60 checks, green.

@@ -6,7 +6,7 @@
   <title>Sprints — grouped view (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.29">
+  <link rel="stylesheet" href="shared/base.css?v=7.30">
 </head>
 <body>
 <div id="app">
@@ -78,6 +78,11 @@
         </svg>
       </button>
     </div>
+    <div class="statsbar" id="statsbar" role="status" aria-live="polite" aria-atomic="true">
+      <span><span class="stat-val" id="stat-groups">0</span> groups</span>
+      <span aria-hidden="true">·</span>
+      <span><span class="stat-val" id="stat-records">0</span> records</span>
+    </div>
   </header>
 
   <div class="settings-panel" id="settings-panel"
@@ -106,7 +111,7 @@
 
     <div>
       <p class="setting-section-title" id="lbl-column-layout">Column layout</p>
-      <p class="setting-help" id="column-layout-hint">Drag footer columns to reorder. Drag a footer edge to resize; double-click the edge to reset that column.</p>
+      <p class="setting-help" id="column-layout-hint">Drag columns in the top strip to reorder. Drag a column edge to resize; double-click the edge to reset its width.</p>
       <button class="btn" id="btn-reset-columns" type="button">Reset widths &amp; order</button>
     </div>
 
@@ -124,13 +129,8 @@
 
   </div>
 
-  <div class="statsbar" id="statsbar" role="status" aria-live="polite" aria-atomic="true">
-    <span><span class="stat-val" id="stat-groups">0</span> groups</span>
-    <span aria-hidden="true">·</span>
-    <span><span class="stat-val" id="stat-records">0</span> records</span>
-  </div>
-
   <main class="content" id="content" aria-label="Record groups">
+    <div class="column-strip" id="column-strip" aria-label="Record columns" hidden></div>
     <div class="empty" id="empty-state" role="status">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="1.2"
@@ -204,8 +204,8 @@
   <button type="button" role="menuitem" tabindex="-1" class="row-command-danger" data-row-command="delete"><span aria-hidden="true">×</span><span class="row-command-label">Delete rows</span></button>
 </div>
 
-<script src="shared/core.js?v=7.29"></script>
-  <script src="widgets/sprints/app.js?v=7.29"></script>
-  <script src="widgets/sprints/actions.js?v=7.29"></script>
+<script src="shared/core.js?v=7.30"></script>
+  <script src="widgets/sprints/app.js?v=7.30"></script>
+  <script src="widgets/sprints/actions.js?v=7.30"></script>
 </body>
 </html>

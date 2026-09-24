@@ -173,9 +173,9 @@ function cellEl(rowId, colName) {
   const row = doc.querySelector(`tr[data-record-id="${rowId}"]`);
   assert(row, `row for record ${rowId} not found`);
   const table = row.closest('table');
-  const footers = [...table.querySelectorAll('tfoot th[data-column]')];
-  const idx = footers.findIndex(th => th.dataset.column === colName);
-  assert(idx >= 0, `column "${colName}" not in table footer`);
+  const headers = [...doc.querySelectorAll('#column-strip thead th[data-column]')];
+  const idx = headers.findIndex(th => th.dataset.column === colName);
+  assert(idx >= 0, `column "${colName}" not in the fixed header`);
   return row.querySelectorAll('td')[idx + 1]; // +1: grip cell comes first
 }
 function cellText(rowId, colName) {
@@ -295,12 +295,14 @@ await test('D11: sums stay in the group header when expanded and collapsed', asy
   const card = [...doc.querySelectorAll('.group')]
     .find(c => c.dataset.groupLabel === 'Sprint 13');
   assert(card, 'group "Sprint 13" not found');
-  assert(!card.querySelector('thead'), 'obsolete table header is still present');
+  assert(!card.querySelector('thead'), 'column headers are repeated inside a group');
   assert(!card.querySelector('.group-select-grip'), 'obsolete group select-all grip is still present');
   const sum = card.querySelector('.group-header .group-sum[data-column="count"]');
   assert(sum, 'numeric sum missing from group header');
   assert(!card.querySelector('tfoot .footer-aggregate'), 'sum remains in footer');
-  assert(card.querySelector('tfoot .column-name'), 'footer labels missing');
+  assert(!card.querySelector('tfoot .column-name'), 'footer labels are still repeated');
+  assert(doc.querySelector('#column-strip thead .column-name'), 'fixed column headers missing');
+  assert(doc.querySelector('.toolbar #statsbar.visible'), 'record counts were not moved into the toolbar');
   assertEq(sum.textContent, '-2850', 'sum of -1425 + -1425');
   click(card.querySelector('.group-header'));
   assert(card.classList.contains('collapsed'), 'group did not collapse');
@@ -1015,10 +1017,10 @@ await test('M: empty picker and Today use the VLAT date across a UTC month bound
   }
 });
 
-await test('M: header sums align to the footer content edge, including after horizontal scrolling', async () => {
+await test('M: header sums align to the fixed header, including after horizontal scrolling', async () => {
   const card = cellEl(1, 'count').closest('.group');
   const header = card.querySelector('.group-header');
-  const footer = card.querySelector('th[data-column="count"]');
+  const footer = doc.querySelector('#column-strip th[data-column="count"]');
   const sum = card.querySelector('.group-sum[data-column="count"]');
   const originalHeaderRect = header.getBoundingClientRect;
   const originalFooterRect = footer.getBoundingClientRect;
@@ -1035,6 +1037,8 @@ await test('M: header sums align to the footer content edge, including after hor
     card.querySelector('.scroll-inner').dispatchEvent(new win.Event('scroll'));
     await new Promise(resolve => win.requestAnimationFrame(resolve));
     assertEq(sum.style.left, '180px', 'sum did not follow horizontal scroll');
+    assertEq(doc.querySelector('#column-strip .scroll-inner').scrollLeft, 120,
+      'fixed header did not follow group horizontal scroll');
   } finally {
     header.getBoundingClientRect = originalHeaderRect;
     footer.getBoundingClientRect = originalFooterRect;
@@ -1343,6 +1347,26 @@ await test('P: typing opens long text with the first character; second click pre
   openEditor(1, 'performance');
   assertEq(text.value, 'Hello\nworld', 'second click replaced existing text');
   click(doc.getElementById('btn-editor-cancel'));
+});
+
+await test('Q: fixed header supports saved keyboard reordering', async () => {
+  const strip = doc.getElementById('column-strip');
+  assert(!strip.hidden, 'fixed column strip is hidden');
+  const before = [...strip.querySelectorAll('th[data-column]')].map(th => th.dataset.column);
+  const index = before.indexOf('students');
+  assert(index >= 0 && index < before.length - 1, 'students has no next column');
+  const saveCount = calls.setOption.length;
+  const header = strip.querySelector('th[data-column="students"]');
+  header.focus();
+  header.dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'ArrowRight', altKey: true, bubbles: true, cancelable: true,
+  }));
+  await waitFor(() => calls.setOption.slice(saveCount).some(([key]) => key === 'columnOrder'),
+    'fixed header order save');
+  const after = [...strip.querySelectorAll('th[data-column]')].map(th => th.dataset.column);
+  assertEq(after[index], before[index + 1], 'next column did not move left');
+  assertEq(after[index + 1], 'students', 'students did not move right');
+  assertEq(doc.activeElement.dataset.column, 'students', 'header focus was lost after reorder');
 });
 
 // ── Summary ──────────────────────────────────────────────────

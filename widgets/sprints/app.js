@@ -430,6 +430,17 @@
       + ` aria-label="${esc(T.resizeColumn)} ${esc(col)}"></span></th>`;
   }
 
+  function renderColumnStrip(cols) {
+    columnStrip.hidden = false;
+    columnStrip.innerHTML = `<div class="scroll-inner" tabindex="0"><table class="rec-table"`
+      + ` style="width:${getTableWidth(cols)}px">${buildColGroup(cols)}`
+      + `<caption>Record columns</caption><thead><tr>`
+      + `<th class="col-grip" aria-hidden="true"></th>`
+      + cols.map(col => buildColumnFooter(col)).join('')
+      + `<th class="col-actions" aria-hidden="true"></th>`
+      + `</tr></thead></table></div>`;
+  }
+
   function buildGroupSums(records, cols) {
     const sumColumns = typeof WIDGET_CONFIG === 'undefined' ? null : WIDGET_CONFIG.sumColumns;
     return '<span class="group-sums">' + cols.filter(col =>
@@ -448,12 +459,12 @@
     cancelAnimationFrame(groupSumAlignFrame);
     groupSumAlignFrame = requestAnimationFrame(() => {
       const placements = [];
+      const stripColumns = new Map([...columnStrip.querySelectorAll('thead th[data-column]')]
+        .map(cell => [cell.dataset.column, cell]));
       content.querySelectorAll('.group').forEach(card => {
         const headerRect = card.querySelector('.group-header').getBoundingClientRect();
-        const footers = new Map([...card.querySelectorAll('tfoot th[data-column]')]
-          .map(cell => [cell.dataset.column, cell]));
         card.querySelectorAll('.group-sum').forEach(sum => {
-          const cell = footers.get(sum.dataset.column);
+          const cell = stripColumns.get(sum.dataset.column);
           if (!cell) return;
           const rect = cell.getBoundingClientRect();
           const padding = parseFloat(getComputedStyle(cell).paddingLeft) || 0;
@@ -1055,8 +1066,12 @@
     if (typeof closeRowContextMenu === 'function') closeRowContextMenu(false);
     const restoreCellFocus = content.contains(document.activeElement)
       && document.activeElement.closest('td.data-cell');
+    const focusedHeader = columnStrip.contains(document.activeElement)
+      ? { col: document.activeElement.closest('th[data-column]')?.dataset.column,
+        resize: document.activeElement.classList.contains('column-resize-handle') }
+      : null;
     Array.from(content.children).forEach(c => {
-      if (c.id !== 'empty-state') c.remove();
+      if (c.id !== 'empty-state' && c.id !== 'column-strip') c.remove();
     });
 
     if (!groupBy || allRecords.length === 0) {
@@ -1083,6 +1098,8 @@
           : `Source: ${table}. Check the Select By link and choose a teacher in Grist.`;
       }
       statsbar.classList.remove('visible');
+      columnStrip.hidden = true;
+      columnStrip.replaceChildren();
       if (typeof salaryReanchorRefEditor === 'function') salaryReanchorRefEditor();
       return;
     }
@@ -1091,6 +1108,8 @@
     const groups      = getGroups();
     const groupCol    = parseGroupBy(groupBy).col;
     const displayCols = orderedDisplayColumns(groupCol);
+
+    renderColumnStrip(displayCols);
 
     statsbar.classList.add('visible');
     statGroups.textContent  = groups.length;
@@ -1171,6 +1190,12 @@
         }
       } else if (!btnEditorSave.disabled) closeFieldEditor();
     } else if (restoreCellFocus) focusSelectedCell();
+    if (focusedHeader?.col) {
+      const header = [...columnStrip.querySelectorAll('th[data-column]')]
+        .find(cell => cell.dataset.column === focusedHeader.col);
+      (focusedHeader.resize ? header?.querySelector('.column-resize-handle') : header)
+        ?.focus({ preventScroll: true });
+    }
     scheduleGroupSumAlignment();
     refreshBoolSection();
     if (typeof salaryReanchorRefEditor === 'function') salaryReanchorRefEditor();
@@ -1203,7 +1228,7 @@
       + `<button type="button" class="group-add-row" data-group-key="${esc(encodeURIComponent(group.key))}"`
       + ` title="${esc(addLabel)}" aria-label="${esc(addLabel)}"`
       + `${addContext.enabled ? '' : ' disabled'}>${plusIconHtml()}</button></th>`
-      + cols.map(col => buildColumnFooter(col)).join('')
+      + cols.map(() => '<th class="column-add-spacer" aria-hidden="true"></th>').join('')
       + '<th class="col-actions" aria-hidden="true"></th>';
     const moveContext = getRecordMoveContext();
     const dragEnabled = moveContext.enabled;
