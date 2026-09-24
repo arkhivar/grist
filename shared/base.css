@@ -365,7 +365,7 @@
       cursor: pointer; outline: none;
       transition: background .1s, color .1s, box-shadow .1s;
     }
-    .group-toggle-all.all-collapsed .chevron { transform: rotate(90deg); }
+    .group-toggle-all.all-collapsed .chevron { transform: rotate(-90deg); }
     .group-toggle-all:hover { background: var(--hover-row); color: var(--accent); }
     .group-toggle-all:focus-visible { box-shadow: var(--focus-ring); color: var(--accent); }
     .group-toggle-all:disabled { opacity: .4; cursor: default; }
@@ -431,7 +431,7 @@
       width: 14px; height: 14px; flex-shrink: 0; color: var(--muted);
       transition: transform .2s cubic-bezier(.4,0,.2,1);
     }
-    .group.collapsed .chevron { transform: rotate(90deg); }
+    .group.collapsed .chevron { transform: rotate(-90deg); }
 
     .group-label {
       font-size: 13px; font-weight: 600; flex: 0 1 auto; min-width: 0;
