@@ -1039,6 +1039,11 @@ await test('M: header sums align to the fixed header, including after horizontal
     assertEq(sum.style.left, '180px', 'sum did not follow horizontal scroll');
     assertEq(doc.querySelector('#column-strip .scroll-inner').scrollLeft, 120,
       'fixed header did not follow group horizontal scroll');
+    const headerScroll = doc.querySelector('#column-strip .scroll-inner');
+    headerScroll.scrollLeft = 48;
+    headerScroll.dispatchEvent(new win.Event('scroll'));
+    assertEq(card.querySelector('.scroll-inner').scrollLeft, 48,
+      'group did not follow the fixed header scrollbar');
   } finally {
     header.getBoundingClientRect = originalHeaderRect;
     footer.getBoundingClientRect = originalFooterRect;

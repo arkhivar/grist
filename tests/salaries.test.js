@@ -283,6 +283,10 @@ async function main() {
   classScroll.dispatchEvent(new win.Event('scroll'));
   assert.equal(doc.querySelector('#column-strip .scroll-inner').scrollLeft, 64,
     'salary header does not track a month table scroll');
+  const headerScroll = doc.querySelector('#column-strip .scroll-inner');
+  headerScroll.scrollLeft = 24;
+  headerScroll.dispatchEvent(new win.Event('scroll'));
+  assert.equal(classScroll.scrollLeft, 24, 'salary month does not track the header scrollbar');
   assert.equal(expenseGrip(13).getAttribute('aria-pressed'), 'false', 'teacher change leaves no stale selection');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 1);
   const fetchTable = win.grist.docApi.fetchTable;
