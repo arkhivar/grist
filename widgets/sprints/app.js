@@ -78,7 +78,7 @@
     if (col === parseGroupBy(groupBy).col
         && !(typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)) return null;
     if (isDateTimeColumnType(type)) return 'datetime';
-    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editReferences
+    if (typeof openReferenceEditor === 'function'
         && ['Ref', 'RefList'].includes(columnBaseType(type))) return 'reference';
     if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editAllWritableText
         && (isTextColumnType(type) || columnBaseType(type) === 'Choice')) return 'text';
@@ -96,14 +96,24 @@
   }
 
   function applyEditableColumnDefaults() {
-    if (editableDefaultsApplied || editableColumnsConfigured) return;
-    editableDefaultsApplied = true;
-    // This widget's attendance-notes field is C. Enable it immediately when
-    // it is a genuine writable Text column; every column remains configurable.
-    if (writableColumnIds.includes('C') && isTextColumnType(writableColumnTypes.C)) {
-      editableColumns.add('C');
-      saveEditableColumns();
+    // Retain the enabled notes field when an older section still stores its
+    // original column ID. Explicit choices (including an empty list) win.
+    if (editableColumnsConfigured) {
+      if (editableColumns.has('C') && !Object.hasOwn(columnTypes, 'C')
+          && writableColumnIds.includes('notes') && isTextColumnType(writableColumnTypes.notes)) {
+        editableColumns.delete('C');
+        editableColumns.add('notes');
+        saveEditableColumns();
+      }
+      return;
     }
+    if (editableDefaultsApplied) return;
+    editableDefaultsApplied = true;
+    for (const col of ['C', 'notes']) {
+      if (writableColumnIds.includes(col) && isTextColumnType(writableColumnTypes[col]))
+        editableColumns.add(col);
+    }
+    if (editableColumns.size) saveEditableColumns();
   }
 
   function refreshEditableColumnsSection() {
@@ -1191,7 +1201,7 @@
       columnStrip.hidden = true;
       columnStrip.replaceChildren();
       columnScrollbar.hidden = true;
-      if (typeof salaryReanchorRefEditor === 'function') salaryReanchorRefEditor();
+      if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
       return;
     }
 
@@ -1289,7 +1299,7 @@
     }
     scheduleGroupSumAlignment();
     refreshBoolSection();
-    if (typeof salaryReanchorRefEditor === 'function') salaryReanchorRefEditor();
+    if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
   }
 
   function gripIconHtml() {
@@ -1616,12 +1626,12 @@
       if (byId.has(id)) {
         const value = byId.get(id);
         const type = columnBaseType(columnTypes[col]);
-        if (type === 'Ref' && typeof salaryRefDisplay === 'function') {
-          const refId = salaryRawRef(value);
-          setReferenceDisplay(record, col, refId == null ? [] : [salaryRefDisplay(col, refId)]);
-        } else if (type === 'RefList' && typeof salaryRefDisplay === 'function') {
+        if (type === 'Ref' && typeof referenceDisplayLabel === 'function') {
+          const refId = referenceIds(value)[0];
+          setReferenceDisplay(record, col, refId == null ? [] : [referenceDisplayLabel(col, refId)]);
+        } else if (type === 'RefList' && typeof referenceDisplayLabel === 'function') {
           setReferenceDisplay(record, col,
-            salaryGroupIds(value).map(refId => salaryRefDisplay(col, refId)));
+            referenceIds(value).map(refId => referenceDisplayLabel(col, refId)));
         } else record[col] = value;
       }
     });
@@ -1928,8 +1938,8 @@
       if (btnEditorSave.disabled) { toggle.checked = !visible; return; }
       closeFieldEditor();
     }
-    if (typeof salaryRefContext !== 'undefined' && salaryRefContext?.col === col)
-      closeSalaryRefEditor();
+    if (typeof referenceEditorContext !== 'undefined' && referenceEditorContext?.col === col)
+      closeReferenceEditor();
     if (!visible && (selectedCell?.col === col || cellRangeEnd?.col === col)) {
       selectedCell = null;
       cellRangeEnd = null;
@@ -2206,7 +2216,7 @@
         + ` aria-label="${esc(editLabelForKind(editKind))}: ${colAttr}"`
         + (editKind === 'number' ? '>' : ` aria-haspopup="dialog" aria-expanded="false">`)
         + `<span class="cell-edit-value">${rendered}</span></button>`
-      : rendered;
+      : `<span class="cell-display-value">${rendered}</span>`;
     return `<td class="${classes}" data-cell-id="${id}" data-cell-col="${colAttr}"`
       + ` data-cell-writable="${String(isWritable)}" tabindex="${isSelected ? '0' : '-1'}"`
       + (!isWritable && isNumericColumnType(columnTypes[col])
@@ -2457,7 +2467,7 @@
     const kind = editKindForColumn(col);
     if (!kind) return;
     if (kind === 'reference') {
-      if (typeof openSalaryRefEditor === 'function') openSalaryRefEditor(idStr, col, anchorEl);
+      if (typeof openReferenceEditor === 'function') openReferenceEditor(idStr, col, anchorEl);
       return;
     }
     const recordId = validRecordId(idStr);

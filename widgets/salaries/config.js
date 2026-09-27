@@ -6,7 +6,6 @@ const WIDGET_CONFIG = {
   showGroupingColumn: true,
   editAllWritableText: true,
   editBoolOnSecondClick: true,
-  editReferences: true,
   classTableId: 'All_att',
   expensesTableId: 'Expenses',
   receivedColumn: 'salary_received',

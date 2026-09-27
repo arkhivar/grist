@@ -69,6 +69,32 @@
     .row-context-menu .row-command-danger { color: #b91c1c; }
 
     /* Reference pickers keep native controls in the widget's light palette. */
+    .salary-ref-editor {
+      position: fixed; z-index: 80; max-height: min(320px, calc(100vh - 16px));
+      display: flex; flex-direction: column; overflow: hidden;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface); color: var(--text);
+      box-shadow: 0 12px 36px rgba(24,24,27,.22), 0 2px 8px rgba(24,24,27,.10);
+    }
+    .salary-ref-editor[hidden] { display: none; }
+    .salary-ref-editor input {
+      margin: 8px; padding: 7px 9px; border: 1px solid var(--border);
+      border-radius: 5px; outline: none; font: 12px var(--font);
+    }
+    .salary-ref-editor input:focus { box-shadow: var(--focus-ring); }
+    .salary-ref-options { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    .salary-ref-option {
+      display: block; width: 100%; padding: 7px 10px; border: 0;
+      background: transparent; color: var(--text); cursor: pointer;
+      font: 12px var(--font); text-align: left;
+    }
+    .salary-ref-option:hover, .salary-ref-option:focus-visible,
+    .salary-ref-option[aria-selected="true"] { background: var(--hover-row); }
+    .salary-ref-footer {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 6px 8px; border-top: 1px solid var(--border);
+      color: var(--muted); font: 11px var(--font);
+    }
     .ref-picker, .ref-picker-search, .ref-picker-options { color-scheme: light; }
     .ref-picker-search {
       background: var(--surface); color: var(--text); caret-color: var(--text);
@@ -615,6 +641,12 @@
 
     .cell-null { color: var(--muted); font-style: italic; font-size: 11px; }
     .cell-num  { font-family: var(--mono); font-size: 11px; }
+    /* Clip the value independently: selection keeps overflow visible for its
+       fill handle, but a long value must never cover the next column. */
+    .cell-display-value {
+      display: block; min-width: 0; max-width: 100%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .cell-ref-list {
       display: inline-flex; align-items: center; gap: 4px;
       max-width: 100%; overflow: hidden; vertical-align: middle;
@@ -629,7 +661,7 @@
     .rec-table tbody td.cell-editable { padding: 0; }
     .cell-edit-btn {
       display: flex; align-items: flex-start; gap: 7px;
-      width: 100%; min-width: 120px; max-width: 360px;
+      width: 100%; min-width: 0; max-width: 100%;
       padding: 5px 10px; border: 0; background: transparent;
       color: inherit; font: inherit; text-align: left; cursor: default; outline: none;
     }

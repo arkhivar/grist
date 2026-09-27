@@ -139,9 +139,10 @@ win.grist = {
   },
 };
 
-// ONE eval: the three classic scripts share the global lexical scope.
+// ONE eval: the classic scripts share the global lexical scope.
 win.eval(
   read('shared/core.js') + '\n;\n' +
+  read('shared/references.js') + '\n;\n' +
   read('widgets/sprints/app.js') + '\n;\n' +
   read('widgets/sprints/actions.js')
 );
@@ -261,7 +262,7 @@ await test('A5a: Reference metadata gives a linked label a pill without boxing t
       } },
       viewApi: {},
     };
-    refWin.eval(read('shared/core.js') + '\n;\n'
+    refWin.eval(read('shared/core.js') + '\n;\n' + read('shared/references.js') + '\n;\n'
       + read('widgets/sprints/app.js') + '\n;\n'
       + read('widgets/sprints/actions.js'));
     const linkedRecord = { id: 101, students: 'A. Student', performance: 'ordinary text', sprint: 'Sprint 1' };
@@ -618,15 +619,17 @@ await test('F16: custom picker converts selected VLAT date and time to UTC stora
 });
 
 // ── G. Smoke ─────────────────────────────────────────────────
-await test('G17: sprints.html loads all three widget scripts', async () => {
-  for (const f of ['shared/core.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
+await test('G17: sprints.html loads the shared editors and widget scripts once', async () => {
+  for (const f of ['shared/core.js', 'shared/references.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
     assert(html.includes(`<script src="${f}?`), `sprints.html missing script tag for ${f}`);
+  const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(match => match[1]);
+  assertEq(new Set(scripts).size, scripts.length, 'duplicate script tag');
 });
 
 await test('G18: live badge and every cache key use the same release version', async () => {
-  const versions = [...html.matchAll(/(?:src|href)="(?:shared\/base\.css|shared\/core\.js|widgets\/sprints\/(?:app|actions)\.js)\?v=([^"&]+)/g)]
+  const versions = [...html.matchAll(/(?:src|href)="(?:shared\/(?:base\.css|core\.js|references\.js)|widgets\/sprints\/(?:app|actions)\.js)\?v=([^"&]+)/g)]
     .map(match => match[1]);
-  assertEq(versions.length, 4, 'versioned asset count');
+  assertEq(versions.length, 5, 'versioned asset count');
   assert(versions.every(version => version === versions[0]), 'asset cache keys differ');
   assertEq(doc.getElementById('version-badge').textContent, `v${versions[0]}`, 'version badge');
 });

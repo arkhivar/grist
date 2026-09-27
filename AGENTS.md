@@ -12,6 +12,7 @@ scripts sharing the global lexical scope (no IIFEs, no modules).
 index.html               # gallery linking to every widget
 shared/
   core.js                # UI strings (T), shared state, date helpers, Grist helpers
+  references.js          # shared Reference / Reference List picker and labels
   base.css               # design system (tokens, toolbar, tables, grips, editor, toasts)
 widgets/<name>/          # per-widget code (app.js, actions.js)
 tests/<name>.test.js     # one jsdom suite per widget, no framework
@@ -89,7 +90,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.42)
+## Current state (v7.43)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -143,6 +144,9 @@ payments.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 65 checks, green.
+- `tests/sprints-editing.test.js` adds 9 checks with writable notes, Reference
+  and Reference List metadata, formula protection, saved preferences, and
+  stale picker loads.
 - `tests/salaries.test.js` covers linked teacher matching, VLAT month boundaries,
   expense-only months, refresh, and failed expense fetches.
 - Payment rows have selector grips with single, additive, and range selection;
@@ -152,6 +156,13 @@ payments.
   from `shared/base.css`. Keep list labels as distinct items, including labels
   containing commas, and apply the same style to the linked teacher on each
   read-only payment row. A payment row displays its own teacher reference.
+- Both widgets load `shared/references.js` before the grouped app. Writable
+  Reference and Reference List fields use the same picker, table adapters,
+  raw IDs, and session history. New Sprints sections enable writable `notes`
+  (or legacy `C`) Text editing by default; saved Text editing choices remain
+  respected. A saved enabled `C` migrates to `notes` only if `C` is absent.
+  Values have their own clipping wrappers so selected cells can show the fill
+  handle without long text spilling into neighboring columns.
 - Salaries follows the selected summary `group` links to `All_att` class rows,
   retaining Select By filtering and expanded Reference labels. Writable Text,
   Choice, Numeric/Int, DateTime, Bool, and Reference columns have in-widget

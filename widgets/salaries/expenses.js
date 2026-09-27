@@ -76,7 +76,7 @@ function salaryPaymentRowsHtml(cols, key) {
       if (col === dateColumn)
         return `<td class="salary-payment-date"><span class="cell-num">${esc(row.dateLabel)}</span></td>`;
       if (col === 'performance')
-        return `<td>${renderReferencePills(salaryRefDisplay('performance', row.performanceId))}</td>`;
+        return `<td>${renderReferencePills(referenceDisplayLabel('performance', row.performanceId))}</td>`;
       if (col === WIDGET_CONFIG.receivedColumn)
         return `<td class="salary-payment-amount"><span class="cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
       return '<td></td>';
@@ -164,12 +164,12 @@ function salaryDisplayClassCell(col, value, record) {
   const type = columnTypes[col] || '';
   if (type.startsWith('Ref:')) {
     const id = salaryRawRef(value);
-    setReferenceDisplay(record, col, id == null ? [] : [salaryRefDisplay(col, id)]);
+    setReferenceDisplay(record, col, id == null ? [] : [referenceDisplayLabel(col, id)]);
     return record[col];
   }
   if (type.startsWith('RefList:')) {
     setReferenceDisplay(record, col,
-      salaryGroupIds(value).map(id => salaryRefDisplay(col, id)));
+      salaryGroupIds(value).map(id => referenceDisplayLabel(col, id)));
     return record[col];
   }
   if (Array.isArray(value) && (value[0] === 'D' || value[0] === 'd'))
@@ -221,10 +221,10 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
       throw new Error(`${sourceId}.group has no Attendance rows for this selection`);
     const refCols = Object.keys(columnTypes).filter(col =>
       columnTypes[col].startsWith('Ref:') || columnTypes[col].startsWith('RefList:'));
-    await salaryPreloadRefChoices(refCols, () => request === salaryClassColumnsRequest);
+    await preloadReferenceChoices(refCols, () => request === salaryClassColumnsRequest);
     if (request !== salaryClassColumnsRequest) return;
     if (source && !salarySelectedTeacherIds.size) {
-      const labels = salaryRefLabels.get('performance');
+      const labels = referenceDisplayLabelsByColumn.get('performance');
       selectedRecords.forEach(row => {
         const label = String(row.performance ?? '');
         labels?.forEach((value, id) => {

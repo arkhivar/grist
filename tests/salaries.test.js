@@ -12,7 +12,7 @@ const html = read('salaries.html');
 const version = /WIDGET_VERSION = '([^']+)'/.exec(read('shared/core.js'))[1];
 const assets = [...html.matchAll(/(?:src|href)="([^"]+\?v=([^"]+))"/g)]
   .filter(match => !match[1].startsWith('https://'));
-assert.equal(assets.length, 8);
+assert.equal(assets.length, 9);
 assert(assets.every(match => match[2] === version), 'salaries asset versions differ');
 assert(html.includes('widgets/salaries/config.js'));
 
@@ -101,10 +101,11 @@ win.grist = {
 win.eval([
   'widgets/salaries/config.js',
   'shared/core.js',
+  'widgets/salaries/attendance.js',
+  'shared/references.js',
   'widgets/salaries/expenses.js',
   'widgets/sprints/app.js',
   'widgets/sprints/actions.js',
-  'widgets/salaries/attendance.js',
 ].map(read).join('\n;\n'));
 
 const records = [{ id: 91, group: ['L', 1, 2, 3], performance: 'VP' }];
