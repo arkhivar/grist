@@ -90,7 +90,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.43)
+## Current state (v7.44)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -102,6 +102,11 @@ payments.
   does not automatically supply fields for custom-widget AddRecord actions.
 - Cell ranges support Shift-click, Shift+arrows, drag selection, and rectangular
   clipboard blocks. Session history includes range pastes and footer row creation.
+- Visible writable Text/Choice grouping cells edit automatically in the shared
+  text popover. Saving moves the row into the matching group or creates a new
+  one; clearing uses the empty group. Group edits, paste/fill, and Undo/Redo
+  clear stale cell ranges and reveal the selected moved row, including collapsed
+  destinations. Ordinary Text editing preferences remain respected.
 - Right-click menus target whole rows covered by a cell range or grip selection;
   duplicate/delete reuse existing API helpers (not session-undoable yet).
   Menu deletion takes one click; inline and bottom-bar deletion remain two-step.
@@ -144,9 +149,9 @@ payments.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 65 checks, green.
-- `tests/sprints-editing.test.js` adds 9 checks with writable notes, Reference
-  and Reference List metadata, formula protection, saved preferences, and
-  stale picker loads.
+- `tests/sprints-editing.test.js` adds 15 checks with writable notes, Reference
+  and Reference List metadata, formula protection, saved preferences, stale
+  picker loads, and grouped Text/Choice editing, movement, history, and paste.
 - `tests/salaries.test.js` covers linked teacher matching, VLAT month boundaries,
   expense-only months, refresh, and failed expense fetches.
 - Payment rows have selector grips with single, additive, and range selection;

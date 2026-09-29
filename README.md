@@ -166,6 +166,15 @@ button or **Ctrl/Cmd+Enter**; cancel with the button or **Escape**. In the
 grouped table, long Text values remain on one line and are truncated with an
 ellipsis rather than making the row taller.
 
+The visible **Sprint** column (or another writable Text/Choice grouping field)
+uses this editor automatically. Saving moves the record into the matching
+group; a new value creates a group, and clearing the value moves it to
+**(empty)**. Counts and totals update, and groups disappear when their last
+record leaves. The moved cell stays selected and its destination opens if it
+was collapsed. Undo/Redo restores the value and group; paste and fill work too.
+Regrouping clears an extended cell range so it cannot select unrelated rows.
+Ordinary Text editing preferences remain unchanged.
+
 Click a DateTime cell to open the widget's compact, non-blocking calendar
 popover beside that cell. It chooses an above/below placement automatically,
 stays inside the viewport, and closes on an outside click while leaving the
@@ -177,8 +186,9 @@ Down are also supported. DateTime values are displayed and edited in
 **Asia/Vladivostok (VLAT)**, independently of the browser's timezone, and
 converted back to UTC epoch seconds for Grist storage. Copy exports VLAT text;
 timezone-free DateTime pastes use VLAT, while explicit ISO offsets are honored.
-Date-only columns are not shifted. Formula columns remain read-only; Text and
-DateTime editors also exclude the active grouping column.
+Date-only columns are not shifted. Formula columns remain read-only. Sprints
+keeps grouped DateTime fields read-only; Salaries supports editing class dates
+in its monthly view.
 Saving uses `grist.selectedTable.update()` and reports the real
 failure inline as well as in Diagnostics.
 

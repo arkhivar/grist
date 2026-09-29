@@ -2,6 +2,17 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.44 — 2026-09-29
+
+- Enable the shared text popover for writable Text/Choice grouping fields,
+  including Sprint. Save to move a row into an existing, new, or empty group;
+  group counts and totals update immediately after the write succeeds.
+- Keep the selected moved row visible, reveal collapsed destinations, and
+  clear stale rectangular selections after regrouping. Reuse cell Undo/Redo,
+  clipboard, fill, and the existing move highlight, with real save errors.
+- Preserve formula protection, ordinary Text preferences, Salaries editing,
+  and VLAT DateTime behavior. Bump both entry pages and shared assets together.
+
 ## v7.20 — 2026-09-23
 
 - Replace the number popover with in-cell editing. Typing replaces a selected

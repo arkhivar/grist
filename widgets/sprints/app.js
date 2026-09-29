@@ -61,6 +61,13 @@
     return editableColumns.has(col) && editableTextCandidates().includes(col);
   }
 
+  function isEditableGroupingColumn(col) {
+    const grouping = parseGroupBy(groupBy);
+    return col === grouping.col && !grouping.granularity
+      && writableColumnIds.includes(col)
+      && ['Text', 'Choice'].includes(columnBaseType(writableColumnTypes[col]));
+  }
+
   function editableDateTimeCandidates() {
     const groupCol = parseGroupBy(groupBy).col;
     return allColumns.filter(col =>
@@ -75,6 +82,9 @@
     if (!writableColumnIds.includes(col)) return null;
     const type = writableColumnTypes[col];
     if (isNumericColumnType(type)) return 'number';
+    // Group values already support drag, paste, and fill. Use the same text
+    // editor so a saved value can move a row into an existing or new group.
+    if (isEditableGroupingColumn(col)) return 'text';
     if (col === parseGroupBy(groupBy).col
         && !(typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)) return null;
     if (isDateTimeColumnType(type)) return 'datetime';
@@ -128,7 +138,8 @@
     }
     const textCandidates = editableTextCandidates();
     const automaticCandidates = editableDateTimeCandidates().concat(allColumns.filter(col =>
-      writableColumnIds.includes(col) && (isNumericColumnType(writableColumnTypes[col])
+      writableColumnIds.includes(col) && (isEditableGroupingColumn(col)
+        || isNumericColumnType(writableColumnTypes[col])
         || (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editAllWritableText
           && ['Text', 'Choice'].includes(columnBaseType(writableColumnTypes[col]))))));
     if (!textCandidates.length && !automaticCandidates.length) {
@@ -167,7 +178,8 @@
       const text = document.createElement('span');
       text.textContent = col;
       const badge = document.createElement('small');
-      badge.textContent = isNumericColumnType(writableColumnTypes[col]) ? 'Number · automatic'
+      badge.textContent = isEditableGroupingColumn(col) ? 'Group · automatic'
+        : isNumericColumnType(writableColumnTypes[col]) ? 'Number · automatic'
         : isDateTimeColumnType(writableColumnTypes[col]) ? T.editableAuto : 'Text · automatic';
       text.appendChild(badge);
       label.appendChild(cb);
@@ -1637,6 +1649,38 @@
     });
   }
 
+  function prepareGroupingCellChanges(changes, defaultCol) {
+    const col = parseGroupBy(groupBy).col;
+    if (!isEditableGroupingColumn(col)) return false;
+    const key = value => value == null || value === '' ? '\x00__empty__' : String(value);
+    const movedIds = changes.filter(change => (change.col || defaultCol) === col
+      && key(change.before) !== key(change.after)).map(change => String(change.id));
+    if (!movedIds.length) return false;
+    // After regrouping, the old rectangle can cover unrelated records.
+    cellRangeEnd = null;
+    queueMoveAnimations(movedIds);
+    const selected = selectedCell && movedIds.includes(selectedCell.recordId)
+      && allRecords.find(record => String(record.id) === selectedCell.recordId);
+    if (!selected) return false;
+    collapsed.delete(key(selected[col]));
+    return true;
+  }
+
+  function scrollRegroupedCellIntoView() {
+    if (!selectedCell) return;
+    const cell = findDataCell(selectedCell.recordId, selectedCell.col);
+    if (!cell) return;
+    const scroller = cell.closest('.scroll-inner');
+    const topPadding = content.style.scrollPaddingTop;
+    const bottomPadding = scroller.style.scrollPaddingBottom;
+    // Keep the moved cell clear of both sticky controls, including capped groups.
+    content.style.scrollPaddingTop = `${columnStrip.getBoundingClientRect().height}px`;
+    scroller.style.scrollPaddingBottom = `${scroller.querySelector('tfoot th').getBoundingClientRect().height}px`;
+    cell.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    content.style.scrollPaddingTop = topPadding;
+    scroller.style.scrollPaddingBottom = bottomPadding;
+  }
+
   async function replayCellHistory(direction) {
     if (cellHistoryBusy) return;
     const isUndo = direction === 'undo';
@@ -1711,7 +1755,9 @@
       cellRangeEnd = null;
       recordActionDiagnostic(action, 'ok', detail);
       showToast(`${action} complete: ${entry.label}`, 'success');
+      const regrouped = prepareGroupingCellChanges(entry.changes, entry.col);
       render();
+      if (regrouped) scrollRegroupedCellIntoView();
       requestAnimationFrame(focusSelectedCell);
     } catch (err) {
       showToast(actionErrorMessage(action, err));
@@ -2061,7 +2107,9 @@
       recordActionDiagnostic(action, 'ok', detail);
       showToast(action === 'Fill' ? `${changes.length} cells filled`
         : action === 'Toggle checkbox' ? 'Checkbox updated' : 'Cell pasted', 'success');
+      const regrouped = prepareGroupingCellChanges(changes, col);
       render();
+      if (regrouped) scrollRegroupedCellIntoView();
       requestAnimationFrame(focusSelectedCell);
     } catch (err) {
       showToast(actionErrorMessage(action, err));
@@ -2187,8 +2235,10 @@
         selectedCell = { recordId: first.dataset.cellId, col: first.dataset.cellCol };
         const last = rows[rowStart + height - 1][colStart + width - 1];
         cellRangeEnd = { recordId: last.dataset.cellId, col: last.dataset.cellCol };
+        const regrouped = prepareGroupingCellChanges(meaningful);
         render();
         focusSelectedCell();
+        if (regrouped) scrollRegroupedCellIntoView();
         showToast(meaningful.length + ' cells pasted', 'success');
       } finally {
         cellHistoryBusy = false;
@@ -2604,15 +2654,18 @@
       recordActionDiagnostic(action, 'ok', detail);
       const current = allRecords.find(r => Number(r.id) === recordId);
       if (current) current[col] = nextValue;
-      rememberCellHistory(action, col, [{
+      const changes = [{
         id: recordId,
         before: historyValue,
         after: cellHistoryValue(nextValue, cellColumnType(col)),
-      }]);
+      }];
+      rememberCellHistory(action, col, changes);
       setEditorBusy(false);
       closeFieldEditor();
+      const regrouped = prepareGroupingCellChanges(changes, col);
       render();
       if (kind === 'text') focusSelectedCell();
+      if (regrouped) scrollRegroupedCellIntoView();
       return true;
     } catch (err) {
       const message = actionErrorMessage(action, err);

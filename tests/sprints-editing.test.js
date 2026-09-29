@@ -26,7 +26,7 @@ async function waitFor(condition, description = 'widget update') {
 const longNote = '❌ [16/07/2026 2:08 PM] A long note with <markup>, commas and\n'
   + 'a second line that must survive opening and saving. '.repeat(30);
 
-async function createWidget(options = {}, recordsFirst = false) {
+async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
   const dom = new JSDOM(html, {
     url: 'https://arkhivar.github.io/grist/sprints.html',
     runScripts: 'outside-only', pretendToBeVisual: true,
@@ -44,15 +44,33 @@ async function createWidget(options = {}, recordsFirst = false) {
     [2, { id: 2, datetime: 1784178000, notes: 'Second note', students: 22,
       teachers: ['L', 8], formulaText: 'Formula note', formulaRef: 22, sprint: '' }],
   ]);
+  if (fixture.sprintValues) {
+    const templates = [...rawRecords.values()];
+    rawRecords.clear();
+    fixture.sprintValues.forEach((sprint, index) => {
+      const id = index + 1;
+      rawRecords.set(id, { ...templates[index % templates.length], id, sprint });
+    });
+  }
   const displayedRecords = () => [...rawRecords.values()].map(record => ({ ...record,
     students: record.students === 21 ? 'A. Student' : 'B. Student',
     teachers: record.teachers.slice(1).map(id => id === 7 ? 'VP' : 'TR'),
     formulaRef: record.formulaRef === 21 ? 'A. Student' : 'B. Student',
   }));
-  const calls = { ready: [], updates: [], raw: [], options: [], fetches: [] };
+  const calls = { ready: [], updates: [], actions: [], raw: [], options: [], fetches: [], scrolled: [] };
+  win.HTMLElement.prototype.scrollIntoView = function (options) {
+    calls.scrolled.push({ recordId: this.dataset.cellId, col: this.dataset.cellCol, options });
+  };
   let onRecords;
   let onOptions;
   let pendingTargetFetch = null;
+  let nextWriteError = null;
+  function checkWriteError() {
+    if (!nextWriteError) return;
+    const error = nextWriteError;
+    nextWriteError = null;
+    throw error;
+  }
   const tableNames = ['All_att', 'Folks', 'Performance'];
   const cols = ['datetime', 'notes', 'students', 'teachers', 'formulaText', 'formulaRef', 'sprint', 'Name', 'Name'];
   win.grist = {
@@ -63,11 +81,13 @@ async function createWidget(options = {}, recordsFirst = false) {
     selectedTable: {
       getTableId: async () => 'All_att',
       async update(updates, writeOptions) {
+        checkWriteError();
         const rows = Array.isArray(updates) ? updates : [updates];
         rows.forEach(row => {
           calls.updates.push({ id: row.id, fields: row.fields, options: writeOptions });
           Object.assign(rawRecords.get(Number(row.id)), row.fields);
         });
+        if (fixture.emitRecordsDuringWrite) onRecords(displayedRecords());
       },
     },
     viewApi: {
@@ -79,6 +99,17 @@ async function createWidget(options = {}, recordsFirst = false) {
       },
     },
     docApi: {
+      async applyUserActions(actions, writeOptions) {
+        checkWriteError();
+        calls.actions.push({ actions, options: writeOptions });
+        actions.forEach(([action, table, id, fields]) => {
+          assert.equal(action, 'UpdateRecord');
+          assert.equal(table, 'All_att');
+          Object.assign(rawRecords.get(Number(id)), fields);
+        });
+        if (fixture.emitRecordsDuringWrite) onRecords(displayedRecords());
+        return actions.map(() => null);
+      },
       async fetchTable(name) {
         calls.fetches.push(name);
         if (name === '_grist_Tables') return { id: [1, 2, 3], tableId: tableNames };
@@ -86,8 +117,8 @@ async function createWidget(options = {}, recordsFirst = false) {
           id: [10, 11, 12, 13, 14, 15, 16, 20, 21], colId: cols,
           parentId: [1, 1, 1, 1, 1, 1, 1, 2, 3],
           type: ['DateTime:Asia/Vladivostok', 'Text', 'Ref:Folks', 'RefList:Performance',
-            'Text', 'Ref:Folks', 'Choice', 'Text', 'Text'],
-          isFormula: [false, false, false, false, true, true, false, false, false],
+            'Text', 'Ref:Folks', fixture.sprintType || 'Choice', 'Text', 'Text'],
+          isFormula: [false, false, false, false, true, true, Boolean(fixture.sprintFormula), false, false],
           visibleCol: [0, 0, 20, 21, 0, 20, 0, 0, 0],
         };
         if (pendingTargetFetch && pendingTargetFetch.name === name) return pendingTargetFetch.promise;
@@ -120,6 +151,18 @@ async function createWidget(options = {}, recordsFirst = false) {
   const optionsFor = label => [...doc.querySelectorAll('.salary-ref-option')]
     .find(option => option.textContent.startsWith(label));
   return { dom, win, doc, calls, cell, key, select, open, refPills, optionsFor,
+    group(value) {
+      const key = value == null || value === '' ? '\x00__empty__' : value;
+      return [...doc.querySelectorAll('.group')].find(card => card.dataset.groupKey === key);
+    },
+    failNextWrite(message) { nextWriteError = new Error(message); },
+    paste(col, text, id = 1) {
+      const event = new win.Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', {
+        value: { getData: type => type === 'text/plain' ? text : '' },
+      });
+      cell(col, id).dispatchEvent(event);
+    },
     deferTarget(name) {
       let resolve;
       const promise = new Promise(done => { resolve = done; });
@@ -135,6 +178,26 @@ let failed = 0;
 async function test(name, run) {
   try { await run(); passed++; console.log(`PASS ${name}`); }
   catch (error) { failed++; console.error(`FAIL ${name}: ${error.stack}`); }
+}
+
+async function saveSprint(h, value, id = 1) {
+  h.select('sprint', id);
+  h.key(h.cell('sprint', id), 'F2');
+  assert(!h.doc.getElementById('cell-editor').hidden, 'Sprint editor did not open');
+  h.doc.getElementById('cell-editor-text').value = value;
+  const before = h.calls.updates.length;
+  h.doc.getElementById('btn-editor-save').click();
+  await waitFor(() => h.calls.updates.length === before + 1
+    && h.doc.getElementById('cell-editor').hidden, 'saved Sprint edit');
+  assert.equal(h.calls.updates[before].fields.sprint, value);
+  assert.equal(h.calls.updates[before].options.parseStrings, false);
+}
+
+function assertGroupCount(h, value, count) {
+  const group = h.group(value);
+  assert(group, `Missing group ${value}`);
+  assert.equal(group.querySelectorAll('tbody tr[data-record-id]').length, count);
+  assert.equal(group.querySelector('.group-badge').textContent, String(count));
 }
 
 async function main() {
@@ -250,6 +313,184 @@ async function main() {
           'default overwrote saved text opt-out');
       } finally { h.dom.window.close(); }
     }
+  });
+
+  await test('Grouped Text and Choice edit automatically with saved text opt-out and familiar cell gestures', async () => {
+    for (const sprintType of ['Text', 'Choice']) {
+      for (const recordsFirst of [false, true]) {
+        const h = await createWidget({ editableColumns: [], columnVisibility: { sprint: true } },
+          recordsFirst, { sprintType, sprintValues: ['Sprint A', 'Sprint B'] });
+        try {
+          assert(h.cell('sprint').querySelector('.cell-edit-btn'));
+          assert.equal(h.cell('notes').querySelector('.cell-edit-btn'), null, 'ordinary Text opt-out changed');
+          const automatic = [...h.doc.querySelectorAll('#editable-col-list .editable-col-option')]
+            .find(option => option.textContent.startsWith('sprint'));
+          assert(automatic?.querySelector('input:checked:disabled'), 'group field is missing its automatic setting');
+          h.select('sprint');
+          assert(h.doc.getElementById('cell-editor').hidden, 'first click must only select Sprint');
+          h.cell('sprint').click();
+          assert(!h.doc.getElementById('cell-editor').hidden, 'second click did not open Sprint');
+          assert(h.doc.getElementById('cell-editor').classList.contains('popover-mode'));
+          assert.equal(h.doc.getElementById('cell-editor-text').value, 'Sprint A');
+          h.key(h.doc.getElementById('cell-editor-text'), 'Escape');
+          h.key(h.cell('sprint'), 'F2');
+          assert(!h.doc.getElementById('cell-editor').hidden, 'F2 did not open Sprint');
+          assert.equal(h.doc.getElementById('cell-editor-text').value, 'Sprint A');
+          h.doc.getElementById('btn-editor-cancel').click();
+          h.key(h.cell('sprint'), 'N');
+          assert.equal(h.doc.getElementById('cell-editor-text').value, 'N', 'typing did not replace Sprint text');
+          h.key(h.doc.getElementById('cell-editor-text'), 'Escape');
+          assert.equal(h.calls.updates.length, 0, 'cancelled edits wrote Sprint');
+          const grouping = h.doc.getElementById('group-select');
+          grouping.value = 'notes';
+          grouping.dispatchEvent(new h.win.Event('change', { bubbles: true }));
+          assert.equal(h.cell('sprint').querySelector('.cell-edit-btn'), null,
+            'former grouped field ignored saved editing preferences');
+          assert(!h.calls.options.some(([key]) => key === 'editableColumns'), 'automatic grouping changed saved Text preferences');
+        } finally { h.dom.window.close(); }
+      }
+    }
+  });
+
+  await test('Grouped Text and Choice edits move rows to existing, new and empty groups with Undo/Redo', async () => {
+    for (const sprintType of ['Text', 'Choice']) {
+      const h = await createWidget({ editableColumns: [], columnVisibility: { sprint: true } },
+        false, { sprintType, sprintValues: ['Sprint A', 'Sprint B', 'Sprint A'],
+          emitRecordsDuringWrite: sprintType === 'Choice' });
+      try {
+        await saveSprint(h, 'Sprint B');
+        assertGroupCount(h, 'Sprint A', 1);
+        assertGroupCount(h, 'Sprint B', 2);
+        assert.equal(h.cell('sprint').closest('.group'), h.group('Sprint B'));
+        assert.equal(h.doc.activeElement, h.cell('sprint'), 'moved cell lost focus');
+        assert(h.cell('sprint').classList.contains('cell-selected'));
+        assert.equal(h.calls.scrolled.at(-1)?.recordId, '1', 'moved row was not brought into view');
+        assert.equal(h.calls.scrolled.at(-1)?.options.block, 'nearest');
+        h.doc.getElementById('btn-undo').click();
+        await waitFor(() => h.calls.updates.length === 2 && !h.doc.getElementById('btn-redo').disabled);
+        assertGroupCount(h, 'Sprint A', 2);
+        assertGroupCount(h, 'Sprint B', 1);
+        h.doc.getElementById('btn-redo').click();
+        await waitFor(() => h.calls.updates.length === 3 && !h.doc.getElementById('btn-undo').disabled);
+        assertGroupCount(h, 'Sprint A', 1);
+        assertGroupCount(h, 'Sprint B', 2);
+        await saveSprint(h, 'Sprint New');
+        assertGroupCount(h, 'Sprint New', 1);
+        assertGroupCount(h, 'Sprint B', 1);
+        assert.equal(h.doc.getElementById('stat-groups').textContent, '3');
+        await saveSprint(h, '');
+        assertGroupCount(h, '', 1);
+        assert.equal(h.group('Sprint New'), undefined, 'empty source group was retained');
+        await saveSprint(h, 'Sprint B', 3);
+        assert.equal(h.group('Sprint A'), undefined, 'last departing row left its source group');
+        assertGroupCount(h, 'Sprint B', 2);
+        assert.equal(h.doc.getElementById('stat-groups').textContent, '2');
+        assert.equal(h.doc.getElementById('stat-records').textContent, '3');
+      } finally { h.dom.window.close(); }
+    }
+  });
+
+  await test('Grouped edits and history reveal collapsed destinations and retain cell selection', async () => {
+    const h = await createWidget({ columnVisibility: { sprint: true } }, false,
+      { sprintValues: ['Sprint A', 'Sprint A', 'Sprint B'] });
+    try {
+      h.group('Sprint B').querySelector('.group-header').click();
+      assert(h.group('Sprint B').classList.contains('collapsed'));
+      await saveSprint(h, 'Sprint B');
+      assert(!h.group('Sprint B').classList.contains('collapsed'), 'edit destination stayed collapsed');
+      assert.equal(h.doc.activeElement, h.cell('sprint'));
+      assert.equal(h.doc.querySelectorAll('td.cell-selected').length, 1);
+      h.group('Sprint A').querySelector('.group-header').click();
+      h.doc.getElementById('btn-undo').click();
+      await waitFor(() => h.calls.updates.length === 2 && !h.doc.getElementById('btn-redo').disabled);
+      assert(!h.group('Sprint A').classList.contains('collapsed'), 'Undo destination stayed collapsed');
+      await waitFor(() => h.doc.activeElement === h.cell('sprint'), 'Undo focus');
+      assert(h.cell('sprint').classList.contains('cell-selected'));
+      h.group('Sprint B').querySelector('.group-header').click();
+      h.doc.getElementById('btn-redo').click();
+      await waitFor(() => h.calls.updates.length === 3 && !h.doc.getElementById('btn-undo').disabled);
+      assert(!h.group('Sprint B').classList.contains('collapsed'), 'Redo destination stayed collapsed');
+      await waitFor(() => h.doc.activeElement === h.cell('sprint'), 'Redo focus');
+      assert(h.cell('sprint').classList.contains('cell-selected'));
+    } finally { h.dom.window.close(); }
+  });
+
+  await test('Grouped formula Text and Choice remain read-only for editing and pasting', async () => {
+    for (const sprintType of ['Text', 'Choice']) {
+      const h = await createWidget({ editableColumns: ['sprint'], columnVisibility: { sprint: true } },
+        false, { sprintType, sprintFormula: true, sprintValues: ['Sprint A', 'Sprint B'] });
+      try {
+        assert.equal(h.cell('sprint').dataset.cellWritable, 'false');
+        assert.equal(h.cell('sprint').querySelector('.cell-edit-btn'), null);
+        h.open('sprint'); h.key(h.cell('sprint'), 'F2'); h.key(h.cell('sprint'), 'X');
+        assert(h.doc.getElementById('cell-editor').hidden);
+        h.paste('sprint', 'Sprint New');
+        await tick();
+        assert.equal(h.calls.updates.length, 0);
+        assert.equal(h.calls.actions.length, 0);
+        assertGroupCount(h, 'Sprint A', 1);
+        assertGroupCount(h, 'Sprint B', 1);
+      } finally { h.dom.window.close(); }
+    }
+  });
+
+  await test('Failed grouped edit keeps its draft and original groups and reports the Grist error', async () => {
+    const h = await createWidget({ columnVisibility: { sprint: true } }, false,
+      { sprintValues: ['Sprint A', 'Sprint B'] });
+    try {
+      h.win.console.error = () => {};
+      h.open('sprint');
+      h.doc.getElementById('cell-editor-text').value = 'Sprint New';
+      h.failNextWrite('ACL denied: sprint cannot be changed');
+      h.doc.getElementById('btn-editor-save').click();
+      await waitFor(() => !h.doc.getElementById('cell-editor-error').hidden
+        && !h.doc.getElementById('btn-editor-save').disabled, 'failed Sprint edit');
+      assert(!h.doc.getElementById('cell-editor').hidden);
+      assert.equal(h.doc.getElementById('cell-editor-text').value, 'Sprint New');
+      assert(h.doc.getElementById('cell-editor-error').textContent.includes('ACL denied: sprint cannot be changed'));
+      assertGroupCount(h, 'Sprint A', 1);
+      assertGroupCount(h, 'Sprint B', 1);
+      assert.equal(h.group('Sprint New'), undefined);
+      assert.equal(h.calls.updates.length, 0);
+      assert(h.doc.getElementById('btn-undo').disabled, 'failed edit was added to Undo');
+      h.doc.getElementById('btn-editor-save').click();
+      await waitFor(() => h.calls.updates.length === 1 && h.doc.getElementById('cell-editor').hidden);
+      assertGroupCount(h, 'Sprint New', 1);
+      assert.equal(h.group('Sprint A'), undefined);
+    } finally { h.dom.window.close(); }
+  });
+
+  await test('Grouping range paste regroups atomically, clears stale rectangle, and supports Undo/Redo', async () => {
+    const h = await createWidget({ sortMode: 'alpha-asc', columnVisibility: { sprint: true } }, false,
+      { sprintValues: ['Sprint A', 'Sprint B', 'Sprint A', 'Sprint C'], emitRecordsDuringWrite: true });
+    try {
+      h.select('sprint', 1);
+      h.cell('sprint', 3).dispatchEvent(new h.win.MouseEvent('click', { bubbles: true, shiftKey: true }));
+      assert.equal(h.doc.querySelectorAll('td.cell-selected').length, 2);
+      h.paste('sprint', 'Sprint C\nSprint B');
+      await waitFor(() => h.calls.actions.length === 1 && !h.doc.getElementById('btn-undo').disabled);
+      const bundle = h.calls.actions[0];
+      assert.equal(bundle.actions.length, 2);
+      assert.equal(bundle.options.parseStrings, false);
+      assert.equal(JSON.stringify(bundle.actions.map(action => [action[2], action[3].sprint])),
+        JSON.stringify([[1, 'Sprint C'], [3, 'Sprint B']]));
+      assert.equal(h.group('Sprint A'), undefined);
+      assertGroupCount(h, 'Sprint B', 2);
+      assertGroupCount(h, 'Sprint C', 2);
+      assert.equal(h.doc.querySelectorAll('td.cell-selected').length, 1, 'regrouping retained a rectangle over unrelated rows');
+      assert.equal(h.doc.querySelectorAll('td.cell-range').length, 0);
+      assert(h.cell('sprint', 1).classList.contains('cell-selected'));
+      h.doc.getElementById('btn-undo').click();
+      await waitFor(() => h.calls.actions.length === 2 && !h.doc.getElementById('btn-redo').disabled);
+      assertGroupCount(h, 'Sprint A', 2);
+      assertGroupCount(h, 'Sprint B', 1);
+      assertGroupCount(h, 'Sprint C', 1);
+      h.doc.getElementById('btn-redo').click();
+      await waitFor(() => h.calls.actions.length === 3 && !h.doc.getElementById('btn-undo').disabled);
+      assert.equal(h.group('Sprint A'), undefined);
+      assertGroupCount(h, 'Sprint B', 2);
+      assertGroupCount(h, 'Sprint C', 2);
+    } finally { h.dom.window.close(); }
   });
 
   await test('Sprints obsolete C text preference migrates to notes when C is absent', async () => {

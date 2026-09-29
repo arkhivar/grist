@@ -24,7 +24,7 @@
       resetColumns:    'Reset column layout',
       resizeColumn:    'Resize column',
       reorderColumn:   'Drag to reorder column',
-      editableHint:    'Choose Text fields. Writable number and DateTime fields are enabled automatically.',
+      editableHint:    'Choose Text fields. Writable Text/Choice group fields, numbers, and DateTime are enabled automatically.',
       editableLoading: 'Loading writable columns…',
       editableNone:    'No writable Text, number, or DateTime fields are visible.',
       editableAuto:    'DateTime · automatic',
@@ -106,7 +106,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.43';
+  const WIDGET_VERSION = '7.44';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
