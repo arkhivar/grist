@@ -27,6 +27,8 @@ const longNote = '❌ [16/07/2026 2:08 PM] A long note with <markup>, commas and
   + 'a second line that must survive opening and saving. '.repeat(30);
 
 async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
+  const notesColumn = fixture.notesColumn || 'notes';
+  const sprintColumn = fixture.sprintColumn || 'sprint';
   const dom = new JSDOM(html, {
     url: 'https://arkhivar.github.io/grist/sprints.html',
     runScripts: 'outside-only', pretendToBeVisual: true,
@@ -39,17 +41,17 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
   style.textContent = read('shared/base.css');
   doc.head.appendChild(style);
   const rawRecords = new Map([
-    [1, { id: 1, datetime: 1784178000, notes: longNote, students: 21,
-      teachers: ['L', 7], formulaText: 'Formula note', formulaRef: 21, sprint: '' }],
-    [2, { id: 2, datetime: 1784178000, notes: 'Second note', students: 22,
-      teachers: ['L', 8], formulaText: 'Formula note', formulaRef: 22, sprint: '' }],
+    [1, { id: 1, datetime: 1784178000, [notesColumn]: longNote, students: 21,
+      teachers: ['L', 7], formulaText: 'Formula note', formulaRef: 21, [sprintColumn]: '' }],
+    [2, { id: 2, datetime: 1784178000, [notesColumn]: 'Second note', students: 22,
+      teachers: ['L', 8], formulaText: 'Formula note', formulaRef: 22, [sprintColumn]: '' }],
   ]);
   if (fixture.sprintValues) {
     const templates = [...rawRecords.values()];
     rawRecords.clear();
     fixture.sprintValues.forEach((sprint, index) => {
       const id = index + 1;
-      rawRecords.set(id, { ...templates[index % templates.length], id, sprint });
+      rawRecords.set(id, { ...templates[index % templates.length], id, [sprintColumn]: sprint });
     });
   }
   const displayedRecords = () => [...rawRecords.values()].map(record => ({ ...record,
@@ -73,7 +75,7 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
     throw error;
   }
   const tableNames = ['All_att', 'Folks', 'Performance'];
-  const cols = ['datetime', 'notes', 'students', 'teachers', 'formulaText', 'formulaRef', 'sprint', 'Name', 'Name'];
+  const cols = ['datetime', notesColumn, 'students', 'teachers', 'formulaText', 'formulaRef', sprintColumn, 'Name', 'Name'];
   win.grist = {
     ready(value) { calls.ready.push(value); },
     onRecords(callback) { onRecords = callback; },
@@ -122,7 +124,7 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
         if (name === '_grist_Tables_column') return {
           id: [10, 11, 12, 13, 14, 15, 16, 20, 21], colId: cols,
           parentId: [1, 1, 1, 1, 1, 1, 1, 2, 3],
-          type: ['DateTime:Asia/Vladivostok', 'Text', 'Ref:Folks', 'RefList:Performance',
+          type: ['DateTime:Asia/Vladivostok', fixture.notesType || 'Text', 'Ref:Folks', 'RefList:Performance',
             'Text', 'Ref:Folks', fixture.sprintType || 'Choice', 'Text', 'Text'],
           isFormula: [false, false, false, false, true, true, Boolean(fixture.sprintFormula), false, false],
           visibleCol: [0, 0, 20, 21, 0, 20, 0, 0, 0],
@@ -135,7 +137,7 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
     },
   };
   win.eval(scripts.map(read).join('\n;\n'));
-  const saved = { groupBy: 'sprint', ...options };
+  const saved = options === null ? {} : { groupBy: 'sprint', ...options };
   if (recordsFirst) { onRecords(displayedRecords()); onOptions(saved, { accessLevel: 'full' }); }
   else { onOptions(saved, { accessLevel: 'full' }); onRecords(displayedRecords()); }
   await waitFor(() => doc.querySelectorAll('#editable-col-list .editable-col-option').length > 0,
@@ -223,6 +225,71 @@ function assertGroupCount(h, value, count) {
 }
 
 async function main() {
+  await test('Sprints defaults to Text or Choice sprint ahead of other Choices after a fresh load or reload', async () => {
+    for (const sprintType of ['Text', 'Choice']) {
+      for (const recordsFirst of [false, true]) {
+        const fixture = { sprintType, notesType: 'Choice', sprintValues: ['Sprint 1', 'Sprint 2'] };
+        for (let load = 0; load < 2; load++) {
+          // Deliberately provide no saved options on either load: the default
+          // must work even when Grist has not persisted the previous selection.
+          const h = await createWidget(null, recordsFirst, fixture);
+          try {
+            assert.equal(h.doc.getElementById('group-select').value, 'sprint');
+            assertGroupCount(h, 'Sprint 1', 1);
+            assertGroupCount(h, 'Sprint 2', 1);
+            assert.deepEqual(h.calls.options.filter(([key]) => key === 'groupBy'), [['groupBy', 'sprint']],
+              'automatic grouping must persist sprint without first choosing another column');
+            h.refreshOptions({ sortMode: 'alpha-asc' });
+            h.switchRecords([1, 2]);
+            await tick();
+            assert.equal(h.doc.getElementById('group-select').value, 'sprint',
+              'options or records refresh reset the automatic grouping');
+          } finally { h.dom.window.close(); }
+        }
+      }
+    }
+  });
+
+  await test('Sprints restores a valid saved grouping and replaces a removed grouping with sprint', async () => {
+    for (const recordsFirst of [false, true]) {
+      for (const groupBy of ['notes', 'datetime::month', 'removedColumn']) {
+        const h = await createWidget({ groupBy }, recordsFirst, { sprintType: 'Text', notesType: 'Choice' });
+        try {
+          const expected = groupBy === 'removedColumn' ? 'sprint' : groupBy;
+          assert.equal(h.doc.getElementById('group-select').value, expected);
+          assert.deepEqual(h.calls.options.filter(([key]) => key === 'groupBy'),
+            groupBy === 'removedColumn' ? [['groupBy', 'sprint']] : [],
+            'a valid saved grouping must win without being overwritten');
+        } finally { h.dom.window.close(); }
+      }
+    }
+  });
+
+  await test('Sprints matches sprint column IDs without case sensitivity but gives exact sprint priority', async () => {
+    for (const fixture of [
+      { sprintColumn: 'Sprint', notesType: 'Choice' },
+      { sprintColumn: 'SPRINT', notesType: 'Choice' },
+      { notesColumn: 'Sprint', notesType: 'Choice' },
+    ]) {
+      const h = await createWidget(null, false, { sprintType: 'Text', ...fixture });
+      try {
+        const expected = fixture.sprintColumn || 'sprint';
+        assert.equal(h.doc.getElementById('group-select').value, expected);
+        assert.deepEqual(h.calls.options.filter(([key]) => key === 'groupBy'), [['groupBy', expected]]);
+      } finally { h.dom.window.close(); }
+    }
+  });
+
+  await test('Sprints keeps the first Choice fallback when no sprint column is available', async () => {
+    for (const recordsFirst of [false, true]) {
+      const h = await createWidget(null, recordsFirst, { sprintColumn: 'phase', notesType: 'Choice' });
+      try {
+        assert.equal(h.doc.getElementById('group-select').value, 'notes');
+        assert.deepEqual(h.calls.options.filter(([key]) => key === 'groupBy'), [['groupBy', 'notes']]);
+      } finally { h.dom.window.close(); }
+    }
+  });
+
   await test('Sprints grouping column starts visible for saved and automatic grouping in either startup order', async () => {
     for (const recordsFirst of [false, true]) {
       for (const automatic of [false, true]) {

@@ -768,8 +768,8 @@
 
   function applyStartupGroupDefault() {
     // Options, records, and table metadata are delivered independently by Grist.
-    // Wait for all three so a saved grouping always wins and ChoiceList is never
-    // mistaken for a single-value Choice column.
+    // Wait for all three so a saved grouping always wins and the fallback can
+    // distinguish single-value Choice columns from ChoiceList columns.
     if (!optionsLoaded || !metadataLoaded || allColumns.length === 0) return false;
     if (isValidGroupByOption(groupBy)) return false;
 
@@ -792,17 +792,20 @@
       return true;
     }
 
-    const choiceColumn = allColumns.find(col =>
-      columnBaseType(columnTypes[col] || writableColumnTypes[col]) === 'Choice');
-    if (!choiceColumn) return false;
+    // Sprint is the natural default even when Grist stores it as plain Text.
+    const defaultColumn = allColumns.find(col => col === 'sprint')
+      || allColumns.find(col => col.toLowerCase() === 'sprint')
+      || allColumns.find(col =>
+        columnBaseType(columnTypes[col] || writableColumnTypes[col]) === 'Choice');
+    if (!defaultColumn) return false;
 
-    groupBy = choiceColumn;
+    groupBy = defaultColumn;
     collapsed.clear();
     rebuildColumnSelect();
-    groupSelect.value = choiceColumn;
-    grist.setOption('groupBy', choiceColumn);
+    groupSelect.value = defaultColumn;
+    grist.setOption('groupBy', defaultColumn);
     recordActionDiagnostic('Auto grouping', 'ok',
-      `column=${choiceColumn} · type=Choice`);
+      `column=${defaultColumn} · type=${columnBaseType(columnTypes[defaultColumn] || writableColumnTypes[defaultColumn])}`);
     return true;
   }
 

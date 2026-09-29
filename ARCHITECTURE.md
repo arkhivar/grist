@@ -38,9 +38,11 @@ guaranteed:
    datatypes and formula/writability information.
 
 Code that depends on more than one source must wait for every required source.
-For example, automatic grouping waits for options, records, and metadata so it
-can choose a real single-value `Choice` column without overwriting a valid
-saved grouping or mistaking `ChoiceList` for `Choice`.
+For example, automatic grouping waits for options, records, and metadata so a
+valid saved grouping always wins. Sprints then prefers the `sprint` column ID
+(exact spelling first, then case-insensitive), including plain `Text`. Without
+that field, it falls back to the first single-value `Choice` column, never a
+`ChoiceList`. Salaries keeps its Date/DateTime monthly grouping default.
 
 ## Runtime API map
 

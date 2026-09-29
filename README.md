@@ -9,8 +9,9 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 ## Features
 
 - **Automatic first grouping** — when no valid grouping is saved, the widget
-  picks the first single-value Grist Choice column; the toolbar still lets you
-  switch to any other column
+  picks `sprint` (including a plain Text field), or the first single-value Grist
+  Choice column if `sprint` is absent. A saved grouping takes priority; the
+  toolbar still lets you switch to any other column.
 - **Date-aware grouping** — Date/DateTime columns (epoch seconds **or** ISO 8601 text) can be grouped **by day, month or year**, with chronological sorting; DateTime buckets use Vladivostok calendar dates
 - **Fold / unfold** each group by clicking its header; **expand all / collapse all** in one click
 - **Group sort**: Z→A by default, or A→Z / record count ascending or descending
@@ -68,8 +69,10 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 3. Select access level **Full access** — required for row actions, field
    editing, and cross-group moves. With a lower level the view still works but
    write actions fail.
-4. The widget initially groups by the first single-value **Choice** column it
-   finds. Use the toolbar to choose a different grouping whenever needed.
+4. Sprints automatically groups by `sprint`, including when it is a plain
+   **Text** column. If that column is absent, it uses the first single-value
+   **Choice** column. A valid saved grouping takes priority on reload.
+   Use the toolbar to choose a different grouping whenever needed.
 
 ## Row actions (duplicate / delete)
 

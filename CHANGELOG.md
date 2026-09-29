@@ -2,6 +2,14 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.47 — 2026-09-30
+
+- Automatically group Sprints by `sprint` when no valid grouping is saved,
+  including plain Text fields and case variants. Preserve valid saved choices;
+  use the first single-value Choice only when no Sprint column exists.
+- Keep Salaries monthly grouping and bump both entry pages' cache keys with
+  the shared version.
+
 ## v7.46 — 2026-09-30
 
 - Show the Sprint/grouping column by default, including after a column layout

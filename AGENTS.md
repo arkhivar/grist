@@ -112,13 +112,17 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.46)
+## Current state (v7.47)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
   actions, drag between groups, inline text/DateTime editing, adjustable
   columns, diagnostics panel).
 - `index.html` gallery lists both active widgets.
+- With no valid saved grouping, Sprints picks the `sprint` column ID (exact,
+  then case-insensitive), including plain Text. Only if absent does it fall
+  back to the first single-value Choice column. Valid saved groupings win;
+  Salaries keeps its monthly Date/DateTime default.
 - Footer creation inherits the common visible student via a typed, unexpanded
   source record, as well as the clicked sprint. Grist's outer Select By filter
   does not automatically supply fields for custom-widget AddRecord actions.
@@ -174,10 +178,11 @@ payments.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 65 checks, green.
-- `tests/sprints-editing.test.js` adds 23 checks with writable notes, Reference
+- `tests/sprints-editing.test.js` adds 27 checks with writable notes, Reference
   and Reference List metadata, formula protection, saved preferences, stale
   picker loads, and grouped Text/Choice editing, movement, history, paste,
-  default visibility, saved visibility reloads, and column layout reset.
+  default visibility, saved visibility reloads, column layout reset, and
+  automatic Sprint grouping with saved preferences and startup ordering.
 - `tests/salaries.test.js` covers linked teacher matching, VLAT month boundaries,
   expense-only months, refresh, and failed expense fetches.
 - Payment rows have selector grips with single, additive, and range selection;
