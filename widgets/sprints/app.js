@@ -344,7 +344,7 @@
     if (Object.prototype.hasOwnProperty.call(columnVisibility, col)
         && typeof columnVisibility[col] === 'boolean') return columnVisibility[col];
     return !(config?.hiddenDisplayColumns || []).includes(col)
-      && (config?.showGroupingColumn || col !== groupCol);
+      && (config?.showGroupingColumn !== false || col !== groupCol);
   }
 
   function defaultColumnWidth(col) {

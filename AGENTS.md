@@ -61,6 +61,28 @@ npm test      # discovers and runs every tests/*.test.js suite
 - Re-adding / re-pointing a custom widget resets its data selection; the owner
   re-links via ⋮ → Edit data selection → Select By.
 
+## Shared UX/UI standard
+
+All widgets, including Sprints and Salaries, follow the same cell interaction
+standard. Preserve it when extending editing or adding another widget:
+
+- First click selects the cell. Once selected, one further click immediately
+  starts in-cell editing and places the caret at the clicked text position.
+  These are ordinary clicks with no double-click timing requirement; do not
+  add another activation click or force the caret to the end of the value.
+- Writable, enabled Text/Choice and Numeric/Int fields use this interaction.
+  Typing replaces the selected value; Enter/F2 edits the existing value.
+  Enter/click-away saves, Tab/Shift+Tab saves and moves, and Escape cancels.
+  Text supports Shift+Enter for a newline and native selection/copy/paste.
+- Keep the UI compact, preserve drafts and caret through refreshes, and retain
+  cell ranges, copy/paste, and Undo/Redo. Formula and payment cells stay read-only.
+  DateTime and Reference pickers remain compact, non-blocking popovers.
+- View settings persist per section. Grouping columns are visible by default;
+  an explicitly saved visibility choice wins. Feedback stays in the fixed
+  bottom-right live region without moving rows or taking focus.
+
+See [Editing fields](README.md#editing-fields) for the complete user workflow.
+
 ## Workflow
 
 - GitHub `main` is the source of truth. Direct-to-main pushes are currently
@@ -90,7 +112,7 @@ rows are read-only and a toolbar button re-fetches Expenses after edits there. K
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.45)
+## Current state (v7.46)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -130,8 +152,8 @@ payments.
   grips for every field, including hidden fields. Alt+Up/Down reorders from
   the popover. Column visibility and full order persist per widget section;
   hidden fields keep their position. The grouped field in Sprints starts
-  hidden but can be shown from the popover. At least one data column stays
-  visible. Reset column layout restores order, widths, and visibility.
+  visible; explicitly saved visibility choices remain respected. At least one
+  data column stays visible. Reset column layout restores order, widths, and visibility.
   The grip header cell contains a single expand/collapse-all toggle. Its next
   action follows the visible groups, including mixed open and closed states.
   The top control and group headers share one caret icon; their centers align
@@ -152,9 +174,10 @@ payments.
 - Notifications use a persistent, fixed bottom-right live region outside
   `#content`; never put feedback in table flow or steal cell focus.
 - Test suite: `tests/sprints.test.js`, 65 checks, green.
-- `tests/sprints-editing.test.js` adds 20 checks with writable notes, Reference
+- `tests/sprints-editing.test.js` adds 23 checks with writable notes, Reference
   and Reference List metadata, formula protection, saved preferences, stale
-  picker loads, and grouped Text/Choice editing, movement, history, and paste.
+  picker loads, and grouped Text/Choice editing, movement, history, paste,
+  default visibility, saved visibility reloads, and column layout reset.
 - `tests/salaries.test.js` covers linked teacher matching, VLAT month boundaries,
   expense-only months, refresh, and failed expense fetches.
 - Payment rows have selector grips with single, additive, and range selection;

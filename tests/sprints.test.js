@@ -1556,8 +1556,15 @@ await test('R: hidden columns can be reordered with keyboard and drag grips', as
   const before = rowOrder();
   const index = before.indexOf('sprint');
   assert(index > 0, 'the grouped sprint field is missing from column control');
+  const toggle = panel.querySelector('.column-control-row[data-column="sprint"] .column-control-toggle');
+  assert(toggle.checked, 'grouped sprint field should start visible');
+  const visibilitySaveCount = calls.setOption.length;
+  toggle.click();
+  await waitFor(() => calls.setOption.slice(visibilitySaveCount)
+    .some(([key, value]) => key === 'columnVisibility' && value.sprint === false),
+  'explicitly hide Sprint before reordering');
   assert(!panel.querySelector('.column-control-row[data-column="sprint"] .column-control-toggle').checked,
-    'grouped sprint field should start hidden');
+    'explicitly hidden grouped Sprint is still enabled');
   const saveCount = calls.setOption.length;
   const grip = panel.querySelector('.column-control-row[data-column="sprint"] .column-control-grip');
   assert(grip, 'column moving grip is missing');

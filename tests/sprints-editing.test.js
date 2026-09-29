@@ -180,6 +180,7 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
       pendingTargetFetch = { name, promise };
       return value => { pendingTargetFetch = null; resolve(value); };
     },
+    refreshOptions(value) { onOptions(value, { accessLevel: 'full' }); },
     switchRecords(ids) { onRecords(displayedRecords().filter(record => ids.includes(record.id))); },
   };
 }
@@ -222,6 +223,78 @@ function assertGroupCount(h, value, count) {
 }
 
 async function main() {
+  await test('Sprints grouping column starts visible for saved and automatic grouping in either startup order', async () => {
+    for (const recordsFirst of [false, true]) {
+      for (const automatic of [false, true]) {
+        const h = await createWidget(automatic ? { groupBy: null } : {}, recordsFirst,
+          { sprintValues: ['Sprint 1', 'Sprint 2'] });
+        try {
+          assert.equal(h.doc.getElementById('group-select').value, 'sprint');
+          assert(h.doc.querySelector('#column-strip th[data-column="sprint"]'),
+            'grouped Sprint header must be visible by default');
+          assert.equal(h.cell('sprint').textContent, 'Sprint 1');
+          h.doc.getElementById('btn-columns').click();
+          assert(h.doc.querySelector('.column-control-row[data-column="sprint"] .column-control-toggle').checked,
+            'default-visible Sprint must be checked in the column control');
+          h.doc.getElementById('btn-columns').click();
+          h.select('sprint');
+          assert(h.doc.getElementById('cell-editor-text').hidden, 'first click must only select');
+          h.cell('sprint').click();
+          assert.equal(assertInlineText(h, 'sprint').value, 'Sprint 1');
+        } finally { h.dom.window.close(); }
+      }
+    }
+  });
+
+  await test('Sprints explicit hidden and visible grouping choices survive widget reloads and refreshes', async () => {
+    let saved = {};
+    for (const visible of [false, true]) {
+      const h = await createWidget({ columnVisibility: saved }, !visible);
+      try {
+        h.doc.getElementById('btn-columns').click();
+        const toggle = h.doc.querySelector('.column-control-row[data-column="sprint"] .column-control-toggle');
+        assert.equal(toggle.checked, !visible, 'reload lost the previous grouping visibility');
+        toggle.click();
+        await waitFor(() => h.calls.options.some(([key]) => key === 'columnVisibility'),
+          'saved Sprint visibility');
+        saved = JSON.parse(JSON.stringify(h.calls.options.find(([key]) => key === 'columnVisibility')[1]));
+        assert.equal(saved.sprint, visible, 'explicit Sprint visibility was not saved');
+      } finally { h.dom.window.close(); }
+
+      const restored = await createWidget({ columnVisibility: saved }, visible);
+      try {
+        const shown = () => Boolean(restored.doc.querySelector('#column-strip th[data-column="sprint"]'));
+        assert.equal(shown(), visible, 'fresh widget did not restore saved Sprint visibility');
+        restored.refreshOptions({ sortMode: 'alpha-asc' });
+        restored.switchRecords([1, 2]);
+        await tick();
+        assert.equal(shown(), visible, 'unrelated options or record refresh reset Sprint visibility');
+        assert.equal(Boolean(restored.doc.querySelector('[data-cell-col="sprint"]')), visible,
+          'Sprint row cells disagree with header visibility');
+      } finally { restored.dom.window.close(); }
+    }
+  });
+
+  await test('Sprints resetting column layout restores the grouped Sprint column and persists its default', async () => {
+    let saved;
+    const h = await createWidget({ columnVisibility: { sprint: false, notes: false } });
+    try {
+      assert(!h.doc.querySelector('#column-strip th[data-column="sprint"]'));
+      h.doc.getElementById('btn-reset-columns').click();
+      assert(h.doc.querySelector('#column-strip th[data-column="sprint"]'), 'layout reset kept Sprint hidden');
+      assert(h.cell('notes'), 'layout reset did not restore other hidden fields');
+      await waitFor(() => h.calls.options.some(([key]) => key === 'columnVisibility'),
+        'saved default column visibility');
+      saved = JSON.parse(JSON.stringify(h.calls.options.find(([key]) => key === 'columnVisibility')[1]));
+      assert.deepEqual(saved, {}, 'layout reset should remove explicit visibility choices');
+    } finally { h.dom.window.close(); }
+    const restored = await createWidget({ columnVisibility: saved }, true);
+    try {
+      assert(restored.doc.querySelector('#column-strip th[data-column="sprint"]'),
+        'reset layout lost its default-visible Sprint after reload');
+    } finally { restored.dom.window.close(); }
+  });
+
   await test('Sprints notes default supports second click, F2 and typing without truncating saved text', async () => {
     const h = await createWidget();
     try {

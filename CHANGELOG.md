@@ -2,6 +2,14 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.46 — 2026-09-30
+
+- Show the Sprint/grouping column by default, including after a column layout
+  reset. Preserve explicitly saved visibility choices and Salaries defaults.
+- Document the shared cell interaction standard: click to select, then aim and
+  click once more to place the caret and edit immediately inside the cell.
+- Bump the shared version and both entry pages' asset keys together.
+
 ## v7.45 — 2026-09-29
 
 - Edit enabled Text and Choice fields directly in the cell across Sprints and

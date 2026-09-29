@@ -22,8 +22,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Row actions** — duplicate ⧉ and delete ✕ any record inline, always visible (two-step delete, requires **Full access**, see below)
 - **Group-footer row creation** — click **+** below any group to create a
   blank record already assigned to that group
-- **Large text editor** — enable writable Text columns in Settings, then click
-  a cell to edit long, multi-line notes and emoji content without leaving the widget
+- **In-cell text editing** — enable writable Text columns in Settings, then
+  select a cell and click again to edit notes and emoji content at the pointer
 - **DateTime editor** — click any visible, writable DateTime cell to choose its
   Vladivostok (VLAT) date and time without finding the record in the source table
 - **In-cell number editing** — type to replace a selected Int/Numeric value,
@@ -151,6 +151,16 @@ then accepts Grist's fresh `onRecords` state.
 
 ## Editing fields
 
+### Shared cell interaction standard
+
+This is the standard interaction for editable Text/Choice and Numeric/Int
+cells throughout the widget family, including Sprints and Salaries:
+**point → click to select → aim at the text → click again to place the caret
+and edit immediately inside the cell**. The second click is an ordinary click,
+with no double-click timing requirement or extra activation click. The caret
+lands where you aimed, so you can edit the middle of a value immediately.
+New widgets and editing features should reuse this shared behavior.
+
 The **Editable fields** section in Settings lists visible, writable Text
 columns. The `C` column is enabled automatically when it has that type; every
 listed Text column can be enabled or disabled independently. Visible, writable
@@ -167,9 +177,10 @@ arrow navigation work inside the editor, which scrolls without growing the row.
 Drafts and caret positions survive view refreshes; switching the linked teacher
 in Salaries closes the previous selection's draft.
 
-The visible **Sprint** column (or another writable Text/Choice grouping field)
-uses this editor automatically. Saving moves the record into the matching
-group; a new value creates a group, and clearing the value moves it to
+The **Sprint** column is visible by default, as are other grouping fields;
+an explicitly saved hidden state is still respected. A visible writable
+Text/Choice grouping field uses this editor automatically. Saving moves the
+record into the matching group; a new value creates a group, and clearing moves it to
 **(empty)**. Counts and totals update, and groups disappear when their last
 record leaves. The moved cell stays selected and its destination opens if it
 was collapsed. Undo/Redo restores the value and group; paste and fill work too.
@@ -271,6 +282,9 @@ configurable Aggregates settings and saved rules are ignored as of v6.0.
 All groups share one column layout, so a long note in one group cannot shift
 the columns in that group away from the others.
 
+- Use the toolbar's **Columns** control to show or hide a field. Grouping does
+  not hide its column by default. Visibility choices persist per section;
+  **Reset column layout** restores default visibility, widths, and order.
 - Drag the right edge of any footer column to resize that column in every
   group. Double-click the edge to restore its automatic width.
 - Drag a footer column left or right to reorder it across every group.
