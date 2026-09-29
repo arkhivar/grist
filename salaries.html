@@ -6,8 +6,8 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.44">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.44">
+  <link rel="stylesheet" href="shared/base.css?v=7.45">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.45">
 </head>
 <body>
 <div id="app">
@@ -178,7 +178,7 @@
 
 <div class="cell-editor-overlay" id="cell-editor" hidden>
   <section class="cell-editor-dialog" id="cell-editor-dialog" role="dialog">
-    <textarea id="cell-editor-text" spellcheck="true" aria-label="Edit text"></textarea>
+    <textarea id="cell-editor-text" spellcheck="true" wrap="off" rows="1" aria-label="Edit text" hidden></textarea>
     <input id="cell-editor-number" type="text" inputmode="decimal" autocomplete="off" aria-label="Edit number" hidden>
     <div class="cell-editor-datetime" id="cell-editor-datetime-panel" hidden>
       <input id="cell-editor-datetime" type="hidden">
@@ -236,12 +236,12 @@
   </div>
 </div>
 
-<script src="widgets/salaries/config.js?v=7.44"></script>
-<script src="shared/core.js?v=7.44"></script>
-<script src="widgets/salaries/attendance.js?v=7.44"></script>
-<script src="shared/references.js?v=7.44"></script>
-<script src="widgets/salaries/expenses.js?v=7.44"></script>
-  <script src="widgets/sprints/app.js?v=7.44"></script>
-  <script src="widgets/sprints/actions.js?v=7.44"></script>
+<script src="widgets/salaries/config.js?v=7.45"></script>
+<script src="shared/core.js?v=7.45"></script>
+<script src="widgets/salaries/attendance.js?v=7.45"></script>
+<script src="shared/references.js?v=7.45"></script>
+<script src="widgets/salaries/expenses.js?v=7.45"></script>
+  <script src="widgets/sprints/app.js?v=7.45"></script>
+  <script src="widgets/sprints/actions.js?v=7.45"></script>
 </body>
 </html>

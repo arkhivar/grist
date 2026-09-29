@@ -2,6 +2,19 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.45 — 2026-09-29
+
+- Edit enabled Text and Choice fields directly in the cell across Sprints and
+  Salaries, including Sprint grouping values. First click selects, second click
+  places the caret, and typing replaces the value without a popover.
+- Enter or click-away saves; Tab/Shift+Tab saves and moves; Escape cancels.
+  Preserve multiline values with Shift+Enter and native selection/clipboard.
+  Keep group movement, formulas, saved Text preferences, and session Undo/Redo.
+- Preserve drafts, caret, and scroll position through renders and unchanged
+  Salaries selection refreshes. Keep the clicked destination selected when a
+  save triggers a refresh; preserve real API errors and dismiss stale editors.
+- Bump all shared assets and both entry pages to v7.45.
+
 ## v7.44 — 2026-09-29
 
 - Enable the shared text popover for writable Text/Choice grouping fields,

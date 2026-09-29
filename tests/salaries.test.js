@@ -122,6 +122,18 @@ const month = label => cards().find(card => card.dataset.groupLabel === label);
 const refPills = (id, col) => [...doc.querySelectorAll(
   `[data-cell-id="${id}"][data-cell-col="${col}"] .cell-ref-pill`)]
   .map(pill => pill.textContent);
+const cell = (col, id = 1) => doc.querySelector(`[data-cell-id="${id}"][data-cell-col="${col}"]`);
+const key = (element, value, modifiers = {}) => element.dispatchEvent(new win.KeyboardEvent('keydown', {
+  bubbles: true, cancelable: true, key: value, ...modifiers,
+}));
+function inlineText(col, id = 1) {
+  const input = doc.getElementById('cell-editor-text');
+  assert.equal(input.closest('td'), cell(col, id), `salary ${col} editor must stay in its cell`);
+  assert(cell(col, id).classList.contains('cell-inline-editing'));
+  assert.equal(doc.activeElement, input);
+  assert(doc.getElementById('cell-editor').hidden, 'salary Text/Choice opened a popover');
+  return input;
+}
 
 async function main() {
   // Grist delivers options, records, and metadata independently.
@@ -243,12 +255,69 @@ async function main() {
   assert(doc.querySelector('[data-edit-col="wage"]'), 'writable wage is not editable');
   const notesCell = doc.querySelector('[data-cell-id="1"][data-cell-col="notes"]');
   notesCell.click();
+  assert.equal(doc.querySelector('td.cell-inline-editing'), null, 'first salary Text click must only select');
   notesCell.click();
-  assert.equal(doc.getElementById('cell-editor').hidden, false);
-  doc.getElementById('cell-editor-text').value = 'Updated note';
-  doc.getElementById('btn-editor-save').click();
+  const textInput = inlineText('notes');
+  textInput.value = 'Updated note';
+  textInput.setSelectionRange(2, 5);
+  onRecords(records);
+  await waitFor(() => cell('notes') !== notesCell);
+  await tick();
+  assert.equal(inlineText('notes'), textInput);
+  assert.equal(textInput.value, 'Updated note', 'salary refresh discarded the Text draft');
+  assert.equal(textInput.selectionStart, 2);
+  assert.equal(textInput.selectionEnd, 5);
+  key(textInput, 'Enter');
   await waitFor(() => calls.updates.some(update => update.fields?.notes === 'Updated note'));
-  await waitFor(() => doc.getElementById('cell-editor').hidden);
+  await waitFor(() => !doc.querySelector('td.cell-inline-editing'));
+  assert.equal(attendance.notes[0], 'Updated note', 'salary Text must update the original class');
+  doc.getElementById('btn-undo').click();
+  await waitFor(() => attendance.notes[0] === 'First note' && !doc.getElementById('btn-redo').disabled);
+  doc.getElementById('btn-redo').click();
+  await waitFor(() => attendance.notes[0] === 'Updated note' && !doc.getElementById('btn-undo').disabled);
+  cell('sprint').click();
+  assert.equal(doc.querySelector('td.cell-inline-editing'), null, 'first salary Choice click must only select');
+  cell('sprint').click();
+  assert.equal(inlineText('sprint').value, 'Sprint 07');
+  textInput.value = 'Sprint 08';
+  key(textInput, 'Enter');
+  await waitFor(() => attendance.sprint[0] === 'Sprint 08' && !doc.querySelector('td.cell-inline-editing'));
+  assert.equal(cell('sprint').closest('.group'), month('August 2026'),
+    'salary Choice edit changed DateTime grouping');
+  assert.equal(doc.activeElement, cell('sprint'));
+  key(cell('sprint'), 'F2');
+  inlineText('sprint').value = 'Cancelled sprint';
+  key(textInput, 'Escape');
+  assert.equal(attendance.sprint[0], 'Sprint 08');
+  assert.equal(cell('sprint').textContent, 'Sprint 08');
+  key(cell('sprint'), 'N');
+  assert.equal(inlineText('sprint').value, 'N', 'salary typing must replace Choice text');
+  key(textInput, 'Escape');
+  cell('weekday').click();
+  cell('weekday').click();
+  key(cell('weekday'), 'F2');
+  key(cell('weekday'), 'X');
+  assert.equal(doc.querySelector('td.cell-inline-editing'), null, 'salary formula Text became editable');
+  assert(doc.getElementById('cell-editor').hidden);
+
+  // DateTime keeps its VLAT calendar and regrouping while Text/Choice are in-cell.
+  cell('datetime').click();
+  key(cell('datetime'), 'F2');
+  assert.equal(doc.getElementById('cell-editor').hidden, false);
+  assert(doc.querySelector('#cell-editor .cell-editor-dialog.date-mode'));
+  assert.equal(doc.querySelector('td.cell-inline-editing'), null);
+  doc.querySelector('.date-picker-day[data-date="2026-07-31"]').click();
+  doc.getElementById('btn-editor-save').click();
+  await waitFor(() => cell('datetime')?.closest('.group') === month('July 2026')
+    && doc.getElementById('cell-editor').hidden);
+  assert.equal(attendance.datetime[0], Date.parse('2026-07-30T14:30:00Z') / 1000);
+  assert.equal(month('July 2026').querySelector('.group-badge').textContent, '2');
+  assert.equal(month('August 2026').querySelector('.group-badge').textContent, '1');
+  doc.getElementById('btn-undo').click();
+  await waitFor(() => cell('datetime')?.closest('.group') === month('August 2026')
+    && !doc.getElementById('btn-redo').disabled);
+  assert.equal(attendance.datetime[0], Date.parse('2026-07-31T14:30:00Z') / 1000);
+  assert.equal(month('August 2026').querySelector('.group-badge').textContent, '2');
   const studentCell = doc.querySelector('[data-cell-id="1"][data-cell-col="students"]');
   studentCell.click();
   studentCell.click();
@@ -434,8 +503,17 @@ async function main() {
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
 
+  if (month('August 2026').classList.contains('collapsed'))
+    month('August 2026').querySelector('.group-header').click();
+  cell('notes').click();
+  key(cell('notes'), 'F2');
+  inlineText('notes').value = 'Draft for the previous teacher';
+  const updatesBeforeTeacherChange = calls.updates.length;
   onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '1 payment');
+  assert.equal(doc.querySelector('td.cell-inline-editing'), null, 'teacher change retained a stale Text editor');
+  assert.equal(calls.updates.length, updatesBeforeTeacherChange, 'teacher change saved a stale Text draft');
+  assert.equal(attendance.notes[0], 'Updated note');
   assert(month('August 2026').querySelector('[data-expense-id="13"]'));
   const teacherPayment = month('August 2026').querySelector('[data-expense-id="13"]');
   assert.deepEqual([...teacherPayment.cells[performanceIndex].querySelectorAll('.cell-ref-pill')]

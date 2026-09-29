@@ -64,6 +64,7 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
   let onRecords;
   let onOptions;
   let pendingTargetFetch = null;
+  let pendingWrite = null;
   let nextWriteError = null;
   function checkWriteError() {
     if (!nextWriteError) return;
@@ -81,6 +82,11 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
     selectedTable: {
       getTableId: async () => 'All_att',
       async update(updates, writeOptions) {
+        if (pendingWrite) {
+          const write = pendingWrite;
+          pendingWrite = null;
+          await write;
+        }
         checkWriteError();
         const rows = Array.isArray(updates) ? updates : [updates];
         rows.forEach(row => {
@@ -141,8 +147,8 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
     assert(element, `Missing ${col} cell for ${id}`);
     return element;
   };
-  const key = (element, value) => element.dispatchEvent(new win.KeyboardEvent('keydown', {
-    bubbles: true, cancelable: true, key: value,
+  const key = (element, value, modifiers = {}) => element.dispatchEvent(new win.KeyboardEvent('keydown', {
+    bubbles: true, cancelable: true, key: value, ...modifiers,
   }));
   const select = (col, id = 1) => { cell(col, id).click(); return cell(col, id); };
   const open = (col, id = 1) => { select(col, id).click(); };
@@ -156,6 +162,11 @@ async function createWidget(options = {}, recordsFirst = false, fixture = {}) {
       return [...doc.querySelectorAll('.group')].find(card => card.dataset.groupKey === key);
     },
     failNextWrite(message) { nextWriteError = new Error(message); },
+    deferWrite() {
+      let reject;
+      pendingWrite = new Promise((resolve, fail) => { reject = fail; });
+      return message => reject(new Error(message));
+    },
     paste(col, text, id = 1) {
       const event = new win.Event('paste', { bubbles: true, cancelable: true });
       Object.defineProperty(event, 'clipboardData', {
@@ -183,14 +194,24 @@ async function test(name, run) {
 async function saveSprint(h, value, id = 1) {
   h.select('sprint', id);
   h.key(h.cell('sprint', id), 'F2');
-  assert(!h.doc.getElementById('cell-editor').hidden, 'Sprint editor did not open');
-  h.doc.getElementById('cell-editor-text').value = value;
+  const input = assertInlineText(h, 'sprint', id);
+  input.value = value;
   const before = h.calls.updates.length;
-  h.doc.getElementById('btn-editor-save').click();
+  h.key(input, 'Enter');
   await waitFor(() => h.calls.updates.length === before + 1
-    && h.doc.getElementById('cell-editor').hidden, 'saved Sprint edit');
+    && !h.doc.querySelector('td.cell-inline-editing'), 'saved Sprint edit');
   assert.equal(h.calls.updates[before].fields.sprint, value);
   assert.equal(h.calls.updates[before].options.parseStrings, false);
+}
+
+function assertInlineText(h, col, id = 1) {
+  const input = h.doc.getElementById('cell-editor-text');
+  assert.equal(input.closest('td'), h.cell(col, id), `${col} editor must be inside its cell`);
+  assert(h.cell(col, id).classList.contains('cell-inline-editing'), `${col} has no inline editing state`);
+  assert.equal(input.hidden, false);
+  assert(h.doc.getElementById('cell-editor').hidden, 'text editing opened a popover');
+  assert.equal(h.doc.activeElement, input, 'in-cell editor must take keyboard input immediately');
+  return input;
 }
 
 function assertGroupCount(h, value, count) {
@@ -211,23 +232,24 @@ async function main() {
       assert.equal(h.cell('notes').textContent, longNote);
       h.select('notes');
       assert(h.doc.getElementById('cell-editor').hidden, 'first click must only select');
+      assert.equal(h.doc.querySelector('td.cell-inline-editing'), null);
       h.cell('notes').click();
-      assert(!h.doc.getElementById('cell-editor').hidden, 'second click did not open notes');
-      assert.equal(h.doc.getElementById('cell-editor-text').value, longNote);
+      const input = assertInlineText(h, 'notes');
+      assert.equal(input.value, longNote);
       const fullText = `${longNote}\nA complete edited final line.`;
-      h.doc.getElementById('cell-editor-text').value = fullText;
-      h.doc.getElementById('btn-editor-save').click();
-      await waitFor(() => h.calls.updates.length === 1 && h.doc.getElementById('cell-editor').hidden);
+      input.value = fullText;
+      h.key(input, 'Enter', { ctrlKey: true });
+      await waitFor(() => h.calls.updates.length === 1 && !h.doc.querySelector('td.cell-inline-editing'));
       assert.equal(h.calls.updates[0].fields.notes, fullText);
       assert.equal(h.calls.updates[0].options.parseStrings, false);
       h.select('notes'); h.key(h.cell('notes'), 'F2');
-      assert.equal(h.doc.getElementById('cell-editor-text').value, fullText);
-      h.doc.getElementById('btn-editor-cancel').click();
+      assert.equal(assertInlineText(h, 'notes').value, fullText);
+      h.key(input, 'Escape');
+      assert.equal(h.doc.activeElement, h.cell('notes'));
       h.key(h.cell('notes'), 'Z');
-      assert(!h.doc.getElementById('cell-editor').hidden, 'typing did not open notes');
-      assert.equal(h.doc.getElementById('cell-editor-text').value, 'Z');
-      h.doc.getElementById('btn-editor-save').click();
-      await waitFor(() => h.calls.updates.length === 2 && h.doc.getElementById('cell-editor').hidden);
+      assert.equal(assertInlineText(h, 'notes').value, 'Z');
+      h.key(input, 'Enter');
+      await waitFor(() => h.calls.updates.length === 2 && !h.doc.querySelector('td.cell-inline-editing'));
       assert.equal(h.calls.updates[1].fields.notes, 'Z');
     } finally { h.dom.window.close(); }
   });
@@ -262,6 +284,130 @@ async function main() {
     } finally { h.dom.window.close(); }
   });
 
+  await test('In-cell Text keeps native selection, clipboard, composition and multiline typing', async () => {
+    const h = await createWidget();
+    try {
+      h.open('notes');
+      const input = assertInlineText(h, 'notes');
+      input.value = 'First line\nSecond line';
+      input.setSelectionRange(2, 7);
+      for (const [key, modifiers] of [
+        ['ArrowLeft', {}], ['ArrowDown', { shiftKey: true }],
+        ['z', { ctrlKey: true }], ['Enter', { shiftKey: true }],
+        ['Enter', { isComposing: true }],
+      ]) {
+        assert.equal(h.key(input, key, modifiers), true, `${key} was prevented inside Text`);
+      }
+      for (const type of ['copy', 'paste']) {
+        const event = new h.win.Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, 'clipboardData', { value: {
+          getData: () => 'Pasted\ttext\nwith a newline',
+          setData: () => { throw new Error('Widget intercepted native text copy'); },
+        } });
+        input.dispatchEvent(event);
+        assert.equal(event.defaultPrevented, false, `${type} was intercepted inside Text`);
+      }
+      input.dispatchEvent(new h.win.MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+      input.dispatchEvent(new h.win.MouseEvent('pointermove', { bubbles: true, buttons: 1 }));
+      await tick();
+      assert.equal(input.value, 'First line\nSecond line');
+      assert.equal(input.selectionStart, 2);
+      assert.equal(input.selectionEnd, 7);
+      assert.equal(h.doc.querySelectorAll('td.cell-selected').length, 1);
+      assert(h.cell('notes').classList.contains('cell-selected'));
+      assert.equal(h.calls.updates.length, 0);
+      assert.equal(h.calls.actions.length, 0);
+      h.key(input, 'Enter');
+      await waitFor(() => h.calls.updates.length === 1 && !h.doc.querySelector('td.cell-inline-editing'));
+      assert.equal(h.calls.updates[0].fields.notes, 'First line\nSecond line');
+    } finally { h.dom.window.close(); }
+  });
+
+  await test('In-cell Text Tab saves and moves in either direction, while Escape cancels', async () => {
+    const h = await createWidget();
+    try {
+      h.open('notes');
+      const input = assertInlineText(h, 'notes');
+      input.value = 'Saved with Tab';
+      h.key(input, 'Tab');
+      await waitFor(() => h.calls.updates.length === 1 && h.doc.activeElement === h.cell('students'));
+      assert.equal(h.calls.updates[0].fields.notes, 'Saved with Tab');
+      assert(h.doc.getElementById('salary-ref-editor').hidden, 'Tab should select the next cell');
+      h.open('notes');
+      assertInlineText(h, 'notes').value = 'Saved with Shift+Tab';
+      h.key(input, 'Tab', { shiftKey: true });
+      await waitFor(() => h.calls.updates.length === 2 && h.doc.activeElement === h.cell('datetime'));
+      assert.equal(h.calls.updates[1].fields.notes, 'Saved with Shift+Tab');
+      h.open('notes');
+      assertInlineText(h, 'notes').value = 'Cancelled';
+      h.key(input, 'Escape');
+      assert.equal(h.doc.activeElement, h.cell('notes'));
+      assert.equal(h.cell('notes').textContent, 'Saved with Shift+Tab');
+      assert.equal(h.calls.updates.length, 2);
+      assert.equal(h.doc.querySelector('td.cell-inline-editing'), null);
+    } finally { h.dom.window.close(); }
+  });
+
+  await test('Click-away saves Text without stealing the newly selected cell or toolbar focus', async () => {
+    const h = await createWidget({ columnVisibility: { sprint: true } }, false,
+      { emitRecordsDuringWrite: true, sprintValues: ['Sprint A', 'Sprint B'] });
+    try {
+      h.open('notes');
+      const input = assertInlineText(h, 'notes');
+      input.value = 'Saved by selecting another row';
+      h.cell('notes', 2).click();
+      await waitFor(() => h.calls.updates.length === 1 && !h.doc.querySelector('td.cell-inline-editing'));
+      assert.equal(h.calls.updates[0].fields.notes, 'Saved by selecting another row');
+      assert.equal(h.doc.activeElement, h.cell('notes', 2));
+      assert(h.cell('notes', 2).classList.contains('cell-selected'));
+      assert.equal(h.doc.querySelectorAll('td.cell-selected').length, 1);
+      h.cell('notes', 2).click();
+      assertInlineText(h, 'notes', 2).value = 'Saved by clicking the toolbar';
+      const toolbarControl = h.doc.getElementById('sort-select');
+      toolbarControl.focus();
+      toolbarControl.click();
+      await waitFor(() => h.calls.updates.length === 2 && !h.doc.querySelector('td.cell-inline-editing'));
+      assert.equal(h.calls.updates[1].fields.notes, 'Saved by clicking the toolbar');
+      assert.equal(h.doc.activeElement, toolbarControl, 'saving stole focus from the toolbar');
+      h.open('sprint');
+      assertInlineText(h, 'sprint').value = 'Sprint B';
+      h.cell('notes', 2).click();
+      await waitFor(() => h.calls.updates.length === 3 && !h.doc.querySelector('td.cell-inline-editing'));
+      assertGroupCount(h, 'Sprint B', 2);
+      assert.equal(h.group('Sprint A'), undefined);
+      assert.equal(h.doc.activeElement, h.cell('notes', 2), 'regrouping stole the newly selected cell');
+      assert(h.cell('notes', 2).classList.contains('cell-selected'));
+    } finally { h.dom.window.close(); }
+  });
+
+  await test('Record refresh preserves the in-cell Text draft, caret and focus, and removes stale editors', async () => {
+    const h = await createWidget();
+    try {
+      h.open('notes');
+      const input = assertInlineText(h, 'notes');
+      input.value = 'An unsaved\nmultiline draft';
+      input.setSelectionRange(3, 9, 'backward');
+      input.scrollTop = 18;
+      input.scrollLeft = 5;
+      h.switchRecords([1, 2]);
+      await tick();
+      assert.equal(assertInlineText(h, 'notes'), input, 'refresh replaced the native textarea');
+      assert.equal(input.value, 'An unsaved\nmultiline draft');
+      assert.equal(input.selectionStart, 3);
+      assert.equal(input.selectionEnd, 9);
+      assert.equal(input.selectionDirection, 'backward');
+      assert.equal(input.scrollTop, 18);
+      assert.equal(input.scrollLeft, 5);
+      assert.equal(h.calls.updates.length, 0, 'refresh saved an unfinished draft');
+      h.switchRecords([2]);
+      await tick();
+      assert.equal(h.doc.querySelector('td.cell-inline-editing'), null);
+      assert.equal(input.closest('td'), null, 'removed row retained an active editor');
+      assert(h.doc.getElementById('cell-editor').hidden);
+      assert.equal(h.calls.updates.length, 0);
+    } finally { h.dom.window.close(); }
+  });
+
   await test('Sprints Reference List uses multi-select, typed raw IDs and session Undo/Redo', async () => {
     const h = await createWidget();
     try {
@@ -293,6 +439,7 @@ async function main() {
         assert.equal(h.cell(col).querySelector('.cell-edit-btn'), null);
         h.open(col); h.key(h.cell(col), 'F2'); h.key(h.cell(col), 'x');
         assert(h.doc.getElementById('cell-editor').hidden);
+        assert.equal(h.doc.querySelector('td.cell-inline-editing'), null);
         assert(h.doc.getElementById('salary-ref-editor').hidden);
       }
       assert.equal(h.calls.updates.length, 0);
@@ -309,6 +456,7 @@ async function main() {
         assert.equal(h.win.getComputedStyle(textValue).overflow, 'hidden', 'disabled notes can overflow into adjacent cells');
         h.open('notes'); h.key(h.cell('notes'), 'F2');
         assert(h.doc.getElementById('cell-editor').hidden);
+        assert.equal(h.doc.querySelector('td.cell-inline-editing'), null);
         assert(!h.calls.options.some(([key, value]) => key === 'editableColumns' && JSON.parse(value).includes('notes')),
           'default overwrote saved text opt-out');
       } finally { h.dom.window.close(); }
@@ -328,17 +476,15 @@ async function main() {
           assert(automatic?.querySelector('input:checked:disabled'), 'group field is missing its automatic setting');
           h.select('sprint');
           assert(h.doc.getElementById('cell-editor').hidden, 'first click must only select Sprint');
+          assert.equal(h.doc.querySelector('td.cell-inline-editing'), null);
           h.cell('sprint').click();
-          assert(!h.doc.getElementById('cell-editor').hidden, 'second click did not open Sprint');
-          assert(h.doc.getElementById('cell-editor').classList.contains('popover-mode'));
-          assert.equal(h.doc.getElementById('cell-editor-text').value, 'Sprint A');
+          assert.equal(assertInlineText(h, 'sprint').value, 'Sprint A');
           h.key(h.doc.getElementById('cell-editor-text'), 'Escape');
           h.key(h.cell('sprint'), 'F2');
-          assert(!h.doc.getElementById('cell-editor').hidden, 'F2 did not open Sprint');
-          assert.equal(h.doc.getElementById('cell-editor-text').value, 'Sprint A');
-          h.doc.getElementById('btn-editor-cancel').click();
+          assert.equal(assertInlineText(h, 'sprint').value, 'Sprint A');
+          h.key(h.doc.getElementById('cell-editor-text'), 'Escape');
           h.key(h.cell('sprint'), 'N');
-          assert.equal(h.doc.getElementById('cell-editor-text').value, 'N', 'typing did not replace Sprint text');
+          assert.equal(assertInlineText(h, 'sprint').value, 'N', 'typing did not replace Sprint text');
           h.key(h.doc.getElementById('cell-editor-text'), 'Escape');
           assert.equal(h.calls.updates.length, 0, 'cancelled edits wrote Sprint');
           const grouping = h.doc.getElementById('group-select');
@@ -424,6 +570,7 @@ async function main() {
         assert.equal(h.cell('sprint').querySelector('.cell-edit-btn'), null);
         h.open('sprint'); h.key(h.cell('sprint'), 'F2'); h.key(h.cell('sprint'), 'X');
         assert(h.doc.getElementById('cell-editor').hidden);
+        assert.equal(h.doc.querySelector('td.cell-inline-editing'), null);
         h.paste('sprint', 'Sprint New');
         await tick();
         assert.equal(h.calls.updates.length, 0);
@@ -440,23 +587,56 @@ async function main() {
     try {
       h.win.console.error = () => {};
       h.open('sprint');
-      h.doc.getElementById('cell-editor-text').value = 'Sprint New';
+      const input = assertInlineText(h, 'sprint');
+      input.value = 'Sprint New';
       h.failNextWrite('ACL denied: sprint cannot be changed');
-      h.doc.getElementById('btn-editor-save').click();
-      await waitFor(() => !h.doc.getElementById('cell-editor-error').hidden
-        && !h.doc.getElementById('btn-editor-save').disabled, 'failed Sprint edit');
-      assert(!h.doc.getElementById('cell-editor').hidden);
-      assert.equal(h.doc.getElementById('cell-editor-text').value, 'Sprint New');
-      assert(h.doc.getElementById('cell-editor-error').textContent.includes('ACL denied: sprint cannot be changed'));
+      h.key(input, 'Enter');
+      await waitFor(() => input.getAttribute('aria-invalid') === 'true'
+        && !input.disabled, 'failed Sprint edit');
+      assert.equal(assertInlineText(h, 'sprint').value, 'Sprint New');
+      assert(h.doc.getElementById('toast').textContent.includes('ACL denied: sprint cannot be changed'));
       assertGroupCount(h, 'Sprint A', 1);
       assertGroupCount(h, 'Sprint B', 1);
       assert.equal(h.group('Sprint New'), undefined);
       assert.equal(h.calls.updates.length, 0);
       assert(h.doc.getElementById('btn-undo').disabled, 'failed edit was added to Undo');
-      h.doc.getElementById('btn-editor-save').click();
-      await waitFor(() => h.calls.updates.length === 1 && h.doc.getElementById('cell-editor').hidden);
+      h.key(input, 'Enter');
+      await waitFor(() => h.calls.updates.length === 1 && !h.doc.querySelector('td.cell-inline-editing'));
       assertGroupCount(h, 'Sprint New', 1);
       assert.equal(h.group('Sprint A'), undefined);
+    } finally { h.dom.window.close(); }
+  });
+
+  await test('A failed pending edit of a removed row reports its error without blocking another cell', async () => {
+    const h = await createWidget();
+    try {
+      h.win.console.error = () => {};
+      h.open('notes');
+      const input = assertInlineText(h, 'notes');
+      input.value = 'Pending edit of the previous row';
+      const rejectWrite = h.deferWrite();
+      h.key(input, 'Enter');
+      assert(input.disabled, 'pending save must disable its draft');
+      h.switchRecords([2]);
+      assert.equal(h.doc.querySelector('[data-cell-id="1"]'), null);
+      const toolbarControl = h.doc.getElementById('sort-select');
+      toolbarControl.focus();
+      rejectWrite('ACL denied: previous row cannot be changed');
+      await waitFor(() => h.doc.getElementById('toast').textContent
+        .includes('ACL denied: previous row cannot be changed') && !input.disabled,
+      'failed save after selection changed');
+      assert.equal(input.closest('td'), null, 'removed row kept an in-cell editor');
+      assert.equal(input.hidden, true, 'failed removed-row draft left an invisible active input');
+      assert(h.doc.getElementById('cell-editor').hidden);
+      assert.equal(h.doc.activeElement, toolbarControl, 'stale save failure stole focus');
+      assert.equal(h.calls.updates.length, 0);
+      assert(h.doc.getElementById('btn-undo').disabled, 'failed save entered session history');
+      h.open('notes', 2);
+      assertInlineText(h, 'notes', 2).value = 'New visible row edit';
+      h.key(input, 'Enter');
+      await waitFor(() => h.calls.updates.length === 1 && !h.doc.querySelector('td.cell-inline-editing'));
+      assert.equal(h.calls.updates[0].id, 2);
+      assert.equal(h.calls.updates[0].fields.notes, 'New visible row edit');
     } finally { h.dom.window.close(); }
   });
 
@@ -498,7 +678,7 @@ async function main() {
     try {
       assert(h.cell('notes').querySelector('.cell-edit-btn'), 'legacy C preference did not enable notes');
       h.open('notes');
-      assert(!h.doc.getElementById('cell-editor').hidden);
+      assertInlineText(h, 'notes');
     } finally { h.dom.window.close(); }
   });
 

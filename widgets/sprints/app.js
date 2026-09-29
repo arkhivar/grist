@@ -935,8 +935,12 @@
 
   grist.onRecords((records) => {
     if (typeof salaryLoadClassColumns === 'function') {
+      const sameSelection = salaryIsSameClassSelection(records || []);
       salaryLoadClassColumns(records || [], expanded => applyIncomingRecords(expanded));
-      applyIncomingRecords([], false);
+      // A refresh of the same linked classes must not discard an inline draft.
+      // A new selection clears immediately while its class records are loading.
+      if (sameSelection) render();
+      else applyIncomingRecords([], false);
     } else {
       applyIncomingRecords(records);
     }
@@ -1171,8 +1175,11 @@
       renderColumnControlList();
       positionColumnControl();
     }
-    const restoreNumberFocus = document.activeElement === cellEditorNumber;
-    const numberSelection = [cellEditorNumber.selectionStart, cellEditorNumber.selectionEnd];
+    const inlineInput = inlineEditorInput();
+    const restoreInlineFocus = inlineInput && document.activeElement === inlineInput;
+    const inlineSelection = inlineInput && [inlineInput.selectionStart, inlineInput.selectionEnd,
+      inlineInput.selectionDirection];
+    const inlineScroll = inlineInput && [inlineInput.scrollLeft, inlineInput.scrollTop];
     refreshRowSortControls();
     if (typeof closeRowContextMenu === 'function') closeRowContextMenu(false);
     const restoreCellFocus = content.contains(document.activeElement)
@@ -1187,8 +1194,8 @@
     });
 
     if (!groupBy || allRecords.length === 0) {
-      if (editingCell?.kind === 'number') {
-        cellEditorDialog.insertBefore(cellEditorNumber, cellEditorDateTimePanel);
+      if (inlineInput) {
+        cellEditorDialog.insertBefore(inlineInput, cellEditorDateTimePanel);
         closeFieldEditor();
       }
       emptyState.style.display = '';
@@ -1291,14 +1298,15 @@
     });
     startPendingRowAnimations();
     refreshCellRange();
-    if (editingCell && editingCell.kind === 'number') {
+    if (inlineInput && editingCell) {
       const cell = findDataCell(editingCell.recordId, editingCell.col);
-      if (cell && editKindForColumn(editingCell.col) === 'number') {
-        attachInlineNumber(cell);
-        if (restoreNumberFocus) {
-          cellEditorNumber.focus({ preventScroll: true });
-          cellEditorNumber.setSelectionRange(...numberSelection);
-        }
+      if (cell && editKindForColumn(editingCell.col) === editingCell.kind) {
+        attachInlineEditor(cell);
+        if (restoreInlineFocus) {
+          inlineInput.focus({ preventScroll: true });
+          inlineInput.setSelectionRange(...inlineSelection);
+        } else if (restoreCellFocus) focusSelectedCell();
+        [inlineInput.scrollLeft, inlineInput.scrollTop] = inlineScroll;
       } else if (!btnEditorSave.disabled) closeFieldEditor();
     } else if (restoreCellFocus) focusSelectedCell();
     if (focusedHeader?.toggle) {
@@ -2264,7 +2272,7 @@
     const contentHtml = editKind
       ? `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
         + ` aria-label="${esc(editLabelForKind(editKind))}: ${colAttr}"`
-        + (editKind === 'number' ? '>' : ` aria-haspopup="dialog" aria-expanded="false">`)
+        + (editKind === 'number' || editKind === 'text' ? '>' : ` aria-haspopup="dialog" aria-expanded="false">`)
         + `<span class="cell-edit-value">${rendered}</span></button>`
       : `<span class="cell-display-value">${rendered}</span>`;
     return `<td class="${classes}" data-cell-id="${id}" data-cell-col="${colAttr}"`
@@ -2273,10 +2281,6 @@
         ? ' title="Read-only number: edit its source values or formula in Grist"' : '')
       + ` aria-selected="${String(isSelected)}">${contentHtml}`
       + `<span class="cell-fill-handle" aria-hidden="true" title="${esc(T.fillCells)}"></span></td>`;
-  }
-
-  function updateEditorCharacterCount() {
-    cellEditorCount.textContent = `${cellEditorText.value.length} ${T.editCharacters}`;
   }
 
   function setEditorBusy(busy) {
@@ -2458,7 +2462,7 @@
   }
 
   function positionFieldEditorPopover() {
-    if (!editingCell || editingCell.kind === 'number') return;
+    if (!editingCell || inlineEditorInput()) return;
     const anchor = editingCell.anchorEl;
     if (!anchor || !anchor.isConnected) {
       closeFieldEditor();
@@ -2489,10 +2493,31 @@
     cellEditorDialog.style.top = `${Math.round(top)}px`;
   }
 
-  function attachInlineNumber(cell) {
-    cell.classList.add('cell-number-editing');
-    cell.appendChild(cellEditorNumber);
+  function inlineEditorInput() {
+    return editingCell?.kind === 'text' ? cellEditorText
+      : editingCell?.kind === 'number' ? cellEditorNumber : null;
+  }
+
+  function attachInlineEditor(cell) {
+    cell.classList.add('cell-inline-editing');
+    cell.appendChild(inlineEditorInput());
     editingCell.anchorEl = cell.querySelector('.cell-edit-btn');
+  }
+
+  function textCaretAtPoint(anchor, value, clientX, clientY) {
+    const text = anchor?.querySelector('.cell-edit-value');
+    if (!text || text.textContent !== value || clientX == null || clientY == null) return value.length;
+    // Read the browser's caret from the displayed proportional text before
+    // hiding it. DOM offsets preserve Unicode, whitespace, and line breaks.
+    const caret = document.caretPositionFromPoint?.(clientX, clientY);
+    const range = caret ? null : document.caretRangeFromPoint?.(clientX, clientY);
+    const node = caret?.offsetNode || range?.startContainer;
+    const offset = caret?.offset ?? range?.startOffset;
+    if (!node || !text.contains(node)) return value.length;
+    const prefix = document.createRange();
+    prefix.selectNodeContents(text);
+    prefix.setEnd(node, offset);
+    return Math.min(value.length, prefix.toString().length);
   }
 
   // The second click chooses a caret position in the existing value. Measure
@@ -2511,9 +2536,9 @@
     input.setSelectionRange(position, position);
   }
 
-  function openFieldEditor(idStr, col, anchorEl = null, initialText = null, clientX = null) {
+  function openFieldEditor(idStr, col, anchorEl = null, initialText = null, clientX = null, clientY = null) {
     if (cellHistoryBusy || btnEditorSave.disabled) return;
-    if (editingCell?.kind === 'number') return;
+    if (inlineEditorInput()) return;
     const kind = editKindForColumn(col);
     if (!kind) return;
     if (kind === 'reference') {
@@ -2525,6 +2550,7 @@
     if (!rec) return;
     const isDateTime = kind === 'datetime';
     const isNumber = kind === 'number';
+    if (editingCell) closeFieldEditor();
     const value = isDateTime
       ? parseDateValueSec(rec[col])
       : (rec[col] == null ? '' : String(rec[col]));
@@ -2532,6 +2558,8 @@
       ? Math.floor(value / 60) * 60
       : value;
     const historyValue = cellHistoryValue(rec[col], cellColumnType(col));
+    const textCaret = kind === 'text' && initialText == null
+      ? textCaretAtPoint(anchorEl, value, clientX, clientY) : null;
     editingCell = { recordId, col, kind, originalValue, historyValue, anchorEl };
     const editorLabel = `${editLabelForKind(kind)}: ${col}${isDateTime ? ' (VLAT)' : ''}`;
     cellEditorText.setAttribute('aria-label', editorLabel);
@@ -2540,14 +2568,17 @@
     cellEditorError.hidden = true;
     cellEditorError.textContent = '';
     cellEditorNumber.removeAttribute('aria-invalid');
-    if (isNumber) {
-      cellEditorNumber.value = initialText == null ? value : initialText;
-      cellEditorNumber.hidden = false;
-      attachInlineNumber(anchorEl.closest('td.data-cell'));
+    cellEditorText.removeAttribute('aria-invalid');
+    const input = inlineEditorInput();
+    if (input) {
+      input.value = initialText == null ? value : initialText;
+      input.hidden = false;
+      attachInlineEditor(findDataCell(recordId, col));
       setEditorBusy(false);
-      cellEditorNumber.focus({ preventScroll: true });
-      cellEditorNumber.setSelectionRange(cellEditorNumber.value.length, cellEditorNumber.value.length);
-      if (clientX != null) positionNumberCaret(clientX);
+      input.focus({ preventScroll: true });
+      const caret = textCaret ?? input.value.length;
+      input.setSelectionRange(caret, caret);
+      if (isNumber && clientX != null) positionNumberCaret(clientX);
       return;
     }
     cellEditorDialog.classList.toggle('date-mode', isDateTime);
@@ -2557,35 +2588,26 @@
     cellEditorDialog.removeAttribute('aria-labelledby');
     cellEditorDialog.setAttribute('aria-label', editorLabel);
     if (anchorEl) anchorEl.setAttribute('aria-expanded', 'true');
-    cellEditorText.hidden = isDateTime;
+    cellEditorText.hidden = true;
     cellEditorNumber.hidden = true;
     cellEditorDateTimePanel.hidden = !isDateTime;
-    if (isDateTime) {
-      setDateTimePickerValue(value);
-      cellEditorCount.textContent = 'VLAT';
-    } else {
-      cellEditorText.value = initialText == null ? value : initialText;
-      updateEditorCharacterCount();
-    }
+    setDateTimePickerValue(value);
+    cellEditorCount.textContent = 'VLAT';
     setEditorBusy(false);
     cellEditor.hidden = false;
     positionFieldEditorPopover();
-    // Focus synchronously so fast typing cannot lose the second character.
-    if (isDateTime) {
-      focusDateTimePicker();
-    } else {
-      cellEditorText.focus();
-      cellEditorText.setSelectionRange(cellEditorText.value.length, cellEditorText.value.length);
-    }
+    focusDateTimePicker();
   }
 
   function closeFieldEditor() {
     if (btnEditorSave.disabled) return;
     const anchor = editingCell && editingCell.anchorEl;
-    const numberCell = cellEditorNumber.closest('td');
-    if (numberCell) numberCell.classList.remove('cell-number-editing');
-    cellEditorDialog.insertBefore(cellEditorNumber, cellEditorDateTimePanel);
-    cellEditorNumber.removeAttribute('aria-invalid');
+    [cellEditorText, cellEditorNumber].forEach(input => {
+      input.closest('td')?.classList.remove('cell-inline-editing');
+      cellEditorDialog.insertBefore(input, cellEditorDateTimePanel);
+      input.removeAttribute('aria-invalid');
+      input.hidden = true;
+    });
     if (anchor && anchor.isConnected && anchor.hasAttribute('aria-expanded')) anchor.setAttribute('aria-expanded', 'false');
     cellEditor.hidden = true;
     cellEditorDialog.classList.remove('date-mode');
@@ -2601,7 +2623,7 @@
     cellEditorText.value = '';
     cellEditorNumber.value = '';
     cellEditorNumber.hidden = true;
-    cellEditorText.hidden = false;
+    cellEditorText.hidden = true;
     cellEditorDateTime.value = '';
     datePickerSelectedDate = '';
     datePickerSelectedTime = '00:00';
@@ -2627,13 +2649,13 @@
       else if (kind === 'number') {
         cellEditorNumber.setAttribute('aria-invalid', 'true');
         showToast(cellEditorError.textContent);
+        selectDataCell(cellEditorNumber.closest('td'), false);
         cellEditorNumber.focus();
       }
       return false;
     }
     if (nextValue === originalValue) {
       closeFieldEditor();
-      if (kind === 'text') focusSelectedCell();
       return true;
     }
     setEditorBusy(true);
@@ -2664,7 +2686,6 @@
       closeFieldEditor();
       const regrouped = prepareGroupingCellChanges(changes, col);
       render();
-      if (kind === 'text') focusSelectedCell();
       if (regrouped) scrollRegroupedCellIntoView();
       return true;
     } catch (err) {
@@ -2673,13 +2694,16 @@
       cellEditorError.hidden = false;
       setEditorBusy(false);
       if (kind === 'datetime') focusDateTimePicker();
-      else if (kind === 'number') {
-        cellEditorNumber.setAttribute('aria-invalid', 'true');
+      else if (inlineEditorInput()) {
+        const input = inlineEditorInput();
         showToast(message);
-        selectDataCell(cellEditorNumber.closest('td'), false);
-        cellEditorNumber.focus();
+        const cell = findDataCell(recordId, col);
+        if (cell && !cell.closest('.collapsed') && editKindForColumn(col) === kind) {
+          input.setAttribute('aria-invalid', 'true');
+          selectDataCell(cell, false);
+          input.focus({ preventScroll: true });
+        } else closeFieldEditor();
       }
-      else cellEditorText.focus();
       return false;
     } finally {
       cellHistoryBusy = false;
@@ -3105,7 +3129,8 @@
     }
     const editBtn = cell.querySelector('button[data-edit-id][data-edit-col]');
     if (wasSelected && !e.shiftKey && editBtn && !editBtn.disabled)
-      openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn, null, e.detail ? e.clientX : null);
+      openFieldEditor(editBtn.dataset.editId, editBtn.dataset.editCol, editBtn, null,
+        e.detail ? e.clientX : null, e.detail ? e.clientY : null);
   });
 
   content.addEventListener('pointerdown', (e) => {
@@ -3241,8 +3266,17 @@
   updateCellHistoryControls();
 
   document.addEventListener('click', (e) => {
-    if (editingCell && editingCell.kind === 'number') {
-      if (!cellEditorNumber.closest('td')?.contains(e.target)) {
+    const input = inlineEditorInput();
+    if (input) {
+      if (!input.closest('td')?.contains(e.target)) {
+        const targetCell = e.target.closest('td.data-cell');
+        if (targetCell && content.contains(targetCell)) {
+          // Select before writing: Grist can refresh synchronously during the
+          // update, detaching the original target before its click bubbles.
+          selectDataCell(targetCell, true, e.shiftKey);
+          e.preventDefault();
+          e.stopPropagation();
+        }
         saveFieldEditor();
         // Validation is synchronous: do not leave an invalid draft behind.
         if (editingCell && !btnEditorSave.disabled) {
@@ -3266,7 +3300,6 @@
   window.addEventListener('resize', positionFieldEditorPopover);
   content.addEventListener('scroll', positionFieldEditorPopover, { passive: true });
 
-  cellEditorText.addEventListener('input', updateEditorCharacterCount);
   function onEditorKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -3277,14 +3310,15 @@
       focusSelectedCell();
     }
   }
-  cellEditorText.addEventListener('keydown', onEditorKeydown);
-  cellEditorNumber.addEventListener('keydown', async (e) => {
+  async function onInlineEditorKeydown(e) {
     if (e.isComposing) return;
-    if (e.key === 'Enter' || e.key === 'Tab') {
+    if ((e.key === 'Enter' && !(e.shiftKey && !e.ctrlKey && !e.metaKey && e.target === cellEditorText))
+        || e.key === 'Tab') {
       e.preventDefault();
       e.stopPropagation();
+      const editor = editingCell;
       const direction = e.key === 'Tab' ? (e.shiftKey ? 'ArrowLeft' : 'ArrowRight') : null;
-      if (await saveFieldEditor()) {
+      if (await saveFieldEditor() && editor && selectedCellMatches(editor.recordId, editor.col)) {
         if (direction) moveSelectedCell(direction);
         focusSelectedCell();
       }
@@ -3294,7 +3328,9 @@
       closeFieldEditor();
       focusSelectedCell();
     }
-  });
+  }
+  cellEditorText.addEventListener('keydown', onInlineEditorKeydown);
+  cellEditorNumber.addEventListener('keydown', onInlineEditorKeydown);
   cellEditorDateTimePanel.addEventListener('keydown', onEditorKeydown);
   datePickerPrev.addEventListener('click', () => shiftDatePickerMonth(-1));
   datePickerNext.addEventListener('click', () => shiftDatePickerMonth(1));

@@ -4,6 +4,7 @@ let salaryPaymentsByMonth = new Map();
 let salaryPaymentsLoaded = false;
 let salaryPaymentRequest = 0;
 let salaryClassColumnsRequest = 0;
+let salaryClassSelectionKey = null;
 let salarySelectedTeacherIds = new Set();
 const selectedSalaryExpenseIds = new Set();
 let salaryExpenseAnchorId = null;
@@ -175,6 +176,13 @@ function salaryDisplayClassCell(col, value, record) {
   if (Array.isArray(value) && (value[0] === 'D' || value[0] === 'd'))
     return value[1];
   return value;
+}
+
+function salaryIsSameClassSelection(selectedRecords) {
+  const key = JSON.stringify(selectedRecords.map(row => [row.id, row.group, row.performance]));
+  const same = selectedRecords.length > 0 && key === salaryClassSelectionKey;
+  salaryClassSelectionKey = key;
+  return same;
 }
 
 async function salaryLoadClassColumns(selectedRecords, apply) {

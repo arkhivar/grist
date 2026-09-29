@@ -156,15 +156,16 @@ columns. The `C` column is enabled automatically when it has that type; every
 listed Text column can be enabled or disabled independently. Visible, writable
 DateTime columns are enabled automatically.
 
-Click an enabled Text cell once to select it and a second time to open a
-compact, non-blocking editor beside that cell. Typing in a selected cell also
-opens the editor, replacing its contents with the typed text. The table remains interactive
-and scrollable underneath it, while the
-textarea scrolls independently for longer notes. It preserves emoji,
-whitespace, and line breaks and includes a live character count. Save with the
-button or **Ctrl/Cmd+Enter**; cancel with the button or **Escape**. In the
-grouped table, long Text values remain on one line and are truncated with an
-ellipsis rather than making the row taller.
+Click an enabled Text or Choice cell once to select it and a second time to
+place the caret and edit **inside the cell**, in both Sprints and Salaries.
+Typing in a selected cell replaces its value; **Enter** or **F2** starts editing
+the existing value. **Enter**, **Ctrl/Cmd+Enter**, or clicking elsewhere saves;
+**Tab/Shift+Tab** saves and moves to the next/previous cell; **Escape** cancels.
+The compact textarea preserves emoji, whitespace, and multiline notes.
+**Shift+Enter** inserts a line break. Native text selection, clipboard, and
+arrow navigation work inside the editor, which scrolls without growing the row.
+Drafts and caret positions survive view refreshes; switching the linked teacher
+in Salaries closes the previous selection's draft.
 
 The visible **Sprint** column (or another writable Text/Choice grouping field)
 uses this editor automatically. Saving moves the record into the matching
@@ -189,8 +190,9 @@ timezone-free DateTime pastes use VLAT, while explicit ISO offsets are honored.
 Date-only columns are not shifted. Formula columns remain read-only. Sprints
 keeps grouped DateTime fields read-only; Salaries supports editing class dates
 in its monthly view.
-Saving uses `grist.selectedTable.update()` and reports the real
-failure inline as well as in Diagnostics.
+Saving uses the active table's update API (original `All_att` rows for Salaries).
+Text and number failures retain the draft with a red outline and report the
+real error in the toast and Diagnostics; calendar errors stay in its popover.
 
 Writable **Int** and **Numeric** cells are enabled automatically: select a cell,
 then type to replace its value directly in the cell, with no popover. A second

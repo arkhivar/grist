@@ -510,7 +510,7 @@ await test('E13: diagnostics lists the date column as date-like: yes', async () 
 });
 
 // ── F. Field editors ─────────────────────────────────────────
-await test('F14: long-text editor is a compact, anchored, non-blocking popover', async () => {
+await test('F14: Text selects on first click and edits inside its cell on second click', async () => {
   const studentsToggle = [...doc.querySelectorAll('#editable-col-list input[type="checkbox"]')]
     .find(input => input.value === 'students');
   assert(studentsToggle, 'students editable-field toggle missing');
@@ -521,36 +521,30 @@ await test('F14: long-text editor is a compact, anchored, non-blocking popover',
   assert(editButton, 'long-text edit button missing');
   assert(!editButton.querySelector('.cell-edit-pencil'),
     'redundant long-text pencil is still present');
-  assertEq(editButton.getAttribute('aria-expanded'), 'false', 'initial text popover state');
   click(editButton);
-  assert(doc.getElementById('cell-editor').hidden, 'first click opened the long-text editor');
+  const text = doc.getElementById('cell-editor-text');
+  assert(text.hidden, 'first click opened the long-text editor');
   assert(cellEl(1, 'students').classList.contains('cell-selected'),
     'first click did not select the long-text cell');
   click(editButton);
   await flush();
-  assert(!doc.getElementById('cell-editor').hidden, 'long-text editor did not open');
-  assert(doc.getElementById('cell-editor').classList.contains('popover-mode'),
-    'long-text editor did not use non-blocking popover mode');
-  assert(!doc.querySelector('.cell-editor-header'), 'obsolete editor header is still present');
-  assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-modal'), null,
-    'long-text popover incorrectly reports itself as modal');
-  assertEq(doc.getElementById('cell-editor-dialog').getAttribute('aria-label'),
-    'Edit text: students', 'long-text popover accessible label');
-  const dateTimePanel = doc.getElementById('cell-editor-datetime-panel');
-  assert(dateTimePanel.hidden, 'DateTime panel is not hidden in the long-text editor');
-  assertEq(win.getComputedStyle(dateTimePanel).display, 'none',
-    'hidden DateTime panel is forced visible by popover styles');
-  assertEq(editButton.getAttribute('aria-expanded'), 'true', 'open text popover state');
-  assert(doc.getElementById('cell-editor-dialog').style.left,
-    'long-text popover was not horizontally positioned');
-  assert(doc.getElementById('cell-editor-dialog').style.top,
-    'long-text popover was not vertically positioned');
+  assert(!text.hidden, 'long-text editor did not open');
+  assertEq(text.closest('td'), cellEl(1, 'students'), 'Text editor is outside the selected cell');
+  assert(cellEl(1, 'students').classList.contains('cell-inline-editing'),
+    'Text cell does not use the shared inline editing state');
+  assert(doc.getElementById('cell-editor').hidden, 'Text editing opened a popover');
+  assertEq(doc.activeElement, text, 'second click did not focus the Text editor');
+  assertEq(text.value, 'V..Petrichenko', 'second click replaced existing text');
+  assertEq(text.getAttribute('aria-label'), 'Edit text: students', 'Text editor accessible label');
   doc.getElementById('content').dispatchEvent(new win.Event('scroll'));
-  assert(!doc.getElementById('cell-editor').hidden,
-    'table scrolling incorrectly dismissed the long-text popover');
+  assert(!text.hidden && text.closest('td') === cellEl(1, 'students'),
+    'table scrolling dismissed or detached the Text editor');
+  const before = calls.update.length;
   click(doc.getElementById('statsbar'));
-  assert(doc.getElementById('cell-editor').hidden, 'outside click did not dismiss text popover');
-  assertEq(editButton.getAttribute('aria-expanded'), 'false', 'dismissed text popover state');
+  await waitFor(() => text.hidden, 'outside click closed the Text editor');
+  assert(!cellEl(1, 'students').classList.contains('cell-inline-editing'),
+    'outside click left the cell in editing state');
+  assertEq(calls.update.length, before, 'unchanged Text value caused a write');
 });
 
 await test('F15: DateTime cell has no pencil and opens a Monday-first calendar', async () => {
@@ -1462,23 +1456,26 @@ await test('P: formula cells and keyboard modifiers never start replacement edit
   }
 });
 
-await test('P: typing opens long text with the first character; second click preserves contents', async () => {
+await test('P: typing replaces Text inline with the first character; second click preserves contents', async () => {
   onOptionsCb({ editableColumns: JSON.stringify(['performance']) }, { accessLevel: 'full' });
   onRecordsCb(RECORDS);
   click(cellEl(1, 'performance'));
   cellKey(1, 'performance', 'H');
   const text = doc.getElementById('cell-editor-text');
-  assert(!doc.getElementById('cell-editor').hidden, 'text editor did not open');
+  assert(!text.hidden, 'text editor did not open');
+  assertEq(text.closest('td'), cellEl(1, 'performance'), 'typing did not edit inside the cell');
+  assert(doc.getElementById('cell-editor').hidden, 'typing opened a Text popover');
   assertEq(text.value, 'H', 'first character lost or appended');
   assertEq(doc.activeElement, text, 'fast follow-up typing would be lost');
   text.value = 'Hello\nworld';
   const before = calls.update.length;
   text.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true }));
-  await waitFor(() => calls.update.length === before + 1 && doc.getElementById('cell-editor').hidden, 'typed text save');
+  await waitFor(() => calls.update.length === before + 1 && text.hidden, 'typed text save');
   assertEq(calls.update[before][0].fields.performance, 'Hello\nworld', 'text draft not saved');
   openEditor(1, 'performance');
   assertEq(text.value, 'Hello\nworld', 'second click replaced existing text');
-  click(doc.getElementById('btn-editor-cancel'));
+  text.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert(text.hidden, 'Escape did not cancel inline Text editing');
 });
 
 await test('Q: fixed header supports saved keyboard reordering', async () => {

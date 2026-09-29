@@ -853,7 +853,7 @@
     .diag-error { color: #b91c1c; }
     .diag-start { color: #1d4ed8; }
 
-    /* Shared editor shell. Both text and DateTime use a cell-anchored popover. */
+    /* DateTime keeps its anchored popover; text and numbers edit in the cell. */
     .cell-editor-overlay {
       position: fixed; inset: 0; z-index: 100;
       display: grid; place-items: center;
@@ -873,15 +873,7 @@
       box-shadow: 0 24px 70px rgba(0,0,0,.28);
       overflow: hidden;
     }
-    #cell-editor-text {
-      flex: 1; width: 100%; min-height: 0; resize: none;
-      padding: 22px 24px;
-      border: 0; outline: none;
-      background: var(--surface); color: var(--text);
-      font: 16px/1.6 var(--font);
-      tab-size: 2;
-    }
-    #cell-editor-text:focus { box-shadow: inset 0 0 0 2px rgba(37,99,235,.15); }
+    #cell-editor-text,
     #cell-editor-number {
       position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0;
       margin: 0; padding: 5px 10px; box-sizing: border-box;
@@ -889,10 +881,17 @@
       background: var(--surface); color: var(--text); font: 11px var(--mono);
       cursor: text; user-select: text; z-index: 3;
     }
+    #cell-editor-text {
+      min-height: 0; resize: none; font: inherit; white-space: pre;
+      overflow: auto; scrollbar-width: none; tab-size: 2;
+    }
+    #cell-editor-text::-webkit-scrollbar { display: none; }
+    #cell-editor-text:focus,
     #cell-editor-number:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+    #cell-editor-text[aria-invalid="true"],
     #cell-editor-number[aria-invalid="true"] { box-shadow: inset 0 0 0 2px #dc2626; }
-    .cell-number-editing > .cell-edit-btn { visibility: hidden; }
-    .cell-number-editing > .cell-fill-handle { display: none !important; }
+    .cell-inline-editing > .cell-edit-btn { visibility: hidden; }
+    .cell-inline-editing > .cell-fill-handle { display: none !important; }
     .cell-editor-datetime {
       flex: 1;
       display: grid; place-items: center;
@@ -1025,12 +1024,6 @@
     .cell-editor-overlay.popover-mode .cell-editor-dialog.date-mode {
       width: min(456px, calc(100vw - 16px));
     }
-    .cell-editor-overlay.popover-mode #cell-editor-text {
-      flex: 0 1 auto; height: 168px; min-height: 112px;
-      max-height: min(320px, calc(100vh - 80px));
-      padding: 12px 14px; resize: vertical;
-      font-size: 13px; line-height: 1.5;
-    }
     .cell-editor-overlay.popover-mode .cell-editor-datetime {
       display: block; padding: 0; overflow: auto;
       background: var(--surface);
@@ -1091,7 +1084,6 @@
       .cell-editor-dialog {
         width: 100vw; height: 100vh; min-height: 0; border: 0; border-radius: 0;
       }
-      #cell-editor-text { padding: 16px; }
       .cell-editor-dialog.date-mode { width: 100vw; height: 100vh; min-height: 0; }
       .cell-editor-datetime { padding: 14px; }
       .date-picker { grid-template-columns: minmax(0, 1fr) 88px; }
