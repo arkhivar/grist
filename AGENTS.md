@@ -97,22 +97,28 @@ See [Editing fields](README.md#editing-fields) for the complete user workflow.
 
 ## Salaries widget
 
-`salaries.html` uses the shared grouped-table app. Linked `All_att` summary
+`salaries.html` uses the shared grouped-table app. Selecting rows from the table
+referenced by `All_att.performance` filters classes by those raw teacher IDs.
+Currently that table is `Performance`, with initials in its `A` column (the
+Reference's configured visible column). Teacher selection works even when the
+teacher has payments but no classes. Linked `All_att` summary
 rows supply `group` RefLists of original `All_att` row IDs (`Attendance` is the
 display label; `All_att` is the table ID). The widget reads those class rows
 with `fetchTable`, displays their fields, and writes class edits to `All_att`.
-It reads `Expenses` with `fetchTable`,
-matches raw `performance` Reference IDs from the selected summary rows against
-Expenses (`All_att.performance` is a RefList), and
-groups payments using `Expenses.date` in Vladivostok time. Every expense with
+It reads `Transactions` with `fetchTable`,
+matches raw `performance` teacher IDs from the selected teacher/summary rows
+against Transactions (`All_att.performance` is a RefList), and
+groups payments using `Transactions.date` in Vladivostok time. The current
+`Transactions.performance` column stores those IDs as Int; Reference IDs also
+work. Every transaction with
 a teacher reference counts as salary received. Month headers show the signed
 `wage` subtotal and `amount` payment subtotal over their columns; class and
 payment rows share one table grid with income and expenses columns. Payment
-rows are read-only and a toolbar button re-fetches Expenses after edits there. Keep
+rows are read-only and a toolbar button re-fetches Transactions after edits there. Keep
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.47)
+## Current state (v7.48)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -185,6 +191,9 @@ payments.
   automatic Sprint grouping with saved preferences and startup ordering.
 - `tests/salaries.test.js` covers linked teacher matching, VLAT month boundaries,
   expense-only months, refresh, and failed expense fetches.
+- `tests/salaries-selection.test.js` covers direct teacher selection, shared
+  class references, payment-only teachers, original class edit IDs, and stale
+  selection loads. Payment-only months disable adding an unassigned class.
 - Payment rows have selector grips with single, additive, and range selection;
   they stay read-only and cannot be dragged or acted on as Attendance records.
   Clicking the sole selected grip again clears selection in both widgets.

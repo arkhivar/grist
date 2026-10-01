@@ -1196,7 +1196,9 @@
       if (c.id !== 'empty-state' && c.id !== 'column-strip') c.remove();
     });
 
-    if (!groupBy || allRecords.length === 0) {
+    const hasSalaryPayments = typeof salaryPaymentsLoaded !== 'undefined'
+      && salaryPaymentsLoaded && salaryPaymentsByMonth.size > 0;
+    if (!groupBy || (allRecords.length === 0 && !hasSalaryPayments)) {
       if (inlineInput) {
         cellEditorDialog.insertBefore(inlineInput, cellEditorDateTimePanel);
         closeFieldEditor();
@@ -2853,6 +2855,8 @@
     let reason = '';
     if (!col)
       reason = 'Choose a grouping column first';
+    else if (group?.addRowDisabledReason)
+      reason = group.addRowDisabledReason;
     else if (!metadataLoaded)
       reason = 'Writable columns are still loading';
     else if (!writableColumnIds.includes(col))

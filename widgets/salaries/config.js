@@ -1,4 +1,4 @@
-// The linked Grist selection supplies summary rows whose group links All_att.
+// Select teachers from All_att.performance's target, or classes via group links.
 // Keep this widget on the shared grouped-table implementation.
 const WIDGET_CONFIG = {
   monthlyOnly: true,
@@ -7,6 +7,6 @@ const WIDGET_CONFIG = {
   editAllWritableText: true,
   editBoolOnSecondClick: true,
   classTableId: 'All_att',
-  expensesTableId: 'Expenses',
+  expensesTableId: 'Transactions',
   receivedColumn: 'salary_received',
 };

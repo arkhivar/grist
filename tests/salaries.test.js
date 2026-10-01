@@ -45,7 +45,7 @@ const attendance = {
   wage: [-100, -200, -50, 75, -1425, 200],
   sprint: ['Sprint 07', 'Sprint 07', 'Sprint 07', '', '', 'Sprint 07'],
 };
-let expenses = {
+let transactions = {
   id: [11, 12, 13, 14],
   performance: [7, 7, 8, 7],
   date: ['2026-07-31T14:30:00Z', '2026-07-31T13:30:00Z', '2026-08-15T03:00:00Z', '2026-09-02T00:00:00Z'],
@@ -73,26 +73,26 @@ win.grist = {
   }, fetchTable: async name => {
     calls.fetches.push(name);
     if (name === '_grist_Tables')
-      return { id: [1, 2, 3, 4, 5], tableId: ['All_att', 'FolksBase', 'Performance', 'Groups', 'All_att_summary_performance'] };
+      return { id: [1, 2, 3, 4, 5, 6], tableId: ['All_att', 'FolksBase', 'Performance', 'Groups', 'All_att_summary_performance', 'Transactions'] };
     if (name === '_grist_Tables_column')
-      return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
-        parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4],
+      return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 6],
         colId: ['group2', 'performance', 'datetime', 'wage', 'count',
-          'students', 'weekday', 'notes', 'group3', 'sprint', 'Name', 'Name', 'Name'],
+          'students', 'weekday', 'notes', 'group3', 'sprint', 'Name', 'A', 'Name', 'performance'],
         type: ['Ref:Groups', 'RefList:Performance', 'DateTime:Asia/Vladivostok',
           'Numeric', 'Numeric', 'Ref:FolksBase', 'Text', 'Text', 'RefList:Groups',
-          'Choice', 'Text', 'Text', 'Text'],
-        visibleCol: [22, 21, 0, 0, 0, 20, 0, 0, 22, 0, 0, 0, 0],
-        isFormula: [false, false, false, false, false, false, true, false, false, false, false, false, false] };
+          'Choice', 'Text', 'Text', 'Text', 'Int'],
+        visibleCol: [22, 21, 0, 0, 0, 20, 0, 0, 22, 0, 0, 0, 0, 0],
+        isFormula: [false, false, false, false, false, false, true, false, false, false, false, false, false, false] };
     if (name === 'All_att_summary_performance') return summary;
     if (name === 'All_att') return attendance;
     if (name === 'FolksBase')
       return { id: [21, 22], Name: ['A. Student', 'B. Student'] };
-    if (name === 'Performance') return { id: [7, 8], Name: ['VP', 'TR'] };
+    if (name === 'Performance') return { id: [7, 8], A: ['VP', 'TR'] };
     if (name === 'Groups') return { id: [31, 32], Name: ['Relentless', 'North, <Team>'] };
-    if (name === 'Expenses') {
-      if (expenses instanceof Error) throw expenses;
-      return expenses;
+    if (name === 'Transactions') {
+      if (transactions instanceof Error) throw transactions;
+      return transactions;
     }
     throw new Error(`Unexpected table ${name}`);
   } },
@@ -154,6 +154,10 @@ async function main() {
       `${table} reference labels should be fetched only once during initial load`);
   assert.equal(firstLoadFetches('All_att'), 1,
     'known summary teacher IDs should not require a second Attendance fetch for payments');
+  assert.equal(firstLoadFetches('Transactions'), 1, 'salary payments must load from Transactions');
+  assert.equal(firstLoadFetches('Expenses'), 0, 'the previous payment table must not be fetched');
+  assert.deepEqual(refPills(1, 'performance'), ['VP'],
+    'teacher initials must resolve through Performance.A rather than an assumed Name column');
   assert.deepEqual(refPills(1, 'group3'), ['Relentless', 'North, <Team>'],
     'deduplicated reference preload lost Reference List labels');
   assert(!doc.querySelector('#column-strip th[data-column="salary_received"]'),
@@ -377,6 +381,8 @@ async function main() {
   assert(!month('August 2026').querySelector('[data-expense-id="13"]'));
   assert(!doc.querySelector('.salary-payments-heading'));
   const payment = month('August 2026').querySelector('.salary-payment-row');
+  assert.equal(payment.title, 'Salary payment from Transactions #11',
+    'payment source title still names the previous table');
   const dateIndex = headers.indexOf('datetime') + 1;
   const performanceIndex = headers.indexOf('performance') + 1;
   const receivedIndex = headers.indexOf('salary_received') + 1;
@@ -491,15 +497,15 @@ async function main() {
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-100');
   assert(month('August 2026').classList.contains('collapsed'));
 
-  expenses = { ...expenses, amount: [125, 50, 200, 20] };
+  transactions = { ...transactions, amount: [125, 50, 200, 20] };
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent === '125');
-  const savedExpenses = expenses;
-  expenses = new Error('Expenses table blocked');
+  const savedTransactions = transactions;
+  transactions = new Error('Transactions table blocked');
   doc.getElementById('btn-refresh-payments').click();
-  await waitFor(() => doc.getElementById('salary-payment-status').textContent.includes('Expenses table blocked'));
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent.includes('Transactions table blocked'));
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '—');
-  expenses = savedExpenses;
+  transactions = savedTransactions;
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
 
@@ -576,7 +582,9 @@ async function main() {
     && doc.querySelector('[data-cell-id="6"][data-cell-col="students"]'));
   assert.equal(calls.fetches.filter(name => name === 'All_att').length - beforeDirectClassFetches, 2,
     'direct class selection needs an Attendance fetch to infer the teacher for payments');
-  console.log('PASS salaries: complete Attendance columns, editing, linked payments, VLAT months, refresh, cache keys');
+  assert.equal(calls.fetches.filter(name => name === 'Expenses').length, 0,
+    'selection changes and refreshes must never return to the previous payment table');
+  console.log('PASS salaries: complete Attendance columns, editing, linked Transactions payments, teacher initials, VLAT months, refresh, cache keys');
   win.close();
 }
 

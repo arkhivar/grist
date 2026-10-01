@@ -74,6 +74,25 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
    **Choice** column. A valid saved grouping takes priority on reload.
    Use the toolbar to choose a different grouping whenever needed.
 
+### Salaries setup
+
+Use `https://arkhivar.github.io/grist/salaries.html` with **Full access**.
+For the selected-teacher workflow, choose `Performance` as the widget's source
+table and link **Select By** to a teacher list using that same table. Salaries
+reads the selected teacher IDs, finds matching `Attendance.performance` links,
+and shows classes and salary payments in monthly groups. `Attendance` is the
+display name of table ID `All_att`; class edits still write to `All_att`.
+Teacher initials follow the Reference's configured display column, currently
+`Performance.A`. Existing summary `group` links and direct Attendance selections
+remain supported.
+
+Salary payments come from `Transactions.performance`, `date`, and `amount`.
+The teacher field must contain the same `Performance` row IDs as Attendance;
+its current Int values work, and a **Reference to Performance** offers a teacher
+picker in Grist. Every teacher-tagged transaction counts as salary received.
+Payments stay read-only; use **Refresh payments** after editing Transactions.
+Payment-only teachers are shown too, with zero classes. DateTime uses VLAT.
+
 ## Row actions (duplicate / delete)
 
 Every record row has a trailing actions cell with always-visible buttons
@@ -417,7 +436,7 @@ the same repo, so no extra hosting steps are needed:
 |---|---|
 | `sprints.html` | Page shell of the grouped-view ("sprints") widget — loads the shared CSS/scripts and its per-widget scripts |
 | `index.html` | Widget gallery — one card per widget in the repo |
-| `salaries.html` | Coming-soon page for the next widget (teacher salary counter); not yet embeddable in Grist |
+| `salaries.html` | Teacher salary counter combining Attendance classes and Transactions payments |
 | `AGENTS.md` | Guidance for AI coding agents working in this repo |
 | `shared/base.css` | Design system (styles) shared by every widget |
 | `shared/core.js` | English UI strings, constants, state, date helpers, and Grist helpers shared by every widget |

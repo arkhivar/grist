@@ -1,4 +1,4 @@
-// Salary payments are read from Expenses and matched by the raw Performance
+// Salary payments are read from Transactions and matched by the raw teacher
 // reference ID. Linked summary group lists select original All_att class rows.
 let salaryPaymentsByMonth = new Map();
 let salaryPaymentsLoaded = false;
@@ -31,6 +31,7 @@ function salaryAddPaymentGroups(groups) {
       sortKey: empty ? null : Number(key),
       writeValue: null,
       records: [],
+      addRowDisabledReason: 'Add the first class for this month in Attendance',
     });
   }
 }
@@ -67,7 +68,7 @@ function salaryPaymentRowsHtml(cols, key) {
   const payments = salaryPaymentRowsFor(key);
   const dateColumn = parseGroupBy(groupBy).col;
   return payments.map(row => `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
-    + ` title="Salary payment from Expenses #${esc(row.id)}">`
+    + ` title="Salary payment from ${esc(WIDGET_CONFIG.expensesTableId)} #${esc(row.id)}">`
     + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`
     + ` data-expense-id="${esc(row.id)}" draggable="false"`
     + ` aria-pressed="${String(selectedSalaryExpenseIds.has(String(row.id)))}"`
@@ -196,6 +197,8 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
   try {
     const sourceId = await grist.selectedTable.getTableId();
     await getWritableColumnIds();
+    const teacherTableId = /^(?:Ref|RefList):(.+)$/.exec(columnTypes.performance || '')?.[1];
+    const teacherSource = sourceId === teacherTableId;
     // Some Grist builds report the source table ID for a summary section.
     // The selected records still carry the summary's group RefList in that case.
     const linkedRows = sourceId === WIDGET_CONFIG.classTableId
@@ -204,25 +207,34 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
       linkedRows ? { id: selectedRecords.map(row => row.id),
         group: selectedRecords.map(row => row.group),
         performance: selectedRecords.map(row => row.performance) }
-        : sourceId === WIDGET_CONFIG.classTableId ? null : grist.docApi.fetchTable(sourceId),
+        : teacherSource || sourceId === WIDGET_CONFIG.classTableId
+          ? null : grist.docApi.fetchTable(sourceId),
       grist.docApi.fetchTable(WIDGET_CONFIG.classTableId),
     ]);
     if (request !== salaryClassColumnsRequest) return;
     if (!Array.isArray(classes.id)) throw new Error('Attendance rows are unavailable');
     let classIds;
-    if (!source) classIds = selectedRecords.map(row => salaryRawRef(row.id));
+    const teacherIds = new Set();
+    if (teacherSource) {
+      selectedRecords.forEach(row => {
+        const id = salaryRawRef(row.id);
+        if (id != null) teacherIds.add(id);
+      });
+      if (!Array.isArray(classes.performance))
+        throw new Error(`${WIDGET_CONFIG.classTableId}.performance is unavailable`);
+      classIds = classes.id.filter((id, index) => salaryReferenceIds(classes.performance[index])
+        .some(teacherId => teacherIds.has(teacherId)));
+    } else if (!source) classIds = selectedRecords.map(row => salaryRawRef(row.id));
     else {
       if (!Array.isArray(source.id) || !Array.isArray(source.group))
         throw new Error(`${sourceId}.group must link to Attendance rows`);
       const sourceById = new Map(source.id.map((id, index) => [Number(id), index]));
-      const teacherIds = new Set();
       classIds = selectedRecords.flatMap(row => {
         const index = sourceById.get(Number(row.id));
         if (index != null && Array.isArray(source.performance))
           salaryReferenceIds(source.performance[index]).forEach(id => teacherIds.add(id));
         return index == null ? [] : salaryGroupIds(source.group[index]);
       });
-      salarySelectedTeacherIds = teacherIds;
     }
     const selectedIds = new Set(classIds.filter(id => id != null));
     if (source && !selectedIds.size)
@@ -231,15 +243,16 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
       columnTypes[col].startsWith('Ref:') || columnTypes[col].startsWith('RefList:'));
     await preloadReferenceChoices(refCols, () => request === salaryClassColumnsRequest);
     if (request !== salaryClassColumnsRequest) return;
-    if (source && !salarySelectedTeacherIds.size) {
+    if (source && !teacherIds.size) {
       const labels = referenceDisplayLabelsByColumn.get('performance');
       selectedRecords.forEach(row => {
         const label = String(row.performance ?? '');
         labels?.forEach((value, id) => {
-          if (value === label) salarySelectedTeacherIds.add(id);
+          if (value === label) teacherIds.add(id);
         });
       });
     }
+    salarySelectedTeacherIds = teacherIds;
     const cols = Object.keys(columnTypes).filter(col => Array.isArray(classes[col]));
     const records = classes.id.flatMap((id, index) => {
       if (!selectedIds.has(Number(id))) return [];
@@ -247,6 +260,12 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
       cols.forEach(col => { record[col] = salaryDisplayClassCell(col, classes[col][index], record); });
       return [record];
     });
+    // A teacher can have payments before their first class. Metadata still
+    // supplies the class columns and monthly grouping for that empty selection.
+    if (teacherSource && !records.length) {
+      allColumns = cols;
+      reconcileColumnOrder();
+    }
     apply(records);
   } catch (error) {
     if (request !== salaryClassColumnsRequest) return;
@@ -263,8 +282,9 @@ async function salaryRefreshPayments(alreadyRendered = false) {
   salaryPaymentsByMonth = new Map();
   salaryPaymentsLoaded = false;
   salaryRefreshButton.disabled = true;
-  salaryPaymentStatus.textContent = classIds.size ? 'Loading payments…' : 'No teacher selected';
-  if (!classIds.size) {
+  const hasSelection = classIds.size || salarySelectedTeacherIds.size;
+  salaryPaymentStatus.textContent = hasSelection ? 'Loading payments…' : 'No teacher selected';
+  if (!hasSelection) {
     salaryClearExpenseSelection();
     salaryRefreshButton.disabled = false;
     return;
