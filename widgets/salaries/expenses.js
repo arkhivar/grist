@@ -300,8 +300,8 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     ]);
     if (request !== salaryPaymentRequest) return;
     if (!Array.isArray(expenses.id) || !Array.isArray(expenses.performance)
-        || !Array.isArray(expenses.date) || !Array.isArray(expenses.amount))
-      throw new Error(`${WIDGET_CONFIG.expensesTableId} must have performance, date, and amount columns`);
+        || !Array.isArray(expenses.datetime) || !Array.isArray(expenses.amount))
+      throw new Error(`${WIDGET_CONFIG.expensesTableId} must have performance, datetime, and amount columns`);
 
     if (!teacherIds.size) {
       if (!Array.isArray(classes.id) || !Array.isArray(classes.performance))
@@ -318,7 +318,7 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     expenses.id.forEach((id, index) => {
       const performanceId = salaryRawRef(expenses.performance[index]);
       if (!teacherIds.has(performanceId)) return;
-      const sec = parseDateValueSec(expenses.date[index]);
+      const sec = parseDateValueSec(expenses.datetime[index]);
       const key = sec == null ? '\x00__empty__'
         : String(bucketStartMs(dateTimeWallDate(sec).getTime() / 1000, 'month'));
       const row = {

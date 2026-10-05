@@ -48,7 +48,9 @@ const attendance = {
 let transactions = {
   id: [11, 12, 13, 14],
   performance: [7, 7, 8, 7],
-  date: ['2026-07-31T14:30:00Z', '2026-07-31T13:30:00Z', '2026-08-15T03:00:00Z', '2026-09-02T00:00:00Z'],
+  datetime: [Date.parse('2026-07-31T14:30:00Z') / 1000,
+    { toString: () => '2026-07-31T13:30:00Z' },
+    '2026-08-15T03:00:00Z', '2026-09-02T00:00:00Z'],
   amount: [100, 50, 200, 20],
 };
 win.grist = {
@@ -387,6 +389,10 @@ async function main() {
   const performanceIndex = headers.indexOf('performance') + 1;
   const receivedIndex = headers.indexOf('salary_received') + 1;
   assert(payment.cells[dateIndex].textContent.includes('2026-08-01 00:30'));
+  assert(month('July 2026').querySelector('[data-expense-id="12"] .salary-payment-date')
+    .textContent.includes('2026-07-31 23:30'), 'wrapped Transactions.datetime lost its VLAT value');
+  assert(month('September 2026').querySelector('[data-expense-id="14"] .salary-payment-date')
+    .textContent.includes('2026-09-02 10:00'), 'ISO Transactions.datetime lost its VLAT value');
   assert.equal(payment.cells[receivedIndex].textContent, '100');
   assert.deepEqual([...payment.cells[performanceIndex].querySelectorAll('.cell-ref-pill')]
     .map(pill => pill.textContent), ['VP'], 'payment teacher needs a linked-record pill');
@@ -509,6 +515,29 @@ async function main() {
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
 
+  // A stale helper column must not override the canonical payment datetime.
+  transactions = { ...savedTransactions, date: savedTransactions.id.map(() => '2025-01-01T00:00:00Z') };
+  doc.getElementById('btn-refresh-payments').click();
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '125');
+  assert(month('August 2026').querySelector('[data-expense-id="11"] .salary-payment-date')
+    .textContent.includes('2026-08-01 00:30'), 'Transactions.date overrode Transactions.datetime');
+  assert(!month('January 2025'), 'legacy date values supplied the payment month');
+
+  delete transactions.datetime;
+  doc.getElementById('btn-refresh-payments').click();
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent ===
+    'Payments unavailable: Transactions must have performance, datetime, and amount columns');
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '—',
+    'missing payment datetime must not show a zero subtotal');
+  assert.equal(doc.querySelectorAll('.salary-payment-row').length, 0,
+    'missing payment datetime retained stale payment rows');
+  transactions = savedTransactions;
+  doc.getElementById('btn-refresh-payments').click();
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '125',
+    'restored payment datetime did not recover its subtotal');
+
   if (month('August 2026').classList.contains('collapsed'))
     month('August 2026').querySelector('.group-header').click();
   cell('notes').click();
@@ -584,7 +613,7 @@ async function main() {
     'direct class selection needs an Attendance fetch to infer the teacher for payments');
   assert.equal(calls.fetches.filter(name => name === 'Expenses').length, 0,
     'selection changes and refreshes must never return to the previous payment table');
-  console.log('PASS salaries: complete Attendance columns, editing, linked Transactions payments, teacher initials, VLAT months, refresh, cache keys');
+  console.log('PASS salaries: complete Attendance columns, editing, linked Transactions datetime payments, teacher initials, VLAT months, missing datetime recovery, refresh, cache keys');
   win.close();
 }
 

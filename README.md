@@ -86,12 +86,13 @@ Teacher initials follow the Reference's configured display column, currently
 `Performance.A`. Existing summary `group` links and direct Attendance selections
 remain supported.
 
-Salary payments come from `Transactions.performance`, `date`, and `amount`.
+Salary payments come from `Transactions.performance`, `datetime`, and `amount`.
 The teacher field must contain the same `Performance` row IDs as Attendance;
 its current Int values work, and a **Reference to Performance** offers a teacher
 picker in Grist. Every teacher-tagged transaction counts as salary received.
 Payments stay read-only; use **Refresh payments** after editing Transactions.
-Payment-only teachers are shown too, with zero classes. DateTime uses VLAT.
+Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
+monthly groups are derived from `datetime`, so no helper `date` column is needed.
 
 ## Row actions (duplicate / delete)
 

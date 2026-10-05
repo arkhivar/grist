@@ -108,7 +108,8 @@ with `fetchTable`, displays their fields, and writes class edits to `All_att`.
 It reads `Transactions` with `fetchTable`,
 matches raw `performance` teacher IDs from the selected teacher/summary rows
 against Transactions (`All_att.performance` is a RefList), and
-groups payments using `Transactions.date` in Vladivostok time. The current
+groups payments using `Transactions.datetime` in Vladivostok time; no helper
+`date` column is required. The current
 `Transactions.performance` column stores those IDs as Int; Reference IDs also
 work. Every transaction with
 a teacher reference counts as salary received. Month headers show the signed
@@ -118,7 +119,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.48)
+## Current state (v7.49)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk

@@ -27,7 +27,7 @@ const teachers = { id: [7, 8, 9], A: ['VP', 'TR', 'ZZ'] };
 const transactions = {
   id: [101, 102, 103],
   performance: [7, 8, 9],
-  date: [sec('2026-09-04T00:00:00Z'), sec('2026-09-05T00:00:00Z'), sec('2026-07-31T14:30:00Z')],
+  datetime: [sec('2026-09-04T00:00:00Z'), sec('2026-09-05T00:00:00Z'), sec('2026-07-31T14:30:00Z')],
   amount: [300, 500, 75],
 };
 const calls = { fetches: [], updates: [] };
@@ -128,7 +128,20 @@ async function main() {
   assert.equal(doc.getElementById('group-select').value, 'datetime::month');
   assert.deepEqual(teacherPills(paymentOnlyMonth.querySelector('.salary-payment-row')), ['ZZ']);
   assert(paymentOnlyMonth.querySelector('.salary-payment-date').textContent.includes('2026-08-01 00:30'),
-    'Transactions.date did not use the Vladivostok month boundary');
+    'Transactions.datetime did not use the Vladivostok month boundary');
+
+  // A payment with no datetime remains visible in the empty month bucket.
+  const paymentOnlyDateTime = transactions.datetime[2];
+  transactions.datetime[2] = null;
+  doc.getElementById('btn-refresh-payments').click();
+  await waitFor(() => status() === '1 payment' && month('(empty)'));
+  assert.equal(month('(empty)').querySelector('.salary-payment-date').textContent, '—');
+  assert.equal(month('(empty)').querySelector('.group-sum[data-column="salary_received"]').textContent, '75');
+  assert.deepEqual(paymentIds(), [103], 'an empty datetime discarded the teacher payment');
+  transactions.datetime[2] = paymentOnlyDateTime;
+  doc.getElementById('btn-refresh-payments').click();
+  await waitFor(() => status() === '1 payment' && month('August 2026'));
+  assert(!month('(empty)'), 'restoring payment datetime left a stale empty month');
 
   // Direct teacher rows select classes by raw references, including shared classes.
   selectTeacher(7);
