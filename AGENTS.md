@@ -119,7 +119,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.50)
+## Current state (v7.51)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -157,6 +157,8 @@ payments.
   for local clock conversion; keep Date-only fields on their existing UTC path.
   Open DateTime pickers reanchor after renders, preserving their date/time draft
   through refreshes, scroll, and resize. Removed or hidden target cells close them.
+  Clicking outside saves the chosen date/time; OK also saves and uses the same
+  neutral button style as Cancel. Cancel and Escape discard the draft.
 - Sort groups and Sort rows are independent. Row sort is a persisted section
   option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
   Both widgets default to `datetime` descending after options, metadata, and
@@ -203,7 +205,8 @@ payments.
 - `tests/row-sort-default.test.js` covers default DateTime sorting, startup
   ordering, saved/manual choices, empty selections, and reloads in both widgets.
 - `tests/date-picker-refresh.test.js` covers DateTime drafts through refreshes,
-  scroll/resize, saving to the original class, and removed/hidden target cells.
+  scroll/resize, saving to the original class, click-away saves, neutral OK,
+  Cancel/Escape, duplicate pending writes, failed saves, and removed/hidden targets.
 - Payment rows have selector grips with single, additive, and range selection;
   they stay read-only and cannot be dragged or acted on as Attendance records.
   Clicking the sole selected grip again clears selection in both widgets.

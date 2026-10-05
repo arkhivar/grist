@@ -1071,10 +1071,6 @@
     .date-picker-footer-actions[hidden] { display: none; }
     .cell-editor-actions { display: flex; gap: 8px; }
     .editor-btn { padding: 6px 13px; font-size: 12px; }
-    .editor-save {
-      background: var(--accent); border-color: var(--accent); color: #fff;
-    }
-    .editor-save:hover { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
     .editor-btn:disabled {
       opacity: .45; cursor: default;
     }

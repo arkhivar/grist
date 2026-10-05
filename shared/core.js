@@ -45,7 +45,7 @@
       dateTimeEarlier: 'Earlier times',
       dateTimeLater: 'Later times',
       editCancel:      'Cancel',
-      editSave:        'Save changes',
+      editSave:        'OK',
       editShortcut:    'Ctrl/Cmd+Enter to save · Esc to cancel',
       editCharacters:  'characters',
       fillCells:       'Drag to fill cells',
@@ -106,7 +106,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.50';
+  const WIDGET_VERSION = '7.51';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──

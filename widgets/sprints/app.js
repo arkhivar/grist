@@ -2740,8 +2740,11 @@
       cellEditorError.textContent = message;
       cellEditorError.hidden = false;
       setEditorBusy(false);
-      if (kind === 'datetime') focusDateTimePicker();
-      else if (inlineEditorInput()) {
+      if (kind === 'datetime') {
+        reanchorDateTimeEditor();
+        if (cellEditor.hidden) showToast(message);
+        else focusDateTimePicker();
+      } else if (inlineEditorInput()) {
         const input = inlineEditorInput();
         showToast(message);
         const cell = findDataCell(recordId, col);
@@ -3338,7 +3341,23 @@
     if (cellEditor.hidden || !cellEditor.classList.contains('popover-mode')) return;
     const anchor = editingCell && editingCell.anchorEl;
     if (cellEditorDialog.contains(e.target) || (anchor && anchor.contains(e.target))) return;
-    closeFieldEditor();
+    const targetCell = e.target.closest('td.data-cell');
+    const tableControl = content.contains(e.target) && e.target.closest('button');
+    if (targetCell && content.contains(targetCell)) {
+      // Keep the clicked cell selected even if saving refreshes the table
+      // before this click can reach its original target.
+      selectDataCell(targetCell, true, e.shiftKey);
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    saveFieldEditor();
+    // Saving can rebuild the group cards synchronously. Do not let a table
+    // control act on a detached card while the write is pending.
+    if ((editingCell && !btnEditorSave.disabled)
+        || (btnEditorSave.disabled && tableControl)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   }, true);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !cellEditor.hidden && cellEditor.classList.contains('popover-mode')) {
