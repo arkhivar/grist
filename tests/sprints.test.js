@@ -609,7 +609,7 @@ await test('F16: custom picker converts selected VLAT date and time to UTC stora
   assertEq(record.fields.startsAt,
     Date.parse('2026-07-19T23:30:00Z') / 1000, 'saved UTC epoch seconds');
   assertEq(options && options.parseStrings, false, 'DateTime parseStrings option');
-  assertEq(cellText(1, 'startsAt'), '2026-07-20 09:30', 'updated DateTime rendering');
+  assertEq(cellText(1, 'startsAt'), '2026-07-20 09:30 (Mon)', 'updated DateTime rendering');
 });
 
 // ── G. Smoke ─────────────────────────────────────────────────
@@ -642,7 +642,7 @@ await test('H19: toolbar history buttons undo and redo a saved cell edit', async
   await flush();
   assertEq(calls.update[calls.update.length - 1][0].fields.startsAt,
     Date.parse('2026-07-16T13:45:00Z') / 1000, 'undo DateTime value');
-  assertEq(cellText(1, 'startsAt'), '2026-07-16 23:45', 'undo rendering');
+  assertEq(cellText(1, 'startsAt'), '2026-07-16 23:45 (Thu)', 'undo rendering');
   assert(!redo.disabled, 'Redo did not enable after undo');
 
   before = calls.update.length;
@@ -651,7 +651,7 @@ await test('H19: toolbar history buttons undo and redo a saved cell edit', async
   await flush();
   assertEq(calls.update[calls.update.length - 1][0].fields.startsAt,
     Date.parse('2026-07-19T23:30:00Z') / 1000, 'redo DateTime value');
-  assertEq(cellText(1, 'startsAt'), '2026-07-20 09:30', 'redo rendering');
+  assertEq(cellText(1, 'startsAt'), '2026-07-20 09:30 (Mon)', 'redo rendering');
   assert(redo.disabled, 'Redo stayed enabled after replaying the latest edit');
 });
 
@@ -1086,17 +1086,27 @@ await test('M: number cancel and Grist errors do not lose the entered value', as
   }
 });
 
-await test('M: DateTime displays VLAT for epochs, ISO strings and wrappers without shifting Date columns', async () => {
+await test('M: DateTime includes its VLAT weekday for epochs, ISO strings and wrappers without shifting Date columns', async () => {
   const values = [Date.parse('2026-07-17T08:00:00Z') / 1000,
     '2026-07-17T08:00:00Z', { toString: () => '2026-07-17T08:00:00Z' }];
   onRecordsCb(RECORDS.map((record, i) => ({ ...record, startsAt: values[i % 3] })));
-  for (const id of [1, 2, 3]) assertEq(cellText(id, 'startsAt'), '2026-07-17 18:00', 'VLAT transport rendering');
+  for (const id of [1, 2, 3]) assertEq(cellText(id, 'startsAt'), '2026-07-17 18:00 (Fri)', 'VLAT transport rendering');
   assertEq(cellText(1, 'date'), '2026-07-16', 'Date-only column shifted');
   const copy = {};
   click(cellEl(1, 'startsAt'));
   cellEl(1, 'startsAt').dispatchEvent(clipboardEvent('copy', copy));
-  assertEq(copy['text/plain'], '2026-07-17 18:00', 'clipboard did not use displayed time');
-  for (const text of ['2026-07-18 00:30', '2026-07-17T14:30:00Z', '2026-07-18T00:30:00+10:00']) {
+  assertEq(copy['text/plain'], '2026-07-17 18:00 (Fri)', 'clipboard did not use displayed time');
+  onRecordsCb(RECORDS.map((record, i) => ({ ...record,
+    startsAt: i === 1 ? '2026-07-16T08:00:00Z' : '2026-07-17T08:00:00Z' })));
+  click(cellEl(2, 'startsAt'));
+  const copyPasteBefore = calls.update.length;
+  cellEl(2, 'startsAt').dispatchEvent(clipboardEvent('paste', { 'text/plain': copy['text/plain'] }));
+  await waitFor(() => calls.update.length === copyPasteBefore + 1 && !doc.getElementById('btn-undo').disabled, 'weekday copy/paste');
+  assertEq(calls.update[copyPasteBefore][0].fields.startsAt,
+    Date.parse('2026-07-17T08:00:00Z') / 1000, 'copy/paste changed the DateTime instant');
+  for (const text of ['2026-07-18 00:30', '2026-07-18 00:30 (Sat)',
+    '\u200E2026-07-18\u00a0 00:30\u00a0(sAt)\u200E',
+    '2026-07-17T14:30:00Z', '2026-07-17T14:30:00Z (Fri)', '2026-07-18T00:30:00+10:00']) {
     cellEl(1, 'startsAt').dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     cellEl(2, 'startsAt').dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     onRecordsCb(RECORDS.map(record => ({ ...record, startsAt: '2026-07-17T08:00:00Z' })));
@@ -1105,7 +1115,7 @@ await test('M: DateTime displays VLAT for epochs, ISO strings and wrappers witho
     cellEl(2, 'startsAt').dispatchEvent(clipboardEvent('paste', { 'text/plain': text }));
     await waitFor(() => calls.update.length === before + 1 && !doc.getElementById('btn-undo').disabled, 'VLAT paste');
     assertEq(calls.update[before][0].fields.startsAt, Date.parse('2026-07-17T14:30:00Z') / 1000, 'paste applied wrong offset');
-    assertEq(cellText(2, 'startsAt'), '2026-07-18 00:30', 'pasted wall time');
+    assertEq(cellText(2, 'startsAt'), '2026-07-18 00:30 (Sat)', 'pasted wall time and VLAT weekday');
   }
   click(doc.getElementById('btn-editor-cancel'));
   onRecordsCb(RECORDS);

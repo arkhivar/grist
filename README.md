@@ -221,7 +221,9 @@ Cancel/OK remain together on the right with matching neutral styles. OK also
 saves; Cancel or Escape discards the draft. Arrow keys, Home/End, and Page Up/Page
 Down are also supported. DateTime values are displayed and edited in
 **Asia/Vladivostok (VLAT)**, independently of the browser's timezone, and
-converted back to UTC epoch seconds for Grist storage. Copy exports VLAT text;
+converted back to UTC epoch seconds for Grist storage. Cells include the local
+weekday, for example `2026-10-10 15:00 (Sat)`, without a helper column.
+Copy exports the same VLAT text with its weekday;
 timezone-free DateTime pastes use VLAT, while explicit ISO offsets are honored.
 Date-only columns are not shifted. Formula columns remain read-only. Sprints
 keeps grouped DateTime fields read-only; Salaries supports editing class dates

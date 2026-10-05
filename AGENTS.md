@@ -119,7 +119,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.51)
+## Current state (v7.52)
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
@@ -155,6 +155,9 @@ payments.
 - DateTime display/edit/clipboard and calendar grouping use Asia/Vladivostok;
   storage stays UTC. Use dateTimeWallDate/formatDateTimeSec/parseDateTimeWallSec
   for local clock conversion; keep Date-only fields on their existing UTC path.
+  DateTime cells and clipboard text include the VLAT weekday, for example
+  `2026-10-10 15:00 (Sat)`. DateTime paste accepts this weekday suffix as well
+  as the existing ISO and plain date/time formats.
   Open DateTime pickers reanchor after renders, preserving their date/time draft
   through refreshes, scroll, and resize. Removed or hidden target cells close them.
   Clicking outside saves the chosen date/time; OK also saves and uses the same

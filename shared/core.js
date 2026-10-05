@@ -106,7 +106,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.51';
+  const WIDGET_VERSION = '7.52';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -421,6 +421,7 @@
   // Reuse one native formatter. Storage remains UTC; wall-clock dates below
   // are calendar coordinates, not instants. Date-only columns never use this.
   const DISPLAY_TIME_ZONE = 'Asia/Vladivostok';
+  const DATE_TIME_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dateTimeWallFormatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: DISPLAY_TIME_ZONE, hourCycle: 'h23',
     year: 'numeric', month: '2-digit', day: '2-digit',
@@ -433,10 +434,17 @@
       +parts.hour, +parts.minute, +parts.second));
   }
   function formatDateTimeSec(sec) {
-    return dateTimeWallDate(sec).toISOString().slice(0, 16).replace('T', ' ');
+    const date = dateTimeWallDate(sec);
+    const text = date.toISOString().slice(0, 16).replace('T', ' ');
+    return `${text} (${DATE_TIME_WEEKDAYS[date.getUTCDay()]})`;
   }
   function parseDateTimeWallSec(text) {
-    const normalized = String(text).replace(/[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/g, '').trim();
+    // The displayed weekday is a decoration; pasted dates still use their
+    // actual calendar value and explicit offset, when present.
+    const normalized = String(text)
+      .replace(/[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/g, '')
+      .trim().replace(/\s+/g, ' ')
+      .replace(/ \((?:Sun|Mon|Tue|Wed|Thu|Fri|Sat)\)$/i, '');
     const wallSec = parseIsoDateSec(normalized);
     if (wallSec == null) return null;
     // Explicit offsets represent instants already; only timezone-free text

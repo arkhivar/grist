@@ -369,7 +369,7 @@ async function main() {
   assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'income');
   assert.equal(doc.querySelector('#column-strip [data-column="salary_received"] .column-name').textContent, 'expenses');
   assert(month('August 2026').querySelector('td[data-cell-id="1"][data-cell-col="datetime"]')
-    .textContent.includes('2026-08-01 00:30'));
+    .textContent.includes('2026-08-01 00:30 (Sat)'));
   assert(!doc.getElementById('content').textContent.includes('D, '), 'encoded DateTime leaked into class cells');
   assert(!doc.getElementById('content').textContent.includes('L, '), 'encoded RefList leaked into class cells');
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-300');
@@ -389,11 +389,11 @@ async function main() {
   const dateIndex = headers.indexOf('datetime') + 1;
   const performanceIndex = headers.indexOf('performance') + 1;
   const receivedIndex = headers.indexOf('salary_received') + 1;
-  assert(payment.cells[dateIndex].textContent.includes('2026-08-01 00:30'));
+  assert(payment.cells[dateIndex].textContent.includes('2026-08-01 00:30 (Sat)'));
   assert(month('July 2026').querySelector('[data-expense-id="12"] .salary-payment-date')
-    .textContent.includes('2026-07-31 23:30'), 'wrapped Transactions.datetime lost its VLAT value');
+    .textContent.includes('2026-07-31 23:30 (Fri)'), 'wrapped Transactions.datetime lost its VLAT value');
   assert(month('September 2026').querySelector('[data-expense-id="14"] .salary-payment-date')
-    .textContent.includes('2026-09-02 10:00'), 'ISO Transactions.datetime lost its VLAT value');
+    .textContent.includes('2026-09-02 10:00 (Wed)'), 'ISO Transactions.datetime lost its VLAT value');
   assert.equal(payment.cells[receivedIndex].textContent, '100');
   assert.deepEqual([...payment.cells[performanceIndex].querySelectorAll('.cell-ref-pill')]
     .map(pill => pill.textContent), ['VP'], 'payment teacher needs a linked-record pill');
