@@ -106,7 +106,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.49';
+  const WIDGET_VERSION = '7.50';
   const LOCALE = 'en-US';
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
@@ -144,6 +144,7 @@
   let groupBy    = '';
   let sortMode   = 'alpha-desc';
   let rowSort = { column: '', direction: 'asc' };
+  let rowSortConfigured = false;
   let optionsLoaded = false;
   let metadataLoaded = false;
   let collapsed  = new Set();

@@ -15,7 +15,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Date-aware grouping** — Date/DateTime columns (epoch seconds **or** ISO 8601 text) can be grouped **by day, month or year**, with chronological sorting; DateTime buckets use Vladivostok calendar dates
 - **Fold / unfold** each group by clicking its header; **expand all / collapse all** in one click
 - **Group sort**: Z→A by default, or A→Z / record count ascending or descending
-- **Independent row sort**: choose a column under **Sort rows** and its direction
+- **Independent row sort**: `datetime` defaults to **Newest first** in both
+  widgets when no row sort is saved. Choose a column under **Sort rows** and its direction
   to order records inside every group. DateTime uses Oldest/Newest first;
   numeric fields use Lowest/Highest first. Empty values stay last, equal values
   retain incoming order, and **Grist order** restores the original sequence.
@@ -225,6 +226,9 @@ Date-only columns are not shifted. Formula columns remain read-only. Sprints
 keeps grouped DateTime fields read-only; Salaries supports editing class dates
 in its monthly view.
 Saving uses the active table's update API (original `All_att` rows for Salaries).
+An open DateTime picker keeps its selected date and time through record or view
+refreshes and follows its current cell when scrolling or resizing. Removing its
+row or hiding its column closes the picker without saving the draft.
 Text and number failures retain the draft with a red outline and report the
 real error in the toast and Diagnostics; calendar errors stay in its popover.
 

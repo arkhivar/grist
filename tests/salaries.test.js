@@ -368,7 +368,8 @@ async function main() {
   assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
   assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'income');
   assert.equal(doc.querySelector('#column-strip [data-column="salary_received"] .column-name').textContent, 'expenses');
-  assert(month('August 2026').querySelector('td[data-cell-col="datetime"]').textContent.includes('2026-08-01 00:30'));
+  assert(month('August 2026').querySelector('td[data-cell-id="1"][data-cell-col="datetime"]')
+    .textContent.includes('2026-08-01 00:30'));
   assert(!doc.getElementById('content').textContent.includes('D, '), 'encoded DateTime leaked into class cells');
   assert(!doc.getElementById('content').textContent.includes('L, '), 'encoded RefList leaked into class cells');
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-300');

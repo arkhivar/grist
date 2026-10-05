@@ -817,6 +817,7 @@
       if (opts.groupBy)  { groupBy  = opts.groupBy;  groupSelect.value = groupBy;  }
       if (opts.sortMode) { sortMode = opts.sortMode; sortSelect.value  = sortMode; }
       if (Object.prototype.hasOwnProperty.call(opts, 'rowSort') && !pendingRowSortSaves) {
+        rowSortConfigured = true;
         const nextRowSort = normalizeRowSort(opts.rowSort);
         if (rowSort.column !== nextRowSort.column || rowSort.direction !== nextRowSort.direction)
           cellRangeEnd = null;
@@ -890,6 +891,7 @@
     optionsLoaded = true;
     getWritableColumnIds().then(() => {
       applyStartupGroupDefault();
+      applyStartupRowSortDefault();
       rebuildColumnSelect();
       applyEditableColumnDefaults();
       refreshEditableColumnsSection();
@@ -929,6 +931,7 @@
     // even when the current filter returns no records.
     rebuildColumnSelect();
     applyStartupGroupDefault();
+    applyStartupRowSortDefault();
     if (settingsPanel.classList.contains('open')) refreshEditableColumnsSection();
     if (settingsPanel.classList.contains('open')) refreshDiag();
     render();
@@ -1017,6 +1020,31 @@
     return type || (allColumns.includes(rowSort.column) && isDateLikeColumn(rowSort.column) ? 'DateTime' : '');
   }
 
+  function saveRowSort() {
+    const snapshot = { ...rowSort };
+    pendingRowSortSaves++;
+    rowSortSaveQueue = rowSortSaveQueue
+      .then(() => grist.setOption('rowSort', snapshot))
+      .catch(err => showToast(actionErrorMessage('Save row sorting', err)))
+      .finally(() => { pendingRowSortSaves--; });
+    return rowSortSaveQueue;
+  }
+
+  function applyStartupRowSortDefault() {
+    // Wait for the saved preference and source columns before choosing a
+    // default. An explicit Grist-order choice is a saved preference too.
+    if (rowSortConfigured || !optionsLoaded || !metadataLoaded || !allColumns.length)
+      return false;
+    const datetimeColumn = allColumns.find(col => col === 'datetime')
+      || allColumns.find(col => col.toLowerCase() === 'datetime');
+    if (!datetimeColumn) return false;
+    rowSortConfigured = true;
+    rowSort = { column: datetimeColumn, direction: 'desc' };
+    cellRangeEnd = null;
+    saveRowSort();
+    return true;
+  }
+
   function refreshRowSortControls() {
     rowSortSelect.replaceChildren(new Option('Grist order', ''));
     allColumns.forEach(col => rowSortSelect.add(new Option(col, col)));
@@ -1037,17 +1065,13 @@
   }
 
   function changeRowSort() {
+    rowSortConfigured = true;
     rowSort = { column: rowSortSelect.value, direction: rowSortDirection.value };
-    const snapshot = { ...rowSort };
     // Reordering changes what lies between range endpoints: retain just the
     // active cell, rather than silently selecting a different rectangle.
     cellRangeEnd = null;
     render();
-    pendingRowSortSaves++;
-    rowSortSaveQueue = rowSortSaveQueue
-      .then(() => grist.setOption('rowSort', snapshot))
-      .catch(err => showToast(actionErrorMessage('Save row sorting', err)))
-      .finally(() => { pendingRowSortSaves--; });
+    saveRowSort();
   }
   rowSortSelect.addEventListener('change', changeRowSort);
   rowSortDirection.addEventListener('change', changeRowSort);
@@ -1226,6 +1250,7 @@
       columnStrip.replaceChildren();
       columnScrollbar.hidden = true;
       if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
+      reanchorDateTimeEditor();
       return;
     }
 
@@ -1325,6 +1350,7 @@
     scheduleGroupSumAlignment();
     refreshBoolSection();
     if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
+    reanchorDateTimeEditor();
   }
 
   function gripIconHtml() {
@@ -2496,6 +2522,22 @@
     top = Math.max(margin, Math.min(top, window.innerHeight - dialogHeight - margin));
     cellEditorDialog.style.left = `${Math.round(left)}px`;
     cellEditorDialog.style.top = `${Math.round(top)}px`;
+  }
+
+  function reanchorDateTimeEditor() {
+    if (!editingCell || editingCell.kind !== 'datetime' || cellEditor.hidden) return;
+    const cell = findDataCell(editingCell.recordId, editingCell.col);
+    const anchor = cell?.querySelector('button[data-edit-kind="datetime"]');
+    if (!anchor || cell.closest('.group.collapsed')
+        || editKindForColumn(editingCell.col) !== 'datetime') {
+      closeFieldEditor();
+      return;
+    }
+    // Rendering replaces the cell button. Keep the picker attached to its
+    // current cell without resetting the selected date, time, or focus.
+    editingCell.anchorEl = anchor;
+    anchor.setAttribute('aria-expanded', 'true');
+    positionFieldEditorPopover();
   }
 
   function inlineEditorInput() {
