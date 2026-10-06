@@ -74,6 +74,7 @@ win.grist = {
 };
 win.eval([
   'widgets/salaries/config.js',
+  'shared/dates.js',
   'shared/core.js',
   'widgets/salaries/attendance.js',
   'shared/references.js',

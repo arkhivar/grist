@@ -59,8 +59,8 @@ async function waitFor(cond, what) {
 async function main() {
 
 // ── Syntax check of the widget sources (node --check) ────────
-await test('syntax: node --check shared/core.js / widgets/sprints/app.js / widgets/sprints/actions.js', async () => {
-  for (const f of ['shared/core.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
+await test('syntax: node --check shared helpers and Sprints sources', async () => {
+  for (const f of ['shared/dates.js', 'shared/core.js', 'shared/navigation.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
     execFileSync(process.execPath, ['--check', path.join(ROOT, f)]);
 });
 
@@ -141,8 +141,10 @@ win.grist = {
 
 // ONE eval: the classic scripts share the global lexical scope.
 win.eval(
+  read('shared/dates.js') + '\n;\n' +
   read('shared/core.js') + '\n;\n' +
   read('shared/references.js') + '\n;\n' +
+  read('shared/navigation.js') + '\n;\n' +
   read('widgets/sprints/app.js') + '\n;\n' +
   read('widgets/sprints/actions.js')
 );
@@ -262,7 +264,7 @@ await test('A5a: Reference metadata gives a linked label a pill without boxing t
       } },
       viewApi: {},
     };
-    refWin.eval(read('shared/core.js') + '\n;\n' + read('shared/references.js') + '\n;\n'
+    refWin.eval(read('shared/dates.js') + '\n;\n' + read('shared/core.js') + '\n;\n' + read('shared/references.js') + '\n;\n' + read('shared/navigation.js') + '\n;\n'
       + read('widgets/sprints/app.js') + '\n;\n'
       + read('widgets/sprints/actions.js'));
     const linkedRecord = { id: 101, students: 'A. Student', performance: 'ordinary text', sprint: 'Sprint 1' };
@@ -614,16 +616,16 @@ await test('F16: custom picker converts selected VLAT date and time to UTC stora
 
 // ── G. Smoke ─────────────────────────────────────────────────
 await test('G17: sprints.html loads the shared editors and widget scripts once', async () => {
-  for (const f of ['shared/core.js', 'shared/references.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
+  for (const f of ['shared/dates.js', 'shared/core.js', 'shared/references.js', 'shared/navigation.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js'])
     assert(html.includes(`<script src="${f}?`), `sprints.html missing script tag for ${f}`);
   const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(match => match[1]);
   assertEq(new Set(scripts).size, scripts.length, 'duplicate script tag');
 });
 
 await test('G18: live badge and every cache key use the same release version', async () => {
-  const versions = [...html.matchAll(/(?:src|href)="(?:shared\/(?:base\.css|core\.js|references\.js)|widgets\/sprints\/(?:app|actions)\.js)\?v=([^"&]+)/g)]
+  const versions = [...html.matchAll(/(?:src|href)="(?:shared\/(?:base\.css|dates\.js|core\.js|references\.js|navigation\.js)|widgets\/sprints\/(?:app|actions)\.js)\?v=([^"&]+)/g)]
     .map(match => match[1]);
-  assertEq(versions.length, 5, 'versioned asset count');
+  assertEq(versions.length, 7, 'versioned asset count');
   assert(versions.every(version => version === versions[0]), 'asset cache keys differ');
   assertEq(doc.getElementById('version-badge').textContent, `v${versions[0]}`, 'version badge');
 });

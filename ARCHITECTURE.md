@@ -8,8 +8,9 @@ architecture without rediscovering how Grist and GitHub Pages divide the work.
 The version is a display/cache identifier rather than strict semantic
 versioning. Starting after v6.7, small releases use `6.71`, `6.72`, `6.73`, and
 so on. From v7.01 on, releases keep two decimal digits (`7.01`, `7.02`, …).
-A release must update both `WIDGET_VERSION` in `shared/core.js` and all four
-`?v=` asset keys in `sprints.html`; otherwise GitHub Pages or an embedding
+A release must update both `WIDGET_VERSION` in `shared/core.js` and every
+`?v=` asset key in every entry HTML, plus Filters' shell version marker;
+otherwise GitHub Pages or an embedding
 browser may continue serving an older script or stylesheet.
 
 ## What runs where
@@ -65,6 +66,41 @@ writability only from the displayed cell value: a text-looking column may be a
 formula, reference, lookup, or encoded Grist type.
 
 ## Persistence
+
+### Student navigation companion
+
+`filters.html` uses the same student summary as the native selector. Its
+`ready({requiredAccess: 'full', allowSelectBy: true})` declaration enables
+outgoing row selection and metadata/raw Reference reads. Matching summary IDs
+are sent through `setSelectedRows`; use `[]` for no matches and the complete
+ID list for an empty query, preserving filter-link behavior. The native table
+is Select By Filters, while Sprints remains Select By the native table.
+No business records or native saved filters are modified.
+
+The filter receives expanded labels through `onRecords` and independently
+reads typed unexpanded rows and column metadata. It waits for options and data
+before publishing; rejects stale reads and serializes selection changes so the
+latest query wins. `studentFilter` holds `{nameColumn, match, rules}`;
+`navigationGroup` identifies an independent companion pair. Query text and
+the active recent student remain temporary.
+
+Custom widgets cannot observe arbitrary sibling cursor clicks. Sprints instead
+reports the one common student represented by its incoming classes through
+`shared/navigation.js`. Typed raw IDs disambiguate repeated labels; an empty
+or mixed-student class view clears the bridge's cached selection. Reads stay
+dormant until a companion connects. Initial and automatically selected results
+can therefore count as viewed students, along with manual student selection.
+
+BroadcastChannel operates only between same-origin widgets and is scoped by
+Grist's document identifier, embedding origin, and navigation group. Five
+distinct identities are stored in localStorage under that scope plus the
+summary table/name field, with current-session fallback if storage is blocked.
+Labels are resolved from current summary rows. Browsing history never enters
+Grist widget options or record data. Salaries does not publish student visits.
+
+`shared/dates.js` holds the original tolerant date parsing and VLAT helpers
+without grouped-table DOM dependencies. Both grouped widgets and Filters load
+it; `shared/core.js` retains the shared version and grouped-table state/UI.
 
 Widget configuration is not stored in this repository or in browser cookies.
 It is stored by Grist as JSON options belonging to the particular custom-widget

@@ -11,7 +11,9 @@ scripts sharing the global lexical scope (no IIFEs, no modules).
 <name>.html              # one entry page per widget — English noun (sprints.html, salaries.html)
 index.html               # gallery linking to every widget
 shared/
-  core.js                # UI strings (T), shared state, date helpers, Grist helpers
+  core.js                # UI strings (T), version, grouped state, Grist helpers
+  dates.js               # date parsing and VLAT helpers without grouped DOM
+  navigation.js          # document-scoped recent-student bridge
   references.js          # shared Reference / Reference List picker and labels
   base.css               # design system (tokens, toolbar, tables, grips, editor, toasts)
 widgets/<name>/          # per-widget code (app.js, actions.js)
@@ -44,7 +46,7 @@ npm test      # discovers and runs every tests/*.test.js suite
 
 - **Date/DateTime cells** arrive as epoch seconds (UTC), as ISO 8601 strings,
   OR as **object wrappers whose `String()` is the ISO text**. Always go through
-  `parseDateValueSec()` / `formatUtcDateSec()` in `shared/core.js`; never
+  `parseDateValueSec()` / `formatUtcDateSec()` in `shared/dates.js`; never
   assume `typeof === 'string'`.
 - `parseIsoDateSec` strips invisible/format characters (ZWSP, LRM/RLM, bidi
   controls, soft hyphen, BOM) and normalizes whitespace before matching — keep
@@ -119,13 +121,34 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.52)
+## Current state (v7.53)
+
+- `filters.html` is a read-only companion on the same student summary as the
+  native table. It publishes matching summary IDs with `setSelectedRows`;
+  the link chain is Filters → native summary → Sprints. Keep Filters unlinked
+  upstream. Native filters intersect with this selection.
+- Progressive name search, typed Match all/any conditions, and five recent
+  students share `shared/base.css`. Saved conditions/name field/navigation
+  group are section options; query and active recent selection are temporary.
+  A recent chip selects by stable raw student identity and pauses conditions
+  until normal search or condition editing resumes.
+- Sprints reports a single common student to `shared/navigation.js` only when
+  a companion connects. BroadcastChannel is scoped by document, embedding
+  origin, and navigation group; personal recents use browser storage, never
+  shared options. Use the same hosting origin and navigation group for a pair.
+  Raw reads are race-safe and repeated class refreshes do not reorder recents.
+  Salaries does not participate in student navigation.
+- Date helpers now live in `shared/dates.js`, loaded before `shared/core.js`
+  in both grouped widgets. `WIDGET_VERSION` remains in core. Filters uses a
+  synchronized version marker on its entry shell and never loads grouped core.
+- `tests/filters.test.js` and `tests/navigation.test.js` cover selection,
+  history, ID/label isolation, saved preferences, dates, stale loads, and focus.
 
 - Live widget: `sprints.html` (grouped view: collapsible groups, automatic
   numeric header sums, group-aware footer row creation, grip selection + bulk
   actions, drag between groups, inline text/DateTime editing, adjustable
   columns, diagnostics panel).
-- `index.html` gallery lists both active widgets.
+- `index.html` gallery lists all three active widgets.
 - With no valid saved grouping, Sprints picks the `sprint` column ID (exact,
   then case-insensitive), including plain Text. Only if absent does it fall
   back to the first single-value Choice column. Valid saved groupings win;

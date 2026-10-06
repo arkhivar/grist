@@ -1,3 +1,175 @@
+  // Companion navigation stays dormant until a filter widget connects.
+  let studentNavigationBridgeConnection = null;
+  let studentNavigationBridgeGroup = null;
+  let studentNavigationBridgeGeneration = 0;
+  let studentNavigationBridgeRevision = 0;
+  let studentNavigationBridgePendingRead = 0;
+  let studentNavigationBridgePeer = false;
+  let studentNavigationBridgeSignature = null;
+  let studentNavigationBridgePublished = null;
+  let studentNavigationBridgeSaveQueue = Promise.resolve();
+  let studentNavigationBridgePendingSaves = 0;
+  let studentNavigationBridgeInputDirty = false;
+  const studentNavigationBridgeInput = document.getElementById('student-navigation-group');
+
+  function syncStudentNavigationBridgeInput() {
+    if (studentNavigationBridgeInput && !studentNavigationBridgeInputDirty
+        && document.activeElement !== studentNavigationBridgeInput)
+      studentNavigationBridgeInput.value = studentNavigationBridgeGroup || 'students';
+  }
+
+  function saveStudentNavigationBridgeGroup() {
+    if (!studentNavigationBridgeInput || !studentNavigationBridgeInputDirty) return;
+    const group = studentNavigationGroup(studentNavigationBridgeInput.value);
+    studentNavigationBridgeInputDirty = false;
+    studentNavigationBridgeInput.value = group;
+    configureStudentNavigationBridge({ navigationGroup: group });
+    ++studentNavigationBridgePendingSaves;
+    studentNavigationBridgeSaveQueue = studentNavigationBridgeSaveQueue
+      .then(() => grist.setOption('navigationGroup', group))
+      .catch(error => showToast(actionErrorMessage('Save student navigation group', error)))
+      .finally(() => { --studentNavigationBridgePendingSaves; });
+  }
+
+  if (studentNavigationBridgeInput) {
+    studentNavigationBridgeInput.addEventListener('input', () => {
+      studentNavigationBridgeInputDirty = true;
+    });
+    studentNavigationBridgeInput.addEventListener('change', saveStudentNavigationBridgeGroup);
+    studentNavigationBridgeInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        saveStudentNavigationBridgeGroup();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        studentNavigationBridgeInputDirty = false;
+        studentNavigationBridgeInput.value = studentNavigationBridgeGroup || 'students';
+      }
+    });
+  }
+
+  function studentNavigationBridgeEnabled() {
+    return typeof studentNavigationConnect === 'function'
+      && !(typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly);
+  }
+
+  function configureStudentNavigationBridge(opts) {
+    if (!studentNavigationBridgeEnabled()) return;
+    const group = studentNavigationGroup(opts && opts.navigationGroup);
+    if (studentNavigationBridgeGroup === group) {
+      syncStudentNavigationBridgeInput();
+      return;
+    }
+    studentNavigationBridgeGroup = group;
+    syncStudentNavigationBridgeInput();
+    const generation = ++studentNavigationBridgeGeneration;
+    if (studentNavigationBridgeConnection) studentNavigationBridgeConnection.close();
+    studentNavigationBridgeConnection = null;
+    studentNavigationBridgePeer = false;
+    studentNavigationBridgePendingRead = 0;
+    studentNavigationBridgeSignature = null;
+    studentNavigationBridgePublished = null;
+    studentNavigationConnect(group, null, () => {
+      if (generation !== studentNavigationBridgeGeneration) return;
+      studentNavigationBridgePeer = true;
+      studentNavigationBridgeSignature = null;
+      studentNavigationBridgePublished = null;
+      refreshStudentNavigationBridge();
+    }).then(connection => {
+      if (generation !== studentNavigationBridgeGeneration) {
+        if (connection) connection.close();
+        return;
+      }
+      studentNavigationBridgeConnection = connection;
+      refreshStudentNavigationBridge();
+    }).catch(error => {
+      if (generation === studentNavigationBridgeGeneration)
+        recordActionDiagnostic('Student navigation', 'error', error.message || String(error));
+    });
+  }
+
+  async function refreshStudentNavigationBridge(forceRaw = false) {
+    if (!studentNavigationBridgeEnabled() || !optionsLoaded || !metadataLoaded
+        || !studentNavigationBridgeConnection || !studentNavigationBridgePeer) return;
+    const columns = allColumns.filter(col => /^(students?|students?_name)$/i.test(col));
+    const column = columns.length === 1 ? columns[0] : null;
+    const type = column && columnTypes[column];
+    const records = allRecords.slice();
+    const signature = JSON.stringify([column, type,
+      records.map(record => [record.id, column && String(record[column] ?? '')])]);
+    // Expanded labels can stay identical when a raw reference changes. Recheck
+    // onRecords, while sharing an identical read that is still in progress.
+    if (signature === studentNavigationBridgeSignature
+        && (!forceRaw || !/^Ref(?:List)?:/.test(type)
+          || studentNavigationBridgePendingRead === studentNavigationBridgeRevision)) return;
+    ++studentNavigationBridgeRevision;
+    studentNavigationBridgeSignature = signature;
+    studentNavigationBridgeConnection.clear();
+    const generation = studentNavigationBridgeGeneration;
+    const revision = studentNavigationBridgeRevision;
+    const current = () => generation === studentNavigationBridgeGeneration
+      && revision === studentNavigationBridgeRevision
+      && signature === studentNavigationBridgeSignature;
+    try {
+      let visit = null;
+      if (column && records.length && columnBaseType(type) === 'Text') {
+        const text = records[0][column];
+        if (typeof text === 'string' && text.trim()
+            && records.every(record => record[column] === text)) visit = { text };
+      } else if (column && records.length && /^Ref(?:List)?:/.test(type)) {
+        studentNavigationBridgePendingRead = revision;
+        const options = { cellFormat: 'typed', expandRefs: false };
+        let rawRecords;
+        if (grist.viewApi && typeof grist.viewApi.fetchSelectedTable === 'function') {
+          const raw = await grist.viewApi.fetchSelectedTable(options);
+          const positions = new Map((raw.id || []).map((id, index) => [Number(id), index]));
+          rawRecords = records.map(record => {
+            const index = positions.get(Number(record.id));
+            return index == null ? undefined : raw[column] && raw[column][index];
+          });
+        } else if (grist.viewApi && typeof grist.viewApi.fetchSelectedRecord === 'function') {
+          const raw = await Promise.all(records.map(record =>
+            grist.viewApi.fetchSelectedRecord(Number(record.id), options)));
+          rawRecords = raw.map(record => record && record[column]);
+        }
+        if (!current()) return;
+        const ids = (rawRecords || []).map(value => {
+          const normalized = normalizeTypedCell(value);
+          const list = columnBaseType(type) === 'RefList'
+            ? (Array.isArray(normalized) && normalized[0] === 'L' ? normalized.slice(1) : [])
+            : [normalized];
+          const id = list.length === 1 ? Number(list[0]) : NaN;
+          return Number.isSafeInteger(id) && id > 0 ? id : null;
+        });
+        if (ids.length === records.length && ids[0] != null
+            && ids.every(id => id === ids[0]))
+          visit = { tableId: type.slice(type.indexOf(':') + 1), ids: [ids[0]] };
+      }
+      if (!current()) return;
+      if (!visit) {
+        studentNavigationBridgePublished = null;
+        return;
+      }
+      const key = JSON.stringify(visit);
+      studentNavigationBridgeConnection.publish(visit, key !== studentNavigationBridgePublished);
+      studentNavigationBridgePublished = key;
+    } catch (error) {
+      if (current()) {
+        studentNavigationBridgeSignature = null;
+        recordActionDiagnostic('Student navigation', 'error', error.message || String(error));
+      }
+    } finally {
+      if (studentNavigationBridgePendingRead === revision) studentNavigationBridgePendingRead = 0;
+    }
+  }
+
+  window.addEventListener('pagehide', () => {
+    ++studentNavigationBridgeGeneration;
+    if (studentNavigationBridgeConnection) studentNavigationBridgeConnection.close();
+  });
+
   // ── 7. Settings panel — button ─────────────────────────
   btnSettings.addEventListener('click', () => {
     const isOpen = settingsPanel.classList.toggle('open');
@@ -889,6 +1061,7 @@
       }
     }
     optionsLoaded = true;
+    if (!studentNavigationBridgePendingSaves) configureStudentNavigationBridge(opts);
     getWritableColumnIds().then(() => {
       applyStartupGroupDefault();
       applyStartupRowSortDefault();
@@ -935,6 +1108,7 @@
     if (settingsPanel.classList.contains('open')) refreshEditableColumnsSection();
     if (settingsPanel.classList.contains('open')) refreshDiag();
     render();
+    refreshStudentNavigationBridge(true);
     // The class view is already current; payment loading only needs its final render.
     if (refreshSalaryPayments && typeof salaryRefreshPayments === 'function') salaryRefreshPayments(true);
   }
@@ -2831,6 +3005,7 @@
       writableColumnTypes = typeMap;
       columnTypes = allTypeMap;
       metadataLoaded = true;
+      refreshStudentNavigationBridge();
       recordActionDiagnostic('Metadata', 'ok',
         `table=${tableId} · writable=${writableColumnIds.join(', ')}`
         + ` · text=${writableColumnIds.filter(col => isTextColumnType(typeMap[col])).join(', ')}`

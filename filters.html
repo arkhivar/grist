@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Filters — student navigation (Grist widget)</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared/base.css?v=7.53">
+  <link rel="stylesheet" href="widgets/filters/filter.css?v=7.53">
+</head>
+<body>
+  <main id="app" class="filter-app" data-widget-version="7.53" aria-label="Student filters">
+    <div class="toolbar filter-toolbar" role="search" aria-label="Find students">
+      <div class="filter-search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false">
+          <circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>
+        </svg>
+        <input id="filter-search" type="search" autocomplete="off" spellcheck="false" placeholder="Search students…" aria-label="Search student names">
+        <button id="filter-clear" class="filter-search-clear" type="button" aria-label="Clear search" title="Clear search" hidden>×</button>
+      </div>
+      <button id="btn-filter-rules" class="btn filter-rules-button" type="button" aria-expanded="false" aria-controls="filter-rules">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M3 4h18l-7 8v7l-4 2v-9z"/>
+        </svg>
+        <span>Filter</span>
+      </button>
+      <span id="filter-count" class="filter-count" role="status" aria-live="polite" aria-atomic="true"></span>
+      <div id="filter-recents" class="filter-recents" role="group" aria-label="Five recent students">
+        <span id="filter-empty-recents" class="filter-empty-recents">Recent students appear here</span>
+      </div>
+      <span id="version-badge" class="version-badge" title="Widget version"></span>
+      <button id="btn-filter-settings" class="btn-icon" type="button" aria-label="Filter settings" title="Filter settings" aria-expanded="false" aria-controls="filter-settings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.86 4a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </main>
+
+  <section id="filter-rules" class="filter-popover filter-rules-popover" role="region" aria-label="Filters" hidden>
+    <header class="filter-popover-header">
+      <h2>Filters</h2>
+      <button id="filter-close-rules" class="btn-icon" type="button" aria-label="Close filters" title="Close filters">×</button>
+    </header>
+    <div class="filter-popover-body">
+      <label class="filter-match-label" for="filter-match">Match
+        <select id="filter-match">
+          <option value="all">all</option>
+          <option value="any">any</option>
+        </select>
+        conditions
+      </label>
+      <div id="filter-rule-list" class="filter-rule-list"></div>
+      <div class="filter-rule-actions">
+        <button id="filter-add-rule" class="btn" type="button">+ Add condition</button>
+        <button id="filter-reset-rules" class="btn" type="button">Clear conditions</button>
+      </div>
+      <p class="setting-help filter-help">Conditions update the linked table immediately. DateTime uses Vladivostok time (VLAT).</p>
+    </div>
+  </section>
+
+  <section id="filter-settings" class="filter-popover filter-settings-popover" role="region" aria-label="Filter settings" hidden>
+    <header class="filter-popover-header">
+      <h2>Filter settings</h2>
+      <button id="filter-settings-close" class="btn-icon" type="button" aria-label="Close filter settings" title="Close filter settings">×</button>
+    </header>
+    <div class="filter-popover-body">
+      <label class="filter-setting" for="filter-name-column">
+        <span>Name column</span>
+        <select id="filter-name-column"><option value="">Automatic</option></select>
+      </label>
+      <label class="filter-setting" for="filter-channel">
+        <span>Navigation group</span>
+        <input id="filter-channel" type="text" value="students" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="setting-help filter-help">Use the same navigation group in Sprints to remember the students you visit.</p>
+      <button id="filter-history-clear" class="btn" type="button">Clear recent students</button>
+      <p id="filter-status" class="setting-help filter-status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="shared/dates.js?v=7.53"></script>
+  <script src="shared/navigation.js?v=7.53"></script>
+  <script src="widgets/filters/app.js?v=7.53"></script>
+</body>
+</html>

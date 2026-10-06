@@ -12,7 +12,7 @@ const html = read('salaries.html');
 const version = /WIDGET_VERSION = '([^']+)'/.exec(read('shared/core.js'))[1];
 const assets = [...html.matchAll(/(?:src|href)="([^"]+\?v=([^"]+))"/g)]
   .filter(match => !match[1].startsWith('https://'));
-assert.equal(assets.length, 9);
+assert.equal(assets.length, 10);
 assert(assets.every(match => match[2] === version), 'salaries asset versions differ');
 assert(html.includes('widgets/salaries/config.js'));
 
@@ -102,6 +102,7 @@ win.grist = {
 
 win.eval([
   'widgets/salaries/config.js',
+  'shared/dates.js',
   'shared/core.js',
   'widgets/salaries/attendance.js',
   'shared/references.js',

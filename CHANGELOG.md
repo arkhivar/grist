@@ -2,6 +2,22 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.53 — 2026-10-06
+
+- Add `filters.html`: progressive student-name search, typed filter conditions
+  with Match all/any, and five personal recent-student buttons. Publish matching
+  summary row IDs through Grist Select By, including an empty result.
+- Remember stable student identities reported by linked Sprints classes,
+  distinguish duplicate names, and resolve current labels. Keep recent history
+  in browser storage, scoped by document/source/navigation group.
+- Preserve native selection, input drafts, caret, and keyboard focus through
+  refreshes; serialize selection and configuration requests and report real
+  API errors in the shared fixed notification region.
+- Reuse the shared design system and extract existing date/VLAT helpers into
+  `shared/dates.js` for the new companion. Keep Sprints and Salaries behavior
+  and bump every entry's cache keys with the shared version.
+- Add filter and navigation regression suites, plus setup/linking instructions.
+
 ## v7.47 — 2026-09-30
 
 - Automatically group Sprints by `sprint` when no valid grouping is saved,

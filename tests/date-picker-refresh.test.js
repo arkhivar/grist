@@ -101,11 +101,11 @@ async function fixture(widget) {
     },
   };
   const scripts = salary ? [
-    'widgets/salaries/config.js', 'shared/core.js', 'widgets/salaries/attendance.js',
+    'widgets/salaries/config.js', 'shared/dates.js', 'shared/core.js', 'widgets/salaries/attendance.js',
     'shared/references.js', 'widgets/salaries/expenses.js',
     'widgets/sprints/app.js', 'widgets/sprints/actions.js',
   ] : [
-    'shared/core.js', 'shared/references.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js',
+    'shared/dates.js', 'shared/core.js', 'shared/references.js', 'shared/navigation.js', 'widgets/sprints/app.js', 'widgets/sprints/actions.js',
   ];
   win.eval(scripts.map(read).join('\n;\n'));
   const cell = (col = 'datetime', id = 11) =>

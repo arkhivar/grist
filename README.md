@@ -95,6 +95,58 @@ Payments stay read-only; use **Refresh payments** after editing Transactions.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
 monthly groups are derived from `datetime`, so no helper `date` column is needed.
 
+### Student filter setup
+
+Use `https://arkhivar.github.io/grist/filters.html` for the compact companion
+above the student table. It progressively narrows names as you type and recalls
+five recently viewed students. It reads data and updates view selection; it
+never edits or caches class records.
+
+1. Add a **Custom** widget using the same `All_att` summary grouped by
+   `students` as the existing student table. Keep the filter's **Select By**
+   unset so it receives the complete student list.
+2. Set its URL to the address above and grant **Full access**. This read-only
+   widget needs metadata and raw Reference IDs to distinguish duplicate names.
+3. In the native student table's **Edit data selection**, set **Select By** to
+   the new filter widget. Keep Sprints' **Select By** linked to the native
+   student table. The chain is **Filters → student summary → Sprints**.
+4. Reload the existing Sprints widget to load v7.53; keep its current URL,
+   Full access, and linking settings. Serve both widgets from the same origin.
+
+The name field defaults to `students` (also recognizes `student`,
+`student_name`, and `students_name`). Choose another field in Filter settings
+when needed. Name search ignores case and accents, accepts partial words, and
+matches all space-separated fragments. Clear search or press Escape inside it
+to restore the list allowed by the saved conditions and native Grist filters.
+Zero matches leaves the linked list empty; it never falls back to all students.
+
+**Filter** opens a compact, non-blocking condition editor with **Match all**
+or **Match any**. Text/Reference labels, numbers, Booleans, and Date/DateTime
+columns have type-appropriate conditions. `lastClass` is the first suggested
+field. Dates compare calendar days; DateTime uses VLAT while Date stays UTC.
+Incomplete conditions wait for a value. Give the filter section enough height
+to use the scrolling condition/settings popover comfortably (about 180–240 px
+when editing conditions); search and recent chips fit a single compact row.
+
+Name-field choice, conditions, match mode, and navigation group persist per
+widget section. Search text and the active recent chip are temporary. Sprints
+reports the single student whose linked classes are currently shown, so initial
+and automatically selected search results can also appear in recent history.
+Five distinct student identities are remembered in this browser for the
+document, name field, and navigation group, without writing browsing history
+to the shared document. Names come from current records. Deleted or currently
+unavailable students are hidden. If browser storage is blocked, history lasts
+for the current session.
+
+Click a recent chip to show that exact student, even if names repeat. Saved
+conditions pause while a recent chip is active; the Filter button marks this.
+Typing, clearing search, or changing a condition resumes normal filtering.
+**Clear recent students** is in Filter settings. When a document has several
+independent student lists, set the same distinct **Navigation group** in each
+filter/Sprints pair (Sprints: Settings → Recent students). The default
+`students` works for one pair. Recent history requires a browser supporting
+BroadcastChannel; filtering itself remains available without it.
+
 ## Row actions (duplicate / delete)
 
 Every record row has a trailing actions cell with always-visible buttons
@@ -445,12 +497,19 @@ the same repo, so no extra hosting steps are needed:
 | `sprints.html` | Page shell of the grouped-view ("sprints") widget — loads the shared CSS/scripts and its per-widget scripts |
 | `index.html` | Widget gallery — one card per widget in the repo |
 | `salaries.html` | Teacher salary counter combining Attendance classes and Transactions payments |
+| `filters.html` | Compact student search, conditions, and recent-student navigation |
 | `AGENTS.md` | Guidance for AI coding agents working in this repo |
 | `shared/base.css` | Design system (styles) shared by every widget |
-| `shared/core.js` | English UI strings, constants, state, date helpers, and Grist helpers shared by every widget |
+| `shared/core.js` | English UI strings, version, grouped-table state, and Grist helpers |
+| `shared/dates.js` | Shared tolerant date parsing and VLAT formatting, independent of grouped-table DOM |
+| `shared/navigation.js` | Document-scoped personal recent-student communication between Filters and Sprints |
 | `widgets/sprints/app.js` | Settings panel, footer sums/add-row actions, diagnostics, Grist wiring, grouping, rendering, row actions |
 | `widgets/sprints/actions.js` | Unified grip selection, cross-group dragging, action bar, and bulk actions |
+| `widgets/filters/app.js` | Student matching, typed conditions, outgoing Grist selection, and personal history |
+| `widgets/filters/filter.css` | Compact filter controls and non-blocking popovers using shared design tokens |
 | `tests/sprints.test.js` | Test suite for the sprints widget (Node + jsdom, no test framework) |
+| `tests/filters.test.js` | Progressive filtering, dates, persistence, request races, history, and input focus |
+| `tests/navigation.test.js` | Scoped companion messages, raw student identity, and the Sprints bridge |
 | `ARCHITECTURE.md` | GitHub Pages/Grist responsibilities, persistence lifecycle, data access, and backend boundaries |
 | `ROADMAP.md` | Deferred drag semantics for dates, Choice Lists, references, and other types |
 
