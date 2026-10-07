@@ -1,4 +1,4 @@
-// A read-only student navigator: publish matching summary rows through Select By.
+// A read-only student navigator: publish matching source rows through Select By.
 const filterSearch = document.getElementById('filter-search');
 const filterClear = document.getElementById('filter-clear');
 const filterCount = document.getElementById('filter-count');
@@ -21,6 +21,9 @@ let filterNavigationGroup = 'students';
 let filterOptionsReady = false;
 let filterDataReady = false;
 let filterLoadRequest = 0;
+let filterPendingRecords = null;
+let filterLoadRunning = false;
+let filterIncomingLink = '';
 let filterMetadataPromise = null;
 let filterMetadataTableId = '';
 let filterConnection = null;
@@ -31,6 +34,7 @@ let filterPinnedKey = '';
 let filterLatestSelection = null;
 let filterSelectionRunning = false;
 let filterLastSelection = '';
+let filterSelectionGeneration = 0;
 let filterDesiredCount = '';
 let filterConfigSaveTimer = null;
 let filterConfigSaveQueue = Promise.resolve();
@@ -202,6 +206,12 @@ function filterNotify(error) {
   filterToastTimer = setTimeout(() => toast.classList.remove('visible'), 6000);
 }
 
+function filterReadyMessage() {
+  return typeof BroadcastChannel === 'function'
+    ? 'Search filters the linked table. Recent students come from Sprints on this page.'
+    : 'Search and filters are ready. This browser cannot share recent students with Sprints.';
+}
+
 async function filterConnectNavigation() {
   const request = ++filterConnectionRequest;
   filterConnection?.close();
@@ -213,7 +223,7 @@ async function filterConnectNavigation() {
     if (request !== filterConnectionRequest) { connection?.close(); return; }
     filterConnection = connection;
     filterLoadRecents();
-    if (!connection) filterStatus.textContent = 'Recent history needs browser storage and the linked Sprints widget.';
+    if (!connection && !filterIncomingLink) filterStatus.textContent = 'Recent history needs browser storage and the linked Sprints widget.';
     filterPendingVisits.splice(0).forEach(filterReceiveVisit);
   } catch (error) { if (request === filterConnectionRequest) filterNotify(error); }
 }
@@ -281,15 +291,20 @@ async function filterPublishSelection() {
   while (filterLatestSelection) {
     const ids = filterLatestSelection;
     filterLatestSelection = null;
-    const signature = JSON.stringify(ids);
+    if (filterIncomingLink || !filterDataReady) continue;
+    // Selection is a set: sorting the native view must not reset its cursor.
+    const signature = JSON.stringify([filterTableId, [...ids].sort((a, b) => a - b)]);
+    const generation = filterSelectionGeneration;
     if (signature === filterLastSelection) continue;
     try {
       await grist.setSelectedRows(ids);
+      if (generation !== filterSelectionGeneration) continue;
       filterLastSelection = signature;
-      if (!filterLatestSelection) filterCount.textContent = filterDesiredCount;
+      if (!filterLatestSelection && !filterIncomingLink && filterDataReady) filterCount.textContent = filterDesiredCount;
     } catch (error) {
+      if (generation !== filterSelectionGeneration) continue;
       filterNotify(error);
-      if (!filterLatestSelection) filterCount.textContent = 'Filter failed';
+      if (!filterLatestSelection && !filterIncomingLink && filterDataReady) filterCount.textContent = 'Filter failed';
     }
   }
   filterSelectionRunning = false;
@@ -303,6 +318,15 @@ function filterApply() {
     ? `Filter · ${completeRules.length}${filterPinnedKey ? ' paused' : ''}` : 'Filter';
   filterRulesButton.classList.toggle('active', completeRules.length > 0 && !filterPinnedKey);
   filterRenderRecents();
+  if (filterIncomingLink) {
+    filterLatestSelection = null;
+    filterCount.textContent = 'Check linking';
+    filterCount.setAttribute('aria-label', 'Filtering paused. Check linking settings.');
+    filterCount.title = 'Clear this filter widget’s own Select By. The attendance or student table selects by this filter.';
+    filterStatus.textContent = filterCount.title;
+    return;
+  }
+  filterCount.removeAttribute('title');
   if (!filterOptionsReady || !filterDataReady) return;
   if (!filterColumn(filterConfig.nameColumn)) {
     filterCount.textContent = 'Choose a name field';
@@ -320,7 +344,7 @@ function filterApply() {
   }).map(record => record.id);
   filterDesiredCount = `${matches.length} / ${filterRawRecords.length}`;
   filterCount.textContent = filterDesiredCount;
-  filterCount.setAttribute('aria-label', `${matches.length} of ${filterRawRecords.length} students`);
+  filterCount.setAttribute('aria-label', `${matches.length} of ${filterRawRecords.length} records`);
   filterLatestSelection = matches;
   filterPublishSelection();
 }
@@ -400,7 +424,7 @@ function filterRenderRuleList(focusNew = false) {
   filterMatchSelect.value = filterConfig.match;
   if (!filterConfig.rules.length) {
     const hint = document.createElement('p'); hint.className = 'filter-help';
-    hint.textContent = 'Add conditions to narrow the student list. Dates use VLAT for DateTime fields.';
+    hint.textContent = 'Add conditions to narrow the records. Dates use VLAT for DateTime fields.';
     filterRuleList.appendChild(hint);
   }
   if (focusNew) filterRuleList.lastElementChild?.querySelector('select')?.focus();
@@ -436,9 +460,12 @@ function filterTogglePanel(panel, button) {
 }
 
 async function filterLoadMetadata(tableId) {
-  const [tables, columns] = await Promise.all([
+  const loaded = await Promise.allSettled([
     grist.docApi.fetchTable('_grist_Tables'), grist.docApi.fetchTable('_grist_Tables_column'),
   ]);
+  const failed = loaded.find(result => result.status === 'rejected');
+  if (failed) throw failed.reason;
+  const [tables, columns] = loaded.map(result => result.value);
   const tableIndex = tables.tableId.indexOf(tableId);
   if (tableIndex < 0) throw new Error(`Cannot read columns for ${tableId}`);
   const parentId = tables.id[tableIndex];
@@ -451,16 +478,40 @@ async function filterLoadMetadata(tableId) {
   return { tableId, metadata };
 }
 
-async function filterLoadRecords(records) {
-  const request = ++filterLoadRequest;
+function filterLoadRecords(records) {
+  filterPendingRecords = { records, request: ++filterLoadRequest };
   filterDataReady = false;
-  filterCount.textContent = 'Loading…';
+  // Recompute queued selections from the next complete snapshot, never from
+  // IDs belonging to a section whose source table may have just changed.
+  filterLatestSelection = null;
+  if (!filterIncomingLink) filterCount.textContent = 'Loading…';
+  filterDrainRecords();
+}
+
+async function filterDrainRecords() {
+  if (filterLoadRunning) return;
+  filterLoadRunning = true;
+  try {
+    // Keep one active load and only the newest waiting refresh. A duplicate or
+    // recalculation can send many onRecords events before a read settles.
+    while (filterPendingRecords) {
+      const pending = filterPendingRecords;
+      filterPendingRecords = null;
+      await filterReadRecords(pending.records, pending.request);
+    }
+  } finally {
+    filterLoadRunning = false;
+  }
+}
+
+async function filterReadRecords(records, request) {
   try {
     const tableId = await grist.selectedTable.getTableId();
     if (request !== filterLoadRequest) return;
     if (filterMetadataTableId !== tableId) {
       filterMetadataPromise = null;
       filterMetadataTableId = tableId;
+      filterSelectionGeneration++;
       filterLastSelection = '';
       filterPinnedKey = '';
     }
@@ -469,11 +520,16 @@ async function filterLoadRecords(records) {
       filterMetadataPromise = metadataPromise;
       metadataPromise.catch(() => { if (filterMetadataPromise === metadataPromise) filterMetadataPromise = null; });
     }
-    const [info, table] = await Promise.all([
+    const loaded = await Promise.allSettled([
       filterMetadataPromise,
       grist.viewApi.fetchSelectedTable({ cellFormat: 'typed', expandRefs: false }),
     ]);
     if (request !== filterLoadRequest) return;
+    // A failed sibling read does not cancel another Grist request. Wait for
+    // every read before starting the next refresh, retaining the real error.
+    const failed = loaded.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+    const [info, table] = loaded.map(result => result.value);
     const allowed = new Set(records.map(record => record.id));
     filterTableId = info.tableId;
     filterRecords = records;
@@ -486,9 +542,7 @@ async function filterLoadRecords(records) {
     filterReconcileConfig();
     filterLoadRecents();
     filterPendingVisits.splice(0).forEach(filterReceiveVisit);
-    filterStatus.textContent = typeof BroadcastChannel === 'function'
-      ? 'Search filters the linked student list. Recent students come from Sprints on this page.'
-      : 'Search and filters are ready. This browser cannot share recent students with Sprints.';
+    filterStatus.textContent = filterReadyMessage();
     filterApply();
   } catch (error) {
     if (request !== filterLoadRequest) return;
@@ -575,7 +629,18 @@ window.addEventListener('pagehide', () => filterConnection?.close());
 document.getElementById('version-badge').textContent = `v${document.getElementById('app').dataset.widgetVersion}`;
 
 grist.ready({ requiredAccess: 'full', allowSelectBy: true });
-grist.onOptions(options => {
+grist.onOptions((options, settings) => {
+  // Newer hosts expose link information; older hosts retain normal filtering.
+  if (settings?.linking && Object.prototype.hasOwnProperty.call(settings.linking, 'asTarget')) {
+    const wasLinked = filterIncomingLink;
+    filterIncomingLink = typeof settings.linking.asTarget === 'string' ? settings.linking.asTarget : '';
+    if (wasLinked !== filterIncomingLink) {
+      filterSelectionGeneration++;
+      filterLastSelection = '';
+      if (!filterIncomingLink)
+        filterStatus.textContent = filterDataReady ? filterReadyMessage() : 'Waiting for Grist records…';
+    }
+  }
   const saved = options?.studentFilter;
   if (!filterConfigSaveTimer && !filterPendingConfigSaves) {
     filterConfig = {

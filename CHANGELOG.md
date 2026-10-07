@@ -2,6 +2,20 @@
 
 All notable changes to the widgets in this repo (formerly the grist-sprints grouped-view widget).
 
+## v7.54 — 2026-10-07
+
+- Bound Filters refreshes to one active load and the newest queued update,
+  including when one metadata or raw-table read fails before another settles.
+  Preserve real API errors and discard stale data.
+- Compare matching row sets independently of sort order to avoid unnecessary
+  selection updates and native cursor resets. Ignore acknowledgements from
+  old source tables or linking configurations.
+- Pause filter publication for an incoming Select By link on hosts that expose
+  link information, with compact Check linking guidance. Keep older hosts
+  compatible and document ungrouped attendance setup and record counts.
+- Add duplicate-refresh, request-bound, sorting, failure, and linking regressions.
+  Bump the shared version and all entry asset keys together.
+
 ## v7.53 — 2026-10-06
 
 - Add `filters.html`: progressive student-name search, typed filter conditions

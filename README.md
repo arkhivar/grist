@@ -110,8 +110,28 @@ never edits or caches class records.
 3. In the native student table's **Edit data selection**, set **Select By** to
    the new filter widget. Keep Sprints' **Select By** linked to the native
    student table. The chain is **Filters → student summary → Sprints**.
-4. Reload the existing Sprints widget to load v7.53; keep its current URL,
-   Full access, and linking settings. Serve both widgets from the same origin.
+4. Reload the existing Sprints widget to load the current version; keep its
+   current URL, Full access, and linking settings. Serve both widgets from
+   the same origin.
+
+For an ungrouped attendance view, use ungrouped `All_att` as the filter's
+source and set the native attendance table's **Select By** to the filter.
+Keep the filter's own **Select By** empty and grant the new instance Full
+access. Searching `students` then selects every matching attendance row;
+the counter counts records rather than distinct students. A standalone native
+table does not report visits to the recent-student bridge.
+
+Refreshes keep one active data load and only the newest waiting update. The
+same matching row set is not republished merely because Grist reorders it.
+On hosts that provide link information, an incoming Select By link pauses
+publication with **Check linking**; clear the filter's own Select By to resume.
+Older hosts retain normal filtering without this link check.
+
+Grist's **Still working...** notification tracks pending document requests.
+These safeguards do not cancel a native duplicate or a stalled server request.
+If it returns after reloading and appears on pages without Filters, check
+Grist's pending request or server logs before repeating Duplicate; a write can
+complete even while its response is pending.
 
 The name field defaults to `students` (also recognizes `student`,
 `student_name`, and `students_name`). Choose another field in Filter settings

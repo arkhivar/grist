@@ -6,6 +6,11 @@ const { JSDOM } = require('jsdom');
 const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const sec = text => Date.parse(text) / 1000;
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
 
 async function fixture(options = {}) {
   const dom = new JSDOM(read('filters.html'), {
@@ -39,10 +44,14 @@ async function fixture(options = {}) {
     starts: records.map(record => record.starts == null ? null : ['D', record.starts, 'Asia/Vladivostok']),
     count: records.map(record => record.count), active: records.map(record => record.active), group: records.map(record => ['L', record.id]),
   };
-  const calls = { ready: [], selection: [], options: [] };
+  const calls = {
+    ready: [], selection: [], options: [], rawReads: 0, activeRawReads: 0, maxActiveRawReads: 0,
+    metadataReads: {}, activeMetadataReads: {}, maxActiveMetadataReads: {},
+  };
   let recordsCallback, optionsCallback;
   let selectionHandler = async () => {};
   let tableHandler = async () => table;
+  const metadataHandlers = new Map();
   let selectedTableId = 'All_att_summary_students';
   const metadata = {
     id: [1, 2, 3, 4, 5, 6, 7], parentId: [10, 10, 10, 10, 10, 10, 10],
@@ -60,25 +69,40 @@ async function fixture(options = {}) {
     docApi: {
       getDocName: async () => 'document-a',
       fetchTable: async name => {
-        if (name === '_grist_Tables') return { id: [10], tableId: [selectedTableId] };
-        if (name === '_grist_Tables_column') return metadata;
-        throw new Error(`Unexpected table ${name}`);
+        if (!['_grist_Tables', '_grist_Tables_column'].includes(name)) throw new Error(`Unexpected table ${name}`);
+        calls.metadataReads[name] = (calls.metadataReads[name] || 0) + 1;
+        calls.activeMetadataReads[name] = (calls.activeMetadataReads[name] || 0) + 1;
+        calls.maxActiveMetadataReads[name] = Math.max(calls.maxActiveMetadataReads[name] || 0, calls.activeMetadataReads[name]);
+        try {
+          if (metadataHandlers.has(name)) return await metadataHandlers.get(name)();
+          return name === '_grist_Tables' ? { id: [10], tableId: [selectedTableId] } : metadata;
+        } finally { calls.activeMetadataReads[name]--; }
       },
     },
-    viewApi: { fetchSelectedTable: async () => tableHandler() },
+    viewApi: {
+      fetchSelectedTable: async () => {
+        calls.rawReads++;
+        calls.activeRawReads++;
+        calls.maxActiveRawReads = Math.max(calls.maxActiveRawReads, calls.activeRawReads);
+        try { return await tableHandler(); }
+        finally { calls.activeRawReads--; }
+      },
+    },
   };
   win.eval([read('shared/dates.js'), read('shared/navigation.js'), read('widgets/filters/app.js')].join('\n;\n'));
   const api = {
     win, doc: win.document, calls,
-    options: value => optionsCallback(value),
+    options: (value, settings) => optionsCallback(value, settings),
     records: value => recordsCallback(value || records),
     setTable: value => { table = value; },
     getTable: () => table,
+    getRecords: () => records,
     setRecords: value => { records = value; },
     metadata,
     setTableId: value => { selectedTableId = value; },
     setSelectionHandler: callback => { selectionHandler = callback; },
     setTableHandler: callback => { tableHandler = callback; },
+    setMetadataHandler: (name, callback) => { if (callback) metadataHandlers.set(name, callback); else metadataHandlers.delete(name); },
     search(value) { const input = win.document.getElementById('filter-search'); input.value = value; input.dispatchEvent(new win.Event('input', { bubbles: true })); },
     async visit(id) {
       api.publisher ||= await win.eval("studentNavigationConnect('students', null)");
@@ -216,13 +240,284 @@ async function main() {
     assert.equal(f.doc.getElementById('filter-search').value, 'Ann');
   });
   await test('stale raw loads cannot replace the current student rows', async f => {
-    let resolve;
-    const stale = new Promise(done => { resolve = done; });
-    f.setTableHandler(() => stale); f.records([{ id: 1, students: 'Ann Lee' }]);
+    const stale = deferred();
+    const reads = f.calls.rawReads;
+    f.setTableHandler(() => stale.promise); f.records([{ id: 1, students: 'Ann Lee' }]);
+    await pause(5); assert.equal(f.calls.rawReads, reads + 1);
     f.setTableHandler(async () => ({ id: [6], students: [['R', 'Students', 106]] }));
+    f.records([{ id: 6, students: 'Иван Петров' }]); await pause(5);
+    assert.equal(f.calls.rawReads, reads + 1, 'newest refresh waits for the active raw read');
+    stale.resolve(f.getTable()); await pause(12);
+    assert.deepEqual(f.lastSelection(), [6]);
+    assert.equal(f.calls.rawReads, reads + 2);
+    assert.equal(f.calls.maxActiveRawReads, 1);
+  });
+  await test('a burst of native refreshes keeps one active read and loads only the latest snapshot next', async f => {
+    const first = deferred();
+    const second = deferred();
+    let nextRead = 0;
+    const reads = f.calls.rawReads;
+    const selections = f.calls.selection.length;
+    f.setTableHandler(() => ++nextRead === 1 ? first.promise : second.promise);
+    f.records([{ id: 1, students: 'Ann Lee' }]); await pause(5);
+    for (let index = 0; index < 30; index++)
+      f.records([{ id: index % 2 ? 2 : 3, students: index % 2 ? 'Ann Lee' : 'Anna Smith' }]);
+    f.records([{ id: 6, students: 'Иван Петров' }]); await pause(5);
+    assert.equal(f.calls.rawReads, reads + 1);
+    assert.equal(f.calls.activeRawReads, 1);
+    first.resolve(f.getTable()); await pause(5);
+    assert.equal(f.calls.rawReads, reads + 2, 'intermediate refreshes are coalesced');
+    assert.equal(f.calls.selection.length, selections, 'stale snapshot is never published');
+    second.resolve(f.getTable()); await pause(12);
+    assert.deepEqual(f.lastSelection(), [6]);
+    assert.equal(f.calls.selection.length, selections + 1);
+    assert.equal(f.calls.maxActiveRawReads, 1);
+    assert.equal(f.calls.activeRawReads, 0);
+    assert.equal(f.doc.getElementById('filter-count').textContent, '1 / 1');
+  });
+  await test('native row sorting keeps the same selected IDs without resetting the native cursor', async f => {
+    f.search('Ann'); await pause(5);
+    assert.deepEqual(f.lastSelection(), [1, 2, 3]);
+    const selections = f.calls.selection.length;
+    f.setTable(Object.fromEntries(Object.entries(f.getTable()).map(([column, values]) => [column, [...values].reverse()])));
+    f.records([...f.getRecords()].reverse()); await pause(12);
+    assert.equal(f.calls.selection.length, selections, 'a row-order-only refresh does not republish the same IDs');
+    assert.equal(f.doc.getElementById('filter-count').textContent, '3 / 6');
+    f.records([...f.getRecords()]); await pause(12);
+    assert.equal(f.calls.selection.length, selections);
+  });
+  await test('a duplicated matching row is published once and repeated native refreshes settle', async f => {
+    f.search('Ann'); await pause(5);
+    const selections = f.calls.selection.length;
+    const duplicated = { id: 7, students: 'Ann Lee', lastClass: null, starts: null, count: 2, active: true };
+    const records = [...f.getRecords(), duplicated];
+    const raw = { ...duplicated, students: ['R', 'Students', 101], group: ['L', 7] };
+    f.setTable(Object.fromEntries(Object.entries(f.getTable()).map(([column, values]) => [column, [...values, raw[column]]])));
+    f.setRecords(records);
+    // Publishing selection can echo back as another native records event.
+    f.setSelectionHandler(async () => { f.records(records); });
+    f.records(records); await pause(20);
+    assert.deepEqual(f.lastSelection(), [1, 2, 3, 7]);
+    assert.equal(f.calls.selection.length, selections + 1);
+    for (let index = 0; index < 20; index++) f.records(records);
+    await pause(20);
+    assert.equal(f.calls.selection.length, selections + 1, 'identical refresh echoes stop without another selection RPC');
+    assert.equal(f.calls.maxActiveRawReads, 1);
+    assert.equal(f.calls.activeRawReads, 0);
+    assert.equal(f.doc.getElementById('filter-count').textContent, '4 / 7');
+  });
+  await test('stale raw errors release the refresh queue; current failures surface and the next refresh recovers', async f => {
+    const first = deferred();
+    const selections = f.calls.selection.length;
+    f.setTableHandler(() => first.promise);
+    f.records([{ id: 1, students: 'Ann Lee' }]); await pause(5);
+    f.setTableHandler(async () => f.getTable());
+    f.records([{ id: 6, students: 'Иван Петров' }]);
+    first.reject(new Error('Stale raw failure')); await pause(12);
+    assert.deepEqual(f.lastSelection(), [6]);
+    assert.equal(f.calls.selection.length, selections + 1);
+    assert.equal(f.doc.getElementById('toast').textContent, '', 'a replaced snapshot failure is not an actionable error');
+    assert.equal(f.calls.activeRawReads, 0);
+    f.setTableHandler(async () => { throw new Error('Current raw failure'); });
+    f.records(); await pause(12);
+    assert.equal(f.doc.getElementById('toast').textContent, 'Current raw failure');
+    assert.equal(f.doc.getElementById('filter-count').textContent, 'Unable to load');
+    assert.equal(f.calls.activeRawReads, 0);
+    f.setTableHandler(async () => f.getTable());
+    f.records(); await pause(12);
+    assert.deepEqual(f.lastSelection(), [1, 2, 3, 4, 5, 6]);
+    assert.equal(f.doc.getElementById('filter-count').textContent, '6 / 6');
+    assert.equal(f.calls.activeRawReads, 0);
+    assert.equal(f.calls.maxActiveRawReads, 1);
+  });
+  await test('an early raw failure waits for pending metadata before the newest refresh starts', async f => {
+    const tables = deferred();
+    f.options({});
+    f.setMetadataHandler('_grist_Tables', () => tables.promise);
+    f.setTableHandler(async () => { throw new Error('Stale raw failure'); });
+    f.records([{ id: 1, students: 'Ann Lee' }]); await pause(5);
+    assert.equal(f.calls.rawReads, 1);
+    assert.equal(f.calls.activeMetadataReads._grist_Tables, 1);
+    f.setTableHandler(async () => f.getTable());
+    f.records([{ id: 6, students: 'Иван Петров' }]); await pause(5);
+    assert.equal(f.calls.rawReads, 1, 'failure cannot release a load while its metadata RPC is pending');
+    assert.equal(f.doc.getElementById('toast').textContent, '');
+    tables.resolve({ id: [10], tableId: ['All_att_summary_students'] }); await pause(12);
+    assert.deepEqual(f.lastSelection(), [6]);
+    assert.equal(f.calls.rawReads, 2);
+    assert.equal(f.calls.activeMetadataReads._grist_Tables, 0);
+    assert.equal(f.calls.maxActiveMetadataReads._grist_Tables, 1);
+    assert.equal(f.doc.getElementById('toast').textContent, '');
+  }, { noStartup: true });
+  await test('an early metadata failure waits for the raw read and surfaces the newest failure before recovery', async f => {
+    const raw = deferred();
+    f.options({});
+    f.setMetadataHandler('_grist_Tables', async () => { throw new Error('Stale metadata failure'); });
+    f.setTableHandler(() => raw.promise);
+    f.records([{ id: 1, students: 'Ann Lee' }]); await pause(5);
+    f.setMetadataHandler('_grist_Tables', async () => { throw new Error('Current metadata unavailable'); });
+    f.setTableHandler(async () => f.getTable());
+    f.records([{ id: 6, students: 'Иван Петров' }]); await pause(5);
+    assert.equal(f.calls.rawReads, 1, 'failure cannot release a load while its raw RPC is pending');
+    assert.equal(f.calls.metadataReads._grist_Tables, 1);
+    assert.equal(f.doc.getElementById('toast').textContent, '');
+    raw.resolve(f.getTable()); await pause(12);
+    assert.equal(f.calls.rawReads, 2);
+    assert.equal(f.calls.selection.length, 0);
+    assert.equal(f.doc.getElementById('toast').textContent, 'Current metadata unavailable');
+    assert.equal(f.doc.getElementById('filter-count').textContent, 'Unable to load');
+    f.setMetadataHandler('_grist_Tables', null);
     f.records([{ id: 6, students: 'Иван Петров' }]); await pause(12);
     assert.deepEqual(f.lastSelection(), [6]);
-    resolve(f.getTable()); await pause(12); assert.deepEqual(f.lastSelection(), [6]);
+    assert.equal(f.calls.rawReads, 3);
+    assert.equal(f.calls.maxActiveRawReads, 1);
+    assert.equal(f.doc.getElementById('filter-count').textContent, '1 / 1');
+  }, { noStartup: true });
+  await test('a failed metadata sibling cannot start another load while the other metadata RPC is pending', async f => {
+    const columns = deferred();
+    f.options({});
+    f.setMetadataHandler('_grist_Tables', async () => { throw new Error('Stale table metadata failure'); });
+    f.setMetadataHandler('_grist_Tables_column', () => columns.promise);
+    f.records([{ id: 1, students: 'Ann Lee' }]); await pause(5);
+    f.setMetadataHandler('_grist_Tables', null);
+    f.setMetadataHandler('_grist_Tables_column', null);
+    for (let index = 0; index < 15; index++) f.records([{ id: 2, students: 'Ann Lee' }]);
+    f.records([{ id: 6, students: 'Иван Петров' }]); await pause(5);
+    assert.equal(f.calls.rawReads, 1);
+    assert.equal(f.calls.metadataReads._grist_Tables_column, 1);
+    assert.equal(f.calls.activeMetadataReads._grist_Tables_column, 1);
+    columns.resolve(f.metadata); await pause(12);
+    assert.deepEqual(f.lastSelection(), [6]);
+    assert.equal(f.calls.rawReads, 2);
+    assert.equal(f.calls.metadataReads._grist_Tables_column, 2);
+    assert.equal(f.calls.maxActiveMetadataReads._grist_Tables_column, 1);
+    assert.equal(f.calls.activeMetadataReads._grist_Tables_column, 0);
+    assert.equal(f.doc.getElementById('toast').textContent, '');
+  }, { noStartup: true });
+  await test('an incoming Select By pauses options-first startup and resumes once it is cleared', async f => {
+    f.options({}, { linking: { asTarget: 'Cursor:Same-Table', asSource: true } });
+    f.records(); await pause(15);
+    assert.equal(f.calls.selection.length, 0);
+    assert.equal(f.doc.getElementById('filter-count').textContent, 'Check linking');
+    assert.match(f.doc.getElementById('filter-count').title, /own Select By/);
+    assert.match(f.doc.getElementById('filter-status').textContent, /selects by this filter/);
+    f.search('Anna'); await pause(5);
+    assert.equal(f.calls.selection.length, 0);
+    f.options({}, { linking: { asSource: true } }); await pause(5);
+    assert.equal(f.calls.selection.length, 0, 'a partial settings callback does not clear a known incoming link');
+    f.options({}, { linking: { asTarget: null, asSource: true } }); await pause(5);
+    assert.deepEqual(f.lastSelection(), [3]);
+    assert.equal(f.calls.selection.length, 1);
+    assert.equal(f.doc.getElementById('filter-count').textContent, '1 / 6');
+    assert.equal(f.doc.getElementById('filter-count').title, '');
+    assert.doesNotMatch(f.doc.getElementById('filter-status').textContent, /Clear this filter/);
+  }, { noStartup: true });
+  await test('records-first startup waits for linking settings before publishing rows', async f => {
+    f.records(); await pause(15);
+    assert.equal(f.calls.selection.length, 0);
+    f.options({}, { linking: { asTarget: 'Cursor:Same-Table', asSource: true } }); await pause(5);
+    assert.equal(f.calls.selection.length, 0);
+    assert.equal(f.doc.getElementById('filter-count').textContent, 'Check linking');
+    f.options({}, { linking: { asTarget: null, asSource: true } }); await pause(5);
+    assert.deepEqual(f.lastSelection(), [1, 2, 3, 4, 5, 6]);
+    assert.equal(f.calls.selection.length, 1);
+  }, { noStartup: true });
+  await test('clearing an incoming link during a pending refresh publishes only the latest loaded rows', async f => {
+    const first = deferred();
+    f.options({}, { linking: { asTarget: 'Cursor:Same-Table', asSource: true } });
+    f.setTableHandler(() => first.promise);
+    f.records([{ id: 1, students: 'Ann Lee' }]); await pause(5);
+    f.setTableHandler(async () => f.getTable());
+    f.records([{ id: 6, students: 'Иван Петров' }]);
+    f.options({}, { linking: { asTarget: null, asSource: true } }); await pause(5);
+    assert.equal(f.calls.selection.length, 0, 'unlinking waits for the current raw snapshot');
+    first.resolve(f.getTable()); await pause(12);
+    assert.deepEqual(f.lastSelection(), [6]);
+    assert.equal(f.calls.selection.length, 1);
+    assert.equal(f.doc.getElementById('filter-count').textContent, '1 / 1');
+  }, { noStartup: true });
+  await test('an incoming link drops queued selections and a settling RPC cannot replace the linking hint', async f => {
+    const pending = deferred();
+    const selections = f.calls.selection.length;
+    f.setSelectionHandler(() => pending.promise);
+    f.search('An'); f.search('Emma');
+    assert.deepEqual(f.lastSelection(), [1, 2, 3]);
+    f.options({}, { linking: { asTarget: 'Cursor:Same-Table', asSource: true } });
+    pending.resolve(); await pause(8);
+    assert.equal(f.calls.selection.length, selections + 1, 'the pending newer selection is not published into an incoming link');
+    assert.equal(f.doc.getElementById('filter-count').textContent, 'Check linking');
+    f.search('Anna'); await pause(5);
+    assert.equal(f.calls.selection.length, selections + 1);
+    f.setSelectionHandler(async () => {});
+    f.options({}, { linking: { asTarget: null, asSource: true } }); await pause(5);
+    assert.deepEqual(f.lastSelection(), [3]);
+    assert.equal(f.calls.selection.length, selections + 2);
+  });
+  await test('unlinking during a delayed selection acknowledgement resends fresh identical IDs once', async f => {
+    const pending = deferred();
+    const selections = f.calls.selection.length;
+    let first = true;
+    f.setSelectionHandler(() => {
+      if (!first) return Promise.resolve();
+      first = false;
+      return pending.promise;
+    });
+    f.search('Ann');
+    f.options({}, { linking: { asTarget: 'Cursor:Same-Table', asSource: true } });
+    f.options({}, { linking: { asTarget: null, asSource: true } });
+    assert.equal(f.calls.selection.length, selections + 1);
+    pending.resolve(); await pause(8);
+    assert.equal(f.calls.selection.length, selections + 2, 'an acknowledgement from before relinking cannot deduplicate the fresh selection');
+    assert.deepEqual(f.calls.selection.slice(-2), [[1, 2, 3], [1, 2, 3]]);
+    f.records(); await pause(12);
+    assert.equal(f.calls.selection.length, selections + 2);
+  });
+  await test('switching A to B to A during a delayed acknowledgement publishes fresh A selection once', async f => {
+    const pending = deferred();
+    const selections = f.calls.selection.length;
+    let first = true;
+    f.setSelectionHandler(() => {
+      if (!first) return Promise.resolve();
+      first = false;
+      return pending.promise;
+    });
+    f.search('Ann');
+    f.setTableId('Other_summary'); f.records(); await pause(12);
+    f.setTableId('All_att_summary_students'); f.records(); await pause(12);
+    assert.equal(f.calls.selection.length, selections + 1);
+    pending.resolve(); await pause(8);
+    assert.equal(f.calls.selection.length, selections + 2, 'returning to the same table does not validate an old-generation acknowledgement');
+    assert.deepEqual(f.calls.selection.slice(-2), [[1, 2, 3], [1, 2, 3]]);
+    f.records(); await pause(12);
+    assert.equal(f.calls.selection.length, selections + 2);
+  });
+  await test('a source switch discards queued old-table selection until current raw rows are ready', async f => {
+    const selection = deferred();
+    const raw = deferred();
+    const selections = f.calls.selection.length;
+    let first = true;
+    f.setSelectionHandler(() => {
+      if (!first) return Promise.resolve();
+      first = false;
+      return selection.promise;
+    });
+    f.search('An'); f.search('Emma');
+    f.setTableId('Other_summary'); f.setTableHandler(() => raw.promise);
+    f.records(); await pause(5);
+    selection.resolve(); await pause(5);
+    assert.equal(f.calls.selection.length, selections + 1, 'old queued IDs cannot be sent against a source whose rows are still loading');
+    raw.resolve(f.getTable()); await pause(12);
+    assert.deepEqual(f.lastSelection(), [5]);
+    assert.equal(f.calls.selection.length, selections + 2);
+    assert.equal(f.doc.getElementById('filter-count').textContent, '1 / 6');
+  });
+  await test('older hosts without incoming-link metadata retain progressive filtering', async f => {
+    f.options({}, { linking: { asSource: true } });
+    f.search('Anna'); await pause(5); assert.deepEqual(f.lastSelection(), [3]);
+    f.options({}, {});
+    f.search('Emma'); await pause(5); assert.deepEqual(f.lastSelection(), [5]);
+    f.options({});
+    f.search('Emile'); await pause(5); assert.deepEqual(f.lastSelection(), [4]);
   });
   await test('selection RPCs are serialized, latest query wins, unchanged refresh avoids native cursor resets', async f => {
     const releases = [];

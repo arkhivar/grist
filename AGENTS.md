@@ -121,12 +121,19 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.53)
+## Current state (v7.54)
 
 - `filters.html` is a read-only companion on the same student summary as the
   native table. It publishes matching summary IDs with `setSelectedRows`;
   the link chain is Filters → native summary → Sprints. Keep Filters unlinked
   upstream. Native filters intersect with this selection.
+- The filter also works on ungrouped `All_att`, publishing matching attendance
+  row IDs. Counts always represent source records. Keep one active data load
+  and only the newest waiting refresh; await every sibling read even after a
+  failure. Selection signatures use table ID and the sorted matching ID set,
+  with generations rejecting acknowledgements from old sources/link states.
+  When a host supplies `settings.linking.asTarget`, pause publication for an
+  incoming link and show Check linking; older hosts remain supported.
 - Progressive name search, typed Match all/any conditions, and five recent
   students share `shared/base.css`. Saved conditions/name field/navigation
   group are section options; query and active recent selection are temporary.

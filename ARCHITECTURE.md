@@ -69,9 +69,10 @@ formula, reference, lookup, or encoded Grist type.
 
 ### Student navigation companion
 
-`filters.html` uses the same student summary as the native selector. Its
+`filters.html` uses the same source table as the native selector, either the
+student summary or ungrouped `All_att` attendance records. Its
 `ready({requiredAccess: 'full', allowSelectBy: true})` declaration enables
-outgoing row selection and metadata/raw Reference reads. Matching summary IDs
+outgoing row selection and metadata/raw Reference reads. Matching source IDs
 are sent through `setSelectedRows`; use `[]` for no matches and the complete
 ID list for an empty query, preserving filter-link behavior. The native table
 is Select By Filters, while Sprints remains Select By the native table.
@@ -83,6 +84,20 @@ before publishing; rejects stale reads and serializes selection changes so the
 latest query wins. `studentFilter` holds `{nameColumn, match, rules}`;
 `navigationGroup` identifies an independent companion pair. Query text and
 the active recent student remain temporary.
+
+Refreshes run one active data load and retain only the newest waiting event.
+Both metadata and raw-table reads wait for every sibling request to settle,
+including failures, before releasing that load. Pending publication from the
+previous snapshot is discarded until fresh data is ready. Selection signatures
+combine the source table ID with sorted matching IDs, so native sort changes
+do not reset the cursor. Generation checks discard publication acknowledgements
+from old table or linking configurations.
+
+Where available, `onOptions` settings expose `linking.asTarget`. An incoming
+link pauses publication and shows Check linking guidance, preventing this
+companion from feeding selection back into its own source. Older hosts that
+omit linking information continue to work. This view-only guard cannot cancel
+pending Grist document writes or diagnose the host's Still working notification.
 
 Custom widgets cannot observe arbitrary sibling cursor clicks. Sprints instead
 reports the one common student represented by its incoming classes through
