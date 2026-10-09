@@ -148,16 +148,28 @@ async function main() {
     .map(header => header.dataset.column);
   const canonicalOrder = ['datetime', 'performance', 'students', 'notes',
     'wage', 'salary_received', 'count', 'sprint'];
+  const compactColumns = ['performance', 'wage', 'salary_received', 'count'];
+  const headerWidth = col => doc.querySelector(`#column-strip col[data-column="${col}"]`).style.width;
   assert.deepEqual(headerOrder().slice(0, 8), canonicalOrder,
     'fresh salary layout does not follow the canonical order');
+  for (const col of compactColumns) {
+    assert.equal(headerWidth(col), '64px', `${col} should default to the shared minimum width`);
+    for (const card of cards())
+      assert.equal(card.querySelector(`col[data-column="${col}"]`).style.width, '64px',
+        `${col} width should match the fixed header in every month`);
+  }
   assert(!calls.options.some(([key]) => key === 'columnOrder'),
     'default column order should not overwrite saved section options during startup');
   onOptions({ sortMode: 'alpha-asc',
     columnOrder: ['datetime', 'wage', 'salary_received', 'performance', 'group2'],
+    columnWidths: { performance: 128, wage: 112, salary_received: 144, count: 96 },
     columnVisibility: { salary_received: false } },
   { accessLevel: 'full' });
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
   await waitFor(() => doc.querySelector('[data-column="students"]'));
+  assert.deepEqual(compactColumns.filter(col => col !== 'salary_received').map(headerWidth),
+    ['128px', '112px', '96px'],
+    'saved widths should take priority over compact defaults');
   const firstLoadFetches = name => calls.fetches.filter(table => table === name).length;
   assert(firstLoadFetches('_grist_Tables') <= 2,
     'reference preload repeats table metadata fetches');
@@ -214,6 +226,8 @@ async function main() {
     .some(([key, value]) => key === 'columnVisibility' && value.salary_received === true));
   assert(doc.querySelector('#column-strip th[data-column="salary_received"]'),
     'restored expenses column is absent from the fixed header');
+  assert.equal(headerWidth('salary_received'), '144px',
+    'unhiding paid should preserve its saved width');
   assert(month('August 2026').querySelector('.group-sum[data-column="salary_received"]'),
     'restored expenses subtotal is absent from the month header');
   columnsButton.click();
@@ -378,13 +392,16 @@ async function main() {
   assert.deepEqual(refPills(1, 'performance'), ['VP', 'TR'],
     'redo lost separate Reference List pills');
   assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
-  assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'earned');
+  assert.equal(doc.querySelector('#column-strip [data-column="performance"] .column-name').textContent, 'per');
+  assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'wage');
   assert.equal(doc.querySelector('#column-strip [data-column="salary_received"] .column-name').textContent, 'paid');
   assert(month('August 2026').querySelector('td[data-cell-id="1"][data-cell-col="datetime"]')
     .textContent.includes('2026-08-01 00:30 (Sat)'));
   assert(!doc.getElementById('content').textContent.includes('D, '), 'encoded DateTime leaked into class cells');
   assert(!doc.getElementById('content').textContent.includes('L, '), 'encoded RefList leaked into class cells');
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-300');
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="count"]').textContent, '-300');
+  assert.equal(month('July 2026').querySelector('.group-sum[data-column="count"]').textContent, '-50');
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '100');
   assert.equal(month('July 2026').querySelector('.group-sum[data-column="wage"]').textContent, '-50');
   assert(month('July 2026').querySelector('.salary-matched'));
@@ -392,6 +409,8 @@ async function main() {
   assert.equal(month('September 2026').querySelector('.group-badge').getAttribute('aria-label'),
     '0\u00a0classes', 'payment-only month needs an accessible zero-class count');
   assert.equal(month('September 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '20');
+  assert.equal(month('September 2026').querySelector('.group-sum[data-column="count"]').textContent, '—',
+    'payment-only months should not contribute to the class count sum');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 3);
   assert(!month('August 2026').querySelector('[data-expense-id="13"]'));
   assert(!doc.querySelector('.salary-payments-heading'));
@@ -631,6 +650,8 @@ async function main() {
   await waitFor(() => calls.options.slice(beforeResetOptions).some(([key]) => key === 'columnOrder'));
   assert.deepEqual(headerOrder().slice(0, 8), canonicalOrder,
     'Reset column layout did not restore the canonical order');
+  assert.deepEqual(compactColumns.map(headerWidth), ['64px', '64px', '64px', '64px'],
+    'Reset column layout should restore the four compact widths');
   const resetOrder = calls.options.slice(beforeResetOptions)
     .find(([key]) => key === 'columnOrder')[1];
   assert.deepEqual(Array.from(resetOrder.slice(0, 8)), canonicalOrder,
@@ -639,7 +660,8 @@ async function main() {
   assert.deepEqual([...doc.querySelectorAll('.column-control-row')]
     .slice(0, 8).map(row => row.dataset.column), canonicalOrder,
     'column control differs from the canonical header order');
-  assert.equal(doc.querySelector('.column-control-row[data-column="wage"] .column-control-name').textContent, 'earned');
+  assert.equal(doc.querySelector('.column-control-row[data-column="performance"] .column-control-name').textContent, 'per');
+  assert.equal(doc.querySelector('.column-control-row[data-column="wage"] .column-control-name').textContent, 'wage');
   assert.equal(doc.querySelector('.column-control-row[data-column="salary_received"] .column-control-name').textContent, 'paid');
   doc.getElementById('btn-columns').click();
   // The current document uses student; older documents used students.

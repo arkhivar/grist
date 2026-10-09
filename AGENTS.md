@@ -118,18 +118,20 @@ Reference and legacy Int IDs also work. Include a transaction when any of its
 teacher IDs matches the selection, counting the row once even when multiple
 selected teachers match. Every transaction with
 a teacher reference counts as salary received. Month headers show the signed
-`wage` subtotal and `amount` payment subtotal over their columns; class and
-payment rows share one table grid with earned and paid columns. Payment
+`wage` and `count` subtotals and `amount` payment subtotal over their columns;
+class and payment rows share one table grid with wage and paid columns. Payment
 rows are read-only and a toolbar button re-fetches Transactions after edits there. Keep
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.58)
+## Current state (v7.59)
 
-- Salaries' canonical order is datetime, performance, student (or legacy
-  students), notes, wage (label earned), salary_received (label paid), count,
+- Salaries' canonical order is datetime, performance (label per), student (or legacy
+  students), notes, wage, salary_received (label paid), count,
   sprint, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
+  Per, wage, paid, and count default to the shared 64px minimum width;
+  saved widths win. Month headers also show the signed class count sum.
 
 - Numeric cells, inline number editors, column labels, and group totals align
   to the right in both grouped widgets. `formatNumberValue()` in shared core

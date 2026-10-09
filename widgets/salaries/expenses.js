@@ -40,13 +40,15 @@ function salaryGroupTotalsHtml(group, displayCols) {
   const payments = salaryPaymentRowsFor(group.key);
   const received = payments.reduce((total, row) =>
     total + (Number.isFinite(row.amount) ? row.amount : 0), 0);
-  const earnedLabel = wage == null ? '—' : salaryAmount(wage);
+  const wageLabel = wage == null ? '—' : salaryAmount(wage);
+  const count = sumColumn(group.records, 'count');
+  const countLabel = count == null ? '—' : salaryAmount(count);
   const receivedLabel = salaryPaymentsLoaded ? salaryAmount(received) : '—';
   const matched = salaryPaymentsLoaded && wage != null
     && Math.abs(Math.abs(wage) - received) < 0.005;
   return '<span class="group-sums">'
     + (displayCols.includes('wage') ? `<span class="group-sum salary-income-sum" data-column="wage"`
-    + ` title="Earned: ${esc(earnedLabel)}" aria-label="Earned: ${esc(earnedLabel)}">${esc(earnedLabel)}</span>`
+    + ` title="Wage: ${esc(wageLabel)}" aria-label="Wage: ${esc(wageLabel)}">${esc(wageLabel)}</span>`
     : '')
     + (displayCols.includes(WIDGET_CONFIG.receivedColumn)
       ? `<span class="group-sum salary-received-sum${matched ? ' salary-matched' : ''}"`
@@ -54,11 +56,14 @@ function salaryGroupTotalsHtml(group, displayCols) {
     + ` title="Paid: ${esc(receivedLabel)}${matched ? ' · amounts match' : ''}"`
     + ` aria-label="Paid: ${esc(receivedLabel)}${matched ? '; amounts match' : ''}">`
     + `${esc(receivedLabel)}</span>` : '')
+    + (displayCols.includes('count') && isNumericColumn('count')
+      ? `<span class="group-sum" data-column="count" title="Sum of count: ${esc(countLabel)}"`
+      + ` aria-label="Sum of count: ${esc(countLabel)}">${esc(countLabel)}</span>` : '')
     + '</span>';
 }
 
 function salaryColumnLabel(col) {
-  if (col === 'wage') return 'earned';
+  if (col === 'performance') return 'per';
   if (col === WIDGET_CONFIG.receivedColumn) return 'paid';
   return col;
 }

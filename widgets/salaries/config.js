@@ -2,7 +2,7 @@
 // Keep this widget on the shared grouped-table implementation.
 const WIDGET_CONFIG = {
   monthlyOnly: true,
-  sumColumns: ['wage'],
+  sumColumns: ['wage', 'count'],
   showGroupingColumn: true,
   editAllWritableText: true,
   editBoolOnSecondClick: true,
@@ -11,4 +11,5 @@ const WIDGET_CONFIG = {
   receivedColumn: 'salary_received',
   defaultColumnOrder: ['datetime', 'performance', 'student', 'students', 'notes',
     'wage', 'salary_received', 'count', 'sprint'],
+  compactColumns: ['performance', 'wage', 'salary_received', 'count'],
 };

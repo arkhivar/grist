@@ -534,6 +534,8 @@
   }
 
   function defaultColumnWidth(col) {
+    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.compactColumns?.includes(col))
+      return MIN_COLUMN_WIDTH;
     if (typeof WIDGET_CONFIG !== 'undefined' && col === WIDGET_CONFIG.receivedColumn)
       return 118;
     const type = columnBaseType(columnTypes[col]);
