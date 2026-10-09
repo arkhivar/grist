@@ -124,7 +124,16 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.56)
+## Current state (v7.57)
+
+- Numeric cells, inline number editors, column labels, and group totals align
+  to the right in both grouped widgets. `formatNumberValue()` in shared core
+  formats plain numbers without grouping separators; editor and clipboard
+  values retain source precision. Keep numeric styling off Date/DateTime cells.
+- Salary payment rows show optional `Transactions.notes` as escaped, clipped
+  read-only text with the complete note in its tooltip, independently of the
+  Attendance notes column's type. Prefer the visible `datetime` column for
+  payment dates when the monthly grouping helper is hidden.
 
 - Salaries matches scalar and list teacher references in Transactions, including
   typed wrappers. Tagged `transfer_out` records in the combined ledger count

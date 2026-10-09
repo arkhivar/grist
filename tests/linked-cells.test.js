@@ -17,23 +17,33 @@ async function waitFor(condition) {
 }
 const plain = value => JSON.parse(JSON.stringify(value));
 
-async function fixture(widget) {
+async function fixture(widget, presentation = false) {
   const html = read(`${widget}.html`);
   const dom = new JSDOM(html, { url: `https://arkhivar.github.io/grist/${widget}.html`,
     runScripts: 'outside-only', pretendToBeVisual: true });
   const win = dom.window;
   const doc = win.document;
+  const style = doc.createElement('style');
+  style.textContent = read('shared/base.css') + (widget === 'salaries' ? read('widgets/salaries/expenses.css') : '');
+  doc.head.appendChild(style);
   const attendance = {
     id: [11, 12, 13], datetime: [1791162679, 1790915077, 1790812800],
     students: [41, 42, 41], group3: [['L', 33, 34], null, ['L', 35]],
     formulaRef: [21, 18, 21], performance: [['L', 21], ['L', 21, 18], ['L', 21, 18]],
     sprint: ['Sprint A', 'Sprint A', 'Sprint A'], notes: ['First', 'Second', 'Third'], wage: [600, 600, 600],
   };
+  attendance.date = attendance.datetime.map(sec => Math.floor((sec + 36000) / 86400) * 86400);
+  attendance.count = [-1425, 3000, 0];
+  if (presentation) {
+    attendance.notes = [true, false, true];
+    attendance.wage = [1000, 1425.1234567, 0];
+  }
   const teachers = { id: [21, 18, 33, 34, 35, 36], A: ['vp', 'cl', 'indie', 'North, <Team>', 'Duplicate', 'Duplicate'] };
   let transactions = {
     id: [2125, 2118, 999, 998], performance: [['L', 21], ['L', 21], ['L', 18], ['L']],
     datetime: [1791162679, 1790915077, 1791162679, 1791162679],
     amount: [3000, 22500, 100, 50], op_type: ['transfer_out', 'transfer_out', 'expense', 'income'],
+    notes: ['Payment <b>October</b>\nSecond line', 'Another payment note', '', ''],
   };
   const summaries = { id: [91, 92], group: [['L', 11, 12, 13], ['L', 12, 13]], performance: [['L', 21], ['L', 18]] };
   const selected = () => widget === 'salaries'
@@ -82,13 +92,13 @@ async function fixture(widget) {
         if (name === '_grist_Tables') return { id: [1, 2, 3, 4, 5],
           tableId: ['ALL_ATT', 'PERFORMANCE', 'FOLKS', 'Transactions', 'Salary_summary'] };
         if (name === '_grist_Tables_column') return {
-          id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 30, 40],
-          parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4],
-          colId: ['datetime', 'students', 'group3', 'formulaRef', 'performance', 'sprint', 'notes', 'wage', 'manualSort', 'A', 'Name', 'performance'],
+          id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 29, 20, 30, 40],
+          parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4],
+          colId: ['datetime', 'students', 'group3', 'formulaRef', 'performance', 'sprint', 'notes', 'wage', 'manualSort', 'date', 'count', 'A', 'Name', 'performance'],
           type: ['DateTime:Asia/Vladivostok', 'Ref:FOLKS', 'RefList:PERFORMANCE', 'Ref:PERFORMANCE',
-            'RefList:PERFORMANCE', 'Choice', 'Text', 'Numeric', 'Numeric', 'Text', 'Text', 'RefList:PERFORMANCE'],
-          isFormula: [false, false, false, true, false, false, false, false, false, false, false, false],
-          visibleCol: [0, 30, 20, 20, 20, 0, 0, 0, 0, 0, 0, 20],
+            'RefList:PERFORMANCE', 'Choice', presentation ? 'Bool' : 'Text', 'Numeric', 'Numeric', 'Date', 'Int', 'Text', 'Text', 'RefList:PERFORMANCE'],
+          isFormula: [false, false, false, true, false, false, false, false, false, true, true, false, false, false],
+          visibleCol: [0, 30, 20, 20, 20, 0, 0, 0, 0, 0, 0, 0, 0, 20],
         };
         if (name === 'ALL_ATT') return attendance;
         if (name === 'PERFORMANCE') return teachers;
@@ -108,8 +118,9 @@ async function fixture(widget) {
       return finishCellFill(true);
     };
   `);
-  onOptions({ groupBy: widget === 'salaries' ? 'datetime::month' : 'sprint',
-    columnOrder: ['datetime', 'students', 'group3', 'formulaRef', 'performance', 'sprint', 'notes', 'wage'] },
+  onOptions({ groupBy: widget === 'salaries' ? (presentation ? 'date::month' : 'datetime::month') : 'sprint',
+    columnVisibility: { date: false },
+    columnOrder: ['datetime', 'students', 'group3', 'formulaRef', 'performance', 'sprint', 'notes', 'count', 'wage'] },
   { accessLevel: 'full' });
   onRecords(selected());
   const cell = (col, id = 11) => doc.querySelector(`[data-cell-id="${id}"][data-cell-col="${col}"]`);
@@ -233,31 +244,78 @@ async function ledgerChecks() {
     const received = () => h.doc.querySelector('.salary-received-sum').textContent;
     const ids = () => [...h.doc.querySelectorAll('.salary-payment-row')].map(row => Number(row.dataset.expenseId));
     assert.deepEqual(ids(), [2125, 2118]);
-    assert.equal(received(), '25,500', 'the two circled transfer_out rows must count as received');
+    assert.equal(received(), '25500', 'the two circled transfer_out rows must count as received');
     assert(!h.doc.querySelector('.salary-payment-row [data-cell-writable="true"]'), 'payment cells became writable');
     assert.deepEqual([...h.doc.querySelectorAll('.salary-payment-row .cell-ref-pill')].map(pill => pill.textContent), ['vp', 'vp']);
     const transactions = { id: [2125, 2118], performance: [['l', ['r', 'PERFORMANCE', [21, 18]]], ['R', 'PERFORMANCE', 21]],
       datetime: [1791162679, 1790915077], amount: [3000, 22500], op_type: ['transfer_out', 'income'] };
     h.refreshPayments(transactions);
     await waitFor(() => status() === '2 payments');
-    assert.equal(received(), '25,500', 'typed references or operation labels changed payment matching');
+    assert.equal(received(), '25500', 'typed references or operation labels changed payment matching');
+    assert.equal(h.doc.querySelector('.salary-payment-notes').textContent, '', 'missing optional notes retained a stale note');
     assert.deepEqual([...h.doc.querySelector('[data-expense-id="2125"] .cell-ref-list').children]
       .map(pill => pill.textContent), ['vp', 'cl'], 'payment must display its own full teacher list');
     h.selectBothTeachers();
     await waitFor(() => status() === '2 payments');
     assert.deepEqual(ids(), [2125, 2118], 'shared teacher references duplicated a payment row');
-    assert.equal(received(), '25,500', 'a transaction was counted once per selected teacher');
+    assert.equal(received(), '25500', 'a transaction was counted once per selected teacher');
     h.refreshPayments({ ...transactions, performance: [21, 18] });
     await waitFor(() => status() === '2 payments');
-    assert.equal(received(), '25,500', 'legacy Int teacher IDs no longer match');
+    assert.equal(received(), '25500', 'legacy Int teacher IDs no longer match');
     assert.equal(h.calls.writes.length, 0, 'ledger reads modified the document');
     console.log('PASS salaries: current PERFORMANCE RefList ledger, transfer_out, typed and scalar IDs, multi-teacher deduplication');
+  } finally { h.win.close(); }
+}
+
+async function presentationChecks(widget) {
+  const h = await fixture(widget, true);
+  try {
+    const { doc, win } = h;
+    assert.equal(h.cell('wage').textContent, '1000');
+    assert.equal(h.cell('wage', 12).textContent, '1425.1234567', 'formatting hid the existing decimal value');
+    assert.equal(h.cell('count').textContent, '-1425');
+    assert.equal(doc.querySelector('.group-sum[data-column="wage"]').textContent, '2425.1234567');
+    for (const col of ['wage', 'count']) {
+      assert.equal(win.getComputedStyle(h.cell(col)).textAlign, 'right');
+      const button = h.cell(col).querySelector('.cell-edit-btn');
+      if (button) assert.equal(win.getComputedStyle(button).textAlign, 'right', 'the editing wrapper overrode numeric alignment');
+      const header = doc.querySelector(`#column-strip th[data-column="${col}"]`);
+      assert.equal(win.getComputedStyle(header).textAlign, 'right');
+      assert.equal(win.getComputedStyle(header.querySelector('.column-footer-content')).justifyContent, 'flex-end');
+    }
+    assert.equal(win.getComputedStyle(doc.querySelector('.group-sum[data-column="wage"]')).textAlign, 'right');
+    assert(!h.cell('datetime').classList.contains('cell-number'), 'DateTime was aligned as a number');
+    const copied = h.copy('wage', 12);
+    assert.equal(copied['text/plain'], '1425.1234567');
+    assert.equal(JSON.parse(copied['application/x-arkhivar-grist-cell']).cells[0][0].value, 1425.1234567);
+    h.cell('wage', 12).dispatchEvent(new win.KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true }));
+    const input = doc.getElementById('cell-editor-number');
+    assert.equal(input.value, '1425.1234567');
+    assert.equal(win.getComputedStyle(input).textAlign, 'right');
+    input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    if (widget === 'salaries') {
+      const payment = doc.querySelector('[data-expense-id="2125"]');
+      const note = payment.querySelector('.salary-payment-notes .cell-display-value');
+      assert.equal(note.textContent, 'Payment <b>October</b>\nSecond line');
+      assert.equal(note.title, note.textContent, 'long transaction notes have no full-value tooltip');
+      assert.equal(note.querySelector('b'), null, 'transaction notes were interpreted as HTML');
+      assert(!payment.querySelector('[data-edit-kind], td.data-cell'), 'payment notes entered class editing');
+      assert.equal(payment.querySelector('.salary-payment-amount').textContent, '3000');
+      assert.equal(win.getComputedStyle(payment.querySelector('.salary-payment-amount')).textAlign, 'right');
+      assert.equal(doc.querySelector('.salary-received-sum').textContent, '25500');
+      assert(payment.querySelector('.salary-payment-date').textContent.includes('2026-10-05 11:11 (Mon)'),
+        'a hidden grouping helper left the visible payment DateTime empty');
+      assert(!doc.querySelector('#column-strip th[data-column="date"]'));
+    }
+    assert.equal(h.calls.writes.length, 0, 'presentation changes rewrote source values');
+    console.log(`PASS ${widget}: plain numbers, decimal values, editable/formula alignment, raw clipboard, payment notes and visible dates`);
   } finally { h.win.close(); }
 }
 
 async function main() {
   for (const widget of ['sprints', 'salaries']) await clipboardChecks(widget);
   await ledgerChecks();
-  console.log('3 linked-cell regression scenarios passed.');
+  for (const widget of ['sprints', 'salaries']) await presentationChecks(widget);
+  console.log('5 linked-cell regression scenarios passed.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

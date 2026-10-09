@@ -10,10 +10,9 @@ const selectedSalaryExpenseIds = new Set();
 let salaryExpenseAnchorId = null;
 const salaryRefreshButton = document.getElementById('btn-refresh-payments');
 const salaryPaymentStatus = document.getElementById('salary-payment-status');
-const salaryNumber = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 });
 
 function salaryAmount(value) {
-  return salaryNumber.format(value);
+  return formatNumberValue(value);
 }
 
 function salaryPaymentRowsFor(key) {
@@ -66,7 +65,10 @@ function salaryColumnLabel(col) {
 
 function salaryPaymentRowsHtml(cols, key) {
   const payments = salaryPaymentRowsFor(key);
-  const dateColumn = parseGroupBy(groupBy).col;
+  const groupedDateColumn = parseGroupBy(groupBy).col;
+  const dateColumn = cols.includes('datetime') ? 'datetime'
+    : cols.includes(groupedDateColumn) ? groupedDateColumn
+      : cols.find(col => ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col])));
   return payments.map(row => `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
     + ` title="Salary payment from ${esc(WIDGET_CONFIG.expensesTableId)} #${esc(row.id)}">`
     + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`
@@ -76,11 +78,13 @@ function salaryPaymentRowsHtml(cols, key) {
     + ` title="Select salary payment">${gripIconHtml()}</button></td>`
     + cols.map(col => {
       if (col === dateColumn)
-        return `<td class="salary-payment-date"><span class="cell-num">${esc(row.dateLabel)}</span></td>`;
+        return `<td class="salary-payment-date"><span class="cell-display-value cell-num">${esc(row.dateLabel)}</span></td>`;
       if (col === 'performance')
         return `<td>${renderReferencePills(row.performanceIds.map(id => referenceDisplayLabel('performance', id)))}</td>`;
       if (col === WIDGET_CONFIG.receivedColumn)
-        return `<td class="salary-payment-amount"><span class="cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
+        return `<td class="cell-number salary-payment-amount"><span class="cell-display-value cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
+      if (col === 'notes')
+        return `<td class="salary-payment-notes"><span class="cell-display-value" title="${esc(row.notes)}">${esc(row.notes)}</span></td>`;
       return '<td></td>';
     }).join('')
     + '<td class="row-actions"></td></tr>').join('');
@@ -324,6 +328,8 @@ async function salaryRefreshPayments(alreadyRendered = false) {
       const row = {
         id, sec, performanceIds,
         dateLabel: sec == null ? '—' : formatDateTimeSec(sec),
+        notes: Array.isArray(expenses.notes) && expenses.notes[index] != null
+          ? String(expenses.notes[index]) : '',
         amount: expenses.amount[index] == null || expenses.amount[index] === ''
           ? null : Number(expenses.amount[index]),
       };

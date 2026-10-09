@@ -106,7 +106,14 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.56';
+  const WIDGET_VERSION = '7.57';
+  const sharedNumberFormatter = new Intl.NumberFormat(LOCALE, {
+    useGrouping: false, maximumSignificantDigits: 15,
+  });
+
+  function formatNumberValue(value) {
+    return sharedNumberFormatter.format(Object.is(value, -0) ? 0 : value);
+  }
 
   // ── Dates: Grist sends Date/DateTime as epoch seconds (UTC) ──
   const DATE_GRANULARITIES = ['day', 'month', 'year'];

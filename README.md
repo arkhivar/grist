@@ -98,6 +98,10 @@ IDs matches the selection, and counted once even if several selected teachers
 match it. Every teacher-tagged transaction counts as salary received, including
 `transfer_out` records in the combined ledger.
 Payments stay read-only; use **Refresh payments** after editing Transactions.
+Payment rows show `Transactions.notes` in the shared notes column even when
+Attendance notes use checkboxes. Long notes are clipped to the column width;
+hover to read the complete text. Payment dates use the visible `datetime`
+column when a hidden date helper supplies monthly grouping.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
 monthly groups are derived from `datetime`, so no helper `date` column is needed.
 
@@ -323,6 +327,11 @@ accept decimals, and clearing either saves an empty value. These edits use the
 same session Undo/Redo as other cell edits. Formula numbers have a read-only
 tooltip: edit their source fields or formula in Grist rather than overwriting
 the calculated value.
+
+Numeric cells, number editors, column labels, and group totals are right-aligned
+in both widgets. Cells and totals use the same plain number format (`1000`,
+`1425.5`) without thousands separators. Editing and copying use the original
+value.
 
 ## Cell selection, copy/paste, and fill
 

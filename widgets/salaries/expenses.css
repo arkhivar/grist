@@ -1,11 +1,4 @@
 /* Class and payment rows share the same grid and column widths. */
-.rec-table td[data-cell-col="wage"],
-.rec-table td[data-cell-col="salary_received"],
-.rec-table td.salary-payment-amount { text-align: right; font-variant-numeric: tabular-nums; }
-.rec-table td[data-cell-col="wage"] .cell-edit-btn,
-.rec-table td[data-cell-col="salary_received"] .cell-edit-btn { justify-content: flex-end; }
-.group-sum.salary-income-sum,
-.group-sum.salary-received-sum { text-align: right; }
 .salary-received-sum.salary-matched { color: #15803d; }
 .rec-table .salary-payment-row td { background: var(--surface); }
 .rec-table .salary-payment-row:hover td { background: var(--hover-row); }

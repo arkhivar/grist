@@ -548,10 +548,13 @@
       display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis;
       padding-right: 5px;
     }
+    .column-strip .rec-table th.column-number { text-align: right; }
+    .column-number .column-footer-content { justify-content: flex-end; }
+    .column-number .column-name { padding-right: 0; }
     .group-sums { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
     .group-sum {
       position: absolute; top: 50%; transform: translateY(-50%);
-      padding: 1px 0; text-align: left;
+      padding: 1px 0; text-align: right;
       background: var(--surface); color: var(--accent);
       font-family: var(--mono); font-size: 10px; font-weight: 600;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -669,6 +672,10 @@
       display: block; flex: 1; min-width: 0;
       overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .rec-table td.cell-number,
+    .rec-table td.cell-number .cell-edit-btn {
+      text-align: right; font-variant-numeric: tabular-nums;
     }
     .cell-edit-btn:focus-visible {
       box-shadow: inset var(--focus-ring);
@@ -886,6 +893,7 @@
       overflow: auto; scrollbar-width: none; tab-size: 2;
     }
     #cell-editor-text::-webkit-scrollbar { display: none; }
+    #cell-editor-number { text-align: right; font-variant-numeric: tabular-nums; }
     #cell-editor-text:focus,
     #cell-editor-number:focus { box-shadow: inset 0 0 0 2px var(--accent); }
     #cell-editor-text[aria-invalid="true"],

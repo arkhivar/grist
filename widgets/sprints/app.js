@@ -461,6 +461,11 @@
     return hasNum;
   }
 
+  function isNumericDisplayColumn(col) {
+    return isNumericColumn(col) || (typeof WIDGET_CONFIG !== 'undefined'
+      && col === WIDGET_CONFIG.receivedColumn);
+  }
+
   function sumColumn(records, col) {
     let sum = 0;
     let hasNumber = false;
@@ -653,7 +658,7 @@
 
   function buildColumnFooter(col) {
     const label = typeof salaryColumnLabel === 'function' ? salaryColumnLabel(col) : col;
-    return `<th scope="col" class="column-header" draggable="true" tabindex="0"`
+    return `<th scope="col" class="column-header${isNumericDisplayColumn(col) ? ' column-number' : ''}" draggable="true" tabindex="0"`
       + ` title="${esc(col)} — ${esc(T.reorderColumn)}" data-column="${esc(col)}">`
       + `<span class="column-footer-content"><span class="column-name">${esc(label)}</span>`
       + `</span>`
@@ -691,7 +696,7 @@
     return '<span class="group-sums">' + cols.filter(col =>
       isNumericColumn(col) && (!sumColumns || sumColumns.includes(col))).map(col => {
       const sum = sumColumn(records, col);
-      const value = sum == null ? '—' : String(sum);
+      const value = sum == null ? '—' : formatNumberValue(sum);
       const label = sumColumns ? 'Salary subtotal' : `Sum of ${col}`;
       return `<span class="group-sum" data-column="${esc(col)}"`
         + ` title="${esc(label)}" aria-label="${esc(label)}: ${esc(value)}">`
@@ -2514,7 +2519,8 @@
     const isWritable = isWritableCellColumn(col);
     const boolEditable = typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.editBoolOnSecondClick
       && isWritable && cellColumnType(col) === 'Bool';
-    const classes = ['data-cell', editKind || boolEditable ? 'cell-editable' : '', isSelected ? 'cell-selected' : '']
+    const classes = ['data-cell', isNumericDisplayColumn(col) ? 'cell-number' : '',
+      editKind || boolEditable ? 'cell-editable' : '', isSelected ? 'cell-selected' : '']
       .filter(Boolean).join(' ');
     const contentHtml = editKind
       ? `<button type="button" class="cell-edit-btn" data-edit-id="${id}" data-edit-col="${colAttr}" data-edit-kind="${editKind}"`
@@ -3715,6 +3721,8 @@
       const fmt = BOOL_FORMATS.find(f => f.key === boolFmtKey) || BOOL_FORMATS[0];
       return val ? fmt.t : fmt.f;
     }
+    if (isNumericColumnType(type) && typeof val === 'number')
+      return `<span class="cell-num">${esc(formatNumberValue(val))}</span>`;
     if (typeof val === 'number') {
       const isYearLike = Number.isInteger(val) && val >= 1000 && val <= 9999;
       if (isYearLike) return `<span class="cell-num">${val}</span>`;
