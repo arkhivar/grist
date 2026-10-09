@@ -78,7 +78,7 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 ### Salaries setup
 
 Use `https://arkhivar.github.io/grist/salaries.html` with **Full access**.
-For the selected-teacher workflow, choose `Performance` as the widget's source
+For the selected-teacher workflow, choose `PERFORMANCE` as the widget's source
 table and link **Select By** to a teacher list using that same table. Salaries
 reads the selected teacher IDs, finds matching `Attendance.performance` links,
 and shows classes and salary payments in monthly groups. `Attendance` is the
@@ -87,13 +87,16 @@ configured `All_att` ID from metadata: an exact match wins, followed by a
 unique match ignoring capitalization. Class reads and writes use the resolved
 ID, so changing capitalization does not require renaming it back.
 Teacher initials follow the Reference's configured display column, currently
-`Performance.A`. Existing summary `group` links and direct Attendance selections
+`PERFORMANCE.A`. Existing summary `group` links and direct Attendance selections
 remain supported.
 
 Salary payments come from `Transactions.performance`, `datetime`, and `amount`.
-The teacher field must contain the same `Performance` row IDs as Attendance;
-its current Int values work, and a **Reference to Performance** offers a teacher
-picker in Grist. Every teacher-tagged transaction counts as salary received.
+The teacher field must contain the same `PERFORMANCE` row IDs as Attendance.
+It currently uses a **Reference List to PERFORMANCE**; single References and
+legacy Int IDs also work. A transaction is included when any of its teacher
+IDs matches the selection, and counted once even if several selected teachers
+match it. Every teacher-tagged transaction counts as salary received, including
+`transfer_out` records in the combined ledger.
 Payments stay read-only; use **Refresh payments** after editing Transactions.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
 monthly groups are derived from `datetime`, so no helper `date` column is needed.
@@ -326,8 +329,8 @@ the calculated value.
 Every visible data cell can be selected with one click; arrow keys move the
 blue selection border through the visible rows and columns. **Enter** or **F2**
 opens the editor when that field supports direct editing. Copy/paste uses the
-underlying typed value rather than the formatted display text when the copy
-originated in this widget.
+underlying typed value for scalar fields when the copy originated in this
+widget. Linked cells copy the record names, keeping each list item separate.
 
 **Shift-click** extends the selection to a rectangle. **Shift+Arrow keys** or
 dragging across cells (left or right mouse button) also extends the blue border.
@@ -342,10 +345,15 @@ quoted multiline cells. All destination cells are checked before a block is
 written, and a range paste is one undoable operation. Pasting beyond the current
 visible rows is rejected; add the required rows first.
 
-Pasting is allowed only into writable scalar columns of the same Grist type:
-Text, Choice, Bool, Int, Numeric, Date, or DateTime. Incompatible typed pastes
+Pasting is allowed into writable Text, Choice, Bool, Int, Numeric, Date,
+DateTime, Reference, and Reference List fields. Incompatible typed pastes
 are rejected with an explanation. External clipboard text is parsed according
-to the destination type. Drag the small blue handle at the selected cell's
+to the destination type. Linked names resolve to existing records; ambiguous
+names require `#ID` or the picker. Reference Lists also accept comma-separated
+names (quote a name containing commas) or a JSON array of names. Copied links
+cannot be pasted into a Reference to a different table. Link paste and fill
+write raw IDs and support Undo/Redo; formula and payment fields stay read-only.
+Drag the small blue handle at the selected cell's
 bottom-right corner vertically to copy its value through the visible range;
 the fill is sent to Grist as one batched update.
 

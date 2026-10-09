@@ -1793,9 +1793,10 @@
 
   const CELL_CLIPBOARD_MIME = 'application/x-arkhivar-grist-cell';
   const CELL_COPY_TYPES = new Set([
-    'Text', 'Choice', 'Bool', 'Int', 'Numeric', 'Date', 'DateTime',
+    'Text', 'Choice', 'Bool', 'Int', 'Numeric', 'Date', 'DateTime', 'Ref', 'RefList',
   ]);
   const CELL_HISTORY_LIMIT = 50;
+  let cellPasteRequest = 0;
 
   function cellColumnType(col) {
     return columnBaseType(writableColumnTypes[col] || columnTypes[col]);
@@ -1812,6 +1813,11 @@
   function cellHistoryValue(value, type) {
     if (value == null) return null;
     return normalizeCellValueForWrite(value, type);
+  }
+
+  function cellValuesEqual(before, after) {
+    return Object.is(before, after) || (Array.isArray(before) && Array.isArray(after)
+      && before.length === after.length && before.every((value, index) => Object.is(value, after[index])));
   }
 
   function updateCellHistoryControls() {
@@ -1832,7 +1838,7 @@
   }
 
   function rememberCellHistory(label, col, changes) {
-    const meaningful = changes.filter(change => !Object.is(change.before, change.after));
+    const meaningful = changes.filter(change => !cellValuesEqual(change.before, change.after));
     if (!meaningful.length) return;
     rememberHistoryEntry({ label, col, changes: meaningful });
   }
@@ -1987,6 +1993,10 @@
 
   function normalizeCellValueForWrite(value, type) {
     if (type === 'Text' || type === 'Choice') return value == null ? '' : String(value);
+    if (type === 'Ref' || type === 'RefList') {
+      const ids = referenceIds(value);
+      return type === 'RefList' ? ['L', ...ids] : ids[0] || 0;
+    }
     if (value == null || value === '') return null;
     if (type === 'Bool') return Boolean(value);
     if (type === 'Int' || type === 'Numeric') {
@@ -2287,20 +2297,29 @@
       target.closest('input, textarea, select, [contenteditable="true"]'));
   }
 
-  async function writeCellValues(action, recordIds, col, value) {
+  async function writeCellValues(action, recordIds, col, value, referenceBefore = null) {
     if (cellHistoryBusy) return;
     const ids = [...new Set(recordIds.map(id => validRecordId(id)).filter(id => id != null))];
     if (!ids.length) return;
     const type = cellColumnType(col);
+    const sourceRecords = allRecords;
+    if ((type === 'Ref' || type === 'RefList') && !referenceBefore) {
+      try {
+        const raw = await referenceWriteRecords(ids);
+        if (sourceRecords !== allRecords || cellHistoryBusy) return;
+        referenceBefore = new Map(ids.map(id => [id, raw.get(id)[col]]));
+      } catch (error) { showToast(actionErrorMessage(action, error)); return; }
+    }
     const after = cellHistoryValue(value, type);
     const changes = ids.map(id => {
       const record = allRecords.find(item => Number(item.id) === id);
       return {
         id,
-        before: record ? cellHistoryValue(record[col], type) : null,
+        before: referenceBefore ? cellHistoryValue(referenceBefore.get(id), type)
+          : record ? cellHistoryValue(record[col], type) : null,
         after,
       };
-    }).filter(change => !Object.is(change.before, change.after));
+    }).filter(change => !cellValuesEqual(change.before, change.after));
     if (!changes.length) {
       showToast('No cell changes to apply', 'success');
       return;
@@ -2337,18 +2356,21 @@
       ? '"' + text.replace(/"/g, '""') + '"' : text).join('\t')).join('\n');
   }
 
-  function decodeClipboardGrid(text) {
+  function decodeClipboardGrid(text, separator = '\t') {
     const rows = [[]];
     let value = '', quoted = false;
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
-      if (char === '"' && (quoted || value === '')) {
+      if (char === '"' && (quoted || value === '' || (separator === ',' && value.trim() === ''))) {
         if (quoted && text[i + 1] === '"') { value += '"'; i++; }
-        else quoted = !quoted;
-      } else if (!quoted && (char === '\t' || char === '\r' || char === '\n')) {
+        else {
+          if (!quoted && separator === ',') value = '';
+          quoted = !quoted;
+        }
+      } else if (!quoted && (char === separator || char === '\r' || char === '\n')) {
         rows[rows.length - 1].push(value);
         value = '';
-        if (char !== '\t') {
+        if (char !== separator) {
           if (char === '\r' && text[i + 1] === '\n') i++;
           rows.push([]);
         }
@@ -2368,6 +2390,7 @@
       const col = cell.dataset.cellCol;
       const type = cellColumnType(col);
       const record = allRecords.find(item => String(item.id) === cell.dataset.cellId);
+      if (type === 'Ref' || type === 'RefList') return referenceClipboardCell(record, col);
       return { type, value: normalizeCellValueForWrite(record[col], type) };
     }));
     if (cells.some(row => row.some(cell => !CELL_COPY_TYPES.has(cell.type)))) {
@@ -2376,7 +2399,7 @@
       return;
     }
     const text = encodeClipboardGrid(cells.map(row =>
-      row.map(cell => cellClipboardText(cell.value, cell.type))));
+      row.map(cell => cell.text ?? cellClipboardText(cell.value, cell.type))));
     copiedCell = { cells, text };
     e.clipboardData.setData('text/plain', text);
     try { e.clipboardData.setData(CELL_CLIPBOARD_MIME, JSON.stringify(copiedCell)); } catch (_) {}
@@ -2389,6 +2412,11 @@
     if (!selectedCell || isClipboardInput(e.target) || !e.clipboardData) return;
     e.preventDefault();
     if (cellHistoryBusy) return;
+    const request = ++cellPasteRequest;
+    const sourceRecords = allRecords;
+    const anchor = { ...selectedCell };
+    const isCurrent = () => request === cellPasteRequest && sourceRecords === allRecords
+      && selectedCellMatches(anchor.recordId, anchor.col) && !cellHistoryBusy;
     const text = e.clipboardData.getData('text/plain');
     let packet = null;
     try {
@@ -2415,6 +2443,7 @@
       if (rowStart + height > rows.length || colStart + width > rows[rowStart].length)
         throw new Error('Not enough visible rows or columns for this paste');
       const changes = [];
+      const referenceReads = { choices: new Map(), targets: new Map() };
       for (let r = 0; r < height; r++) {
         for (let c = 0; c < width; c++) {
           const target = rows[rowStart + r][colStart + c];
@@ -2422,20 +2451,33 @@
           if (!isWritableCellColumn(col)) throw new Error('Paste blocked: "' + col + '" is read-only or unsupported');
           const type = cellColumnType(col);
           const input = values[r % values.length][c % values[0].length];
-          if (packet && (!input || input.type !== type))
+          const isReference = type === 'Ref' || type === 'RefList';
+          if (packet && (!input || (input.type !== type
+              && !(isReference && ['Text', 'Choice', 'Ref', 'RefList'].includes(input.type)))))
             throw new Error('Paste blocked: ' + (input && input.type) + ' cannot be pasted into ' + type);
-          const after = packet ? normalizeCellValueForWrite(input.value, type) : parsePastedCellText(input, type);
+          const after = isReference ? await pastedReferenceValue(input, col, referenceReads, isCurrent)
+            : packet ? normalizeCellValueForWrite(input.value, type) : parsePastedCellText(input, type);
+          if (!isCurrent()) return;
           const id = validRecordId(target.dataset.cellId);
           const record = allRecords.find(item => Number(item.id) === id);
-          changes.push({ id, col, before: cellHistoryValue(record[col], type), after });
+          changes.push({ id, col, before: isReference ? undefined : cellHistoryValue(record[col], type), after });
         }
+      }
+      const referenceChanges = changes.filter(change => ['Ref', 'RefList'].includes(cellColumnType(change.col)));
+      if (referenceChanges.length) {
+        const raw = await referenceWriteRecords([...new Set(referenceChanges.map(change => change.id))]);
+        if (!isCurrent()) return;
+        referenceChanges.forEach(change => {
+          change.before = cellHistoryValue(raw.get(change.id)[change.col], cellColumnType(change.col));
+        });
       }
       // Preserve the existing single-cell path; rectangular writes use one atomic action bundle.
       if (changes.length === 1) {
-        await writeCellValues('Paste', [changes[0].id], changes[0].col, changes[0].after);
+        await writeCellValues('Paste', [changes[0].id], changes[0].col, changes[0].after,
+          referenceChanges.length ? new Map([[changes[0].id, changes[0].before]]) : null);
         return;
       }
-      const meaningful = changes.filter(change => !Object.is(change.before, change.after));
+      const meaningful = changes.filter(change => !cellValuesEqual(change.before, change.after));
       if (!meaningful.length) return;
       cellHistoryBusy = true;
       updateCellHistoryControls();
@@ -3300,9 +3342,18 @@
     const sourceRecord = allRecords.find(record => String(record.id) === drag.recordId);
     const type = cellColumnType(drag.col);
     if (!sourceRecord || !isWritableCellColumn(drag.col)) return;
-    const value = normalizeCellValueForWrite(sourceRecord[drag.col], type);
-    await writeCellValues(
-      'Fill', drag.targetCells.map(cell => cell.dataset.cellId), drag.col, value);
+    try {
+      let value = sourceRecord[drag.col];
+      const sourceRecords = allRecords;
+      if (type === 'Ref' || type === 'RefList') {
+        const raw = await fetchReferenceSourceRecord(Number(drag.recordId));
+        await referenceChoices(drag.col, { isCurrent: () => sourceRecords === allRecords });
+        if (sourceRecords !== allRecords) return;
+        value = raw[drag.col];
+      }
+      await writeCellValues('Fill', drag.targetCells.map(cell => cell.dataset.cellId), drag.col,
+        normalizeCellValueForWrite(value, type));
+    } catch (error) { showToast(actionErrorMessage('Fill', error)); }
   }
 
   function moveSelectedCell(key, extend = false) {

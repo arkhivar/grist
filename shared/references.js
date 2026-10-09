@@ -33,6 +33,70 @@ function referenceDisplayLabel(col, id) {
   return referenceDisplayLabelsByColumn.get(col)?.get(Number(id)) || String(id);
 }
 
+function referenceClipboardCell(record, col) {
+  const type = cellColumnType(col);
+  const labels = record[REFERENCE_LABELS]?.[col]
+    ?? referenceDisplayLabels(record[col], type === 'RefList');
+  return { type, refTable: String(columnTypes[col] || '').split(':')[1], labels,
+    text: labels.length > 1 ? JSON.stringify(labels) : labels[0] || '' };
+}
+
+async function referenceWriteRecords(ids) {
+  if (typeof salaryFetchClassRecord !== 'function')
+    return new Map(await Promise.all(ids.map(async id => [id, await fetchReferenceSourceRecord(id)])));
+  // A range paste reads the original Attendance table once, rather than once per cell.
+  const table = await grist.docApi.fetchTable(await activeTableOps().getTableId());
+  const indices = new Map((table.id || []).map((id, index) => [Number(id), index]));
+  return new Map(ids.map(id => {
+    const index = indices.get(id);
+    if (index == null) throw new Error(`Class record ${id} is unavailable`);
+    return [id, Object.fromEntries(Object.entries(table).map(([col, values]) => [col, values[index]]))];
+  }));
+}
+
+async function pastedReferenceValue(input, col, reads, isCurrent) {
+  const type = cellColumnType(col);
+  const refTable = String(columnTypes[col] || '').split(':')[1];
+  const packet = input && typeof input === 'object';
+  if (packet && input.refTable && input.refTable !== refTable)
+    throw new Error(`Paste blocked: links to ${input.refTable} cannot be pasted into links to ${refTable}`);
+  if (!reads.choices.has(col)) {
+    reads.tables ||= grist.docApi.fetchTable('_grist_Tables');
+    reads.columns ||= grist.docApi.fetchTable('_grist_Tables_column');
+    if (!reads.targets.has(refTable)) reads.targets.set(refTable, grist.docApi.fetchTable(refTable));
+    reads.choices.set(col, referenceChoices(col, {
+      tables: reads.tables, columns: reads.columns, table: reads.targets.get(refTable), isCurrent,
+    }));
+  }
+  const choices = await reads.choices.get(col);
+  const text = String(packet ? input.value ?? '' : input ?? '').trim();
+  let labels = packet && Array.isArray(input.labels) ? input.labels : text ? [text] : [];
+  // Match an entire label first: a comma can be part of one linked record's name.
+  if (!(packet && Array.isArray(input.labels)) && type === 'RefList' && text
+      && !choices.some(choice => choice.label === text)) {
+    if (text.startsWith('[')) {
+      labels = JSON.parse(text);
+      if (!Array.isArray(labels) || labels.some(label => typeof label !== 'string'))
+        throw new Error('Paste requires a list of linked record names');
+    } else if (text.includes(',')) {
+      const rows = decodeClipboardGrid(text, ',');
+      if (rows.length !== 1) throw new Error('Paste requires one list of linked record names per cell');
+      labels = rows[0].map(label => label.trim());
+    }
+  }
+  const ids = [...new Set(labels.map(label => {
+    const matches = choices.filter(choice => choice.label === label);
+    if (matches.length === 1) return matches[0].id;
+    if (matches.length > 1)
+      throw new Error(`Multiple linked records named "${label}"; paste #ID or use the picker`);
+    const id = /^#?\d+$/.test(label) ? Number(label.replace(/^#/, '')) : null;
+    if (id && choices.some(choice => choice.id === id)) return id;
+    throw new Error(`Linked record "${label}" not found in ${refTable}`);
+  }))];
+  if (type === 'Ref' && ids.length > 1) throw new Error('Paste requires one linked record for this column');
+  return type === 'RefList' ? ['L', ...ids] : ids[0] || 0;
+}
+
 function closeReferenceEditor() {
   referenceEditorRequest++;
   if (referenceEditorContext?.anchor?.isConnected)

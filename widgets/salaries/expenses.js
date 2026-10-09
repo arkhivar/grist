@@ -78,7 +78,7 @@ function salaryPaymentRowsHtml(cols, key) {
       if (col === dateColumn)
         return `<td class="salary-payment-date"><span class="cell-num">${esc(row.dateLabel)}</span></td>`;
       if (col === 'performance')
-        return `<td>${renderReferencePills(referenceDisplayLabel('performance', row.performanceId))}</td>`;
+        return `<td>${renderReferencePills(row.performanceIds.map(id => referenceDisplayLabel('performance', id)))}</td>`;
       if (col === WIDGET_CONFIG.receivedColumn)
         return `<td class="salary-payment-amount"><span class="cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
       return '<td></td>';
@@ -156,8 +156,7 @@ function salaryGroupIds(value) {
 }
 
 function salaryReferenceIds(value) {
-  const single = salaryRawRef(value);
-  return single == null ? salaryGroupIds(value) : [single];
+  return referenceIds(value);
 }
 
 function salaryDisplayClassCell(col, value, record) {
@@ -317,13 +316,13 @@ async function salaryRefreshPayments(alreadyRendered = false) {
 
     const months = new Map();
     expenses.id.forEach((id, index) => {
-      const performanceId = salaryRawRef(expenses.performance[index]);
-      if (!teacherIds.has(performanceId)) return;
+      const performanceIds = salaryReferenceIds(expenses.performance[index]);
+      if (!performanceIds.some(teacherId => teacherIds.has(teacherId))) return;
       const sec = parseDateValueSec(expenses.datetime[index]);
       const key = sec == null ? '\x00__empty__'
         : String(bucketStartMs(dateTimeWallDate(sec).getTime() / 1000, 'month'));
       const row = {
-        id, sec, performanceId,
+        id, sec, performanceIds,
         dateLabel: sec == null ? '—' : formatDateTimeSec(sec),
         amount: expenses.amount[index] == null || expenses.amount[index] === ''
           ? null : Number(expenses.amount[index]),

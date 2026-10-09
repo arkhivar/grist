@@ -101,19 +101,22 @@ See [Editing fields](README.md#editing-fields) for the complete user workflow.
 
 `salaries.html` uses the shared grouped-table app. Selecting rows from the table
 referenced by `All_att.performance` filters classes by those raw teacher IDs.
-Currently that table is `Performance`, with initials in its `A` column (the
+Currently that table is `PERFORMANCE`, with initials in its `A` column (the
 Reference's configured visible column). Teacher selection works even when the
 teacher has payments but no classes. Linked `All_att` summary
 rows supply `group` RefLists of original `All_att` row IDs (`Attendance` is the
-display label; `All_att` is the table ID). The widget reads those class rows
-with `fetchTable`, displays their fields, and writes class edits to `All_att`.
+display label; `ALL_ATT` is the current table ID). The widget resolves the
+configured `All_att` ID from metadata, reads those class rows with `fetchTable`,
+displays their fields, and writes class edits to the resolved ID.
 It reads `Transactions` with `fetchTable`,
 matches raw `performance` teacher IDs from the selected teacher/summary rows
 against Transactions (`All_att.performance` is a RefList), and
 groups payments using `Transactions.datetime` in Vladivostok time; no helper
 `date` column is required. The current
-`Transactions.performance` column stores those IDs as Int; Reference IDs also
-work. Every transaction with
+`Transactions.performance` column is a RefList to `PERFORMANCE`; single
+Reference and legacy Int IDs also work. Include a transaction when any of its
+teacher IDs matches the selection, counting the row once even when multiple
+selected teachers match. Every transaction with
 a teacher reference counts as salary received. Month headers show the signed
 `wage` subtotal and `amount` payment subtotal over their columns; class and
 payment rows share one table grid with income and expenses columns. Payment
@@ -121,7 +124,18 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.55)
+## Current state (v7.56)
+
+- Salaries matches scalar and list teacher references in Transactions, including
+  typed wrappers. Tagged `transfer_out` records in the combined ledger count
+  as received; each payment displays its own complete teacher list.
+- Both grouped widgets support writable Reference/Reference List copy, paste,
+  and fill. Resolve copied names or external names/#IDs against fresh choices,
+  keep comma-containing labels separate, and reject ambiguous names or links
+  to a different target table. Read original raw IDs for Undo/Redo, share reads
+  within a range, and cancel pending pastes after selection changes. Formula
+  and payment fields remain protected. `tests/linked-cells.test.js` covers both
+  widgets and the current uppercase PERFORMANCE/ALL_ATT ledger schema.
 
 - Salaries resolves its configured `All_att` class table ID from metadata:
   exact match first, then a unique case-insensitive match (currently `ALL_ATT`).
