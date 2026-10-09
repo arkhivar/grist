@@ -9,4 +9,6 @@ const WIDGET_CONFIG = {
   classTableId: 'All_att',
   expensesTableId: 'Transactions',
   receivedColumn: 'salary_received',
+  defaultColumnOrder: ['datetime', 'performance', 'student', 'students', 'notes',
+    'wage', 'salary_received', 'count', 'sprint'],
 };

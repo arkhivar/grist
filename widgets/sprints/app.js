@@ -430,8 +430,12 @@
     syncMaxHUI();
   }
 
+  let columnOrderConfigured = false;
+
   btnResetColumns.addEventListener('click', () => {
-    columnOrder = [...allColumns];
+    columnOrderConfigured = false;
+    columnOrder = [];
+    reconcileColumnOrder();
     columnWidths = {};
     columnVisibility = {};
     sharedTableScrollLeft = 0;
@@ -496,12 +500,17 @@
   function reconcileColumnOrder() {
     // Options and records arrive independently. Keep saved order until columns exist.
     if (!allColumns.length) return;
-    const known = new Set(allColumns);
     const received = allColumns.length && typeof WIDGET_CONFIG !== 'undefined'
       ? WIDGET_CONFIG.receivedColumn : null;
+    const known = new Set(allColumns);
     if (received) known.add(received);
-    const saved = columnOrder.filter((col, i) =>
-      known.has(col) && columnOrder.indexOf(col) === i);
+    const preferred = typeof WIDGET_CONFIG !== 'undefined'
+      ? WIDGET_CONFIG.defaultColumnOrder || [] : [];
+    const defaults = [...preferred, ...allColumns].filter((col, i, order) =>
+      known.has(col) && order.indexOf(col) === i);
+    const order = columnOrderConfigured ? columnOrder : defaults;
+    const saved = order.filter((col, i) =>
+      known.has(col) && order.indexOf(col) === i);
     const missing = allColumns.filter(col => !saved.includes(col));
     columnOrder = [...saved, ...missing];
     if (received && !columnOrder.includes(received)) {
@@ -584,6 +593,7 @@
 
   let pendingColumnOrderSaves = 0;
   function saveColumnOrder() {
+    columnOrderConfigured = columnOrder.length > 0;
     pendingColumnOrderSaves++;
     return queueColumnLayoutOption('columnOrder', columnOrder, 'Save column order')
       .finally(() => { pendingColumnOrderSaves--; });
@@ -1029,8 +1039,10 @@
           columnOrder = Array.isArray(value)
             ? value.filter(col => typeof col === 'string')
             : [];
+          columnOrderConfigured = columnOrder.length > 0;
         } catch (_) {
           columnOrder = [];
+          columnOrderConfigured = false;
         }
       }
       if (Object.prototype.hasOwnProperty.call(opts, 'columnVisibility')

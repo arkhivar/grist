@@ -80,7 +80,8 @@ win.grist = {
       return { id: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
         parentId: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 6],
         colId: ['group2', 'performance', 'datetime', 'wage', 'count',
-          'students', 'weekday', 'notes', 'group3', 'sprint', 'Name', 'A', 'Name', 'performance'],
+          Object.hasOwn(attendance, 'student') ? 'student' : 'students',
+          'weekday', 'notes', 'group3', 'sprint', 'Name', 'A', 'Name', 'performance'],
         type: ['Ref:Groups', 'RefList:Performance', 'DateTime:Asia/Vladivostok',
           'Numeric', 'Numeric', 'Ref:FolksBase', 'Text', 'Text', 'RefList:Groups',
           'Choice', 'Text', 'Text', 'Text', 'Int'],
@@ -140,11 +141,21 @@ function inlineText(col, id = 1) {
 
 async function main() {
   // Grist delivers options, records, and metadata independently.
+  onRecords(records);
+  onOptions({ sortMode: 'alpha-asc' }, { accessLevel: 'full' });
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
+  const headerOrder = () => [...doc.querySelectorAll('#column-strip th[data-column]')]
+    .map(header => header.dataset.column);
+  const canonicalOrder = ['datetime', 'performance', 'students', 'notes',
+    'wage', 'salary_received', 'count', 'sprint'];
+  assert.deepEqual(headerOrder().slice(0, 8), canonicalOrder,
+    'fresh salary layout does not follow the canonical order');
+  assert(!calls.options.some(([key]) => key === 'columnOrder'),
+    'default column order should not overwrite saved section options during startup');
   onOptions({ sortMode: 'alpha-asc',
     columnOrder: ['datetime', 'wage', 'salary_received', 'performance', 'group2'],
     columnVisibility: { salary_received: false } },
   { accessLevel: 'full' });
-  onRecords(records);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
   await waitFor(() => doc.querySelector('[data-column="students"]'));
   const firstLoadFetches = name => calls.fetches.filter(table => table === name).length;
@@ -176,7 +187,7 @@ async function main() {
   assert(!columnsPanel.querySelector('input[type="search"]'), 'column search was not requested');
   const receivedRow = () => columnsPanel.querySelector('.column-control-row[data-column="salary_received"]');
   assert(receivedRow(), 'synthetic expenses column is missing from the control');
-  assert(receivedRow().textContent.includes('expenses'), 'synthetic column lacks its salary label');
+  assert(receivedRow().textContent.includes('paid'), 'synthetic column lacks its salary label');
   assert.equal(receivedRow().querySelector('.column-control-toggle').checked, false);
   const controlOrder = () => [...columnsPanel.querySelectorAll('.column-control-row')]
     .map(row => row.dataset.column);
@@ -367,8 +378,8 @@ async function main() {
   assert.deepEqual(refPills(1, 'performance'), ['VP', 'TR'],
     'redo lost separate Reference List pills');
   assert.equal(headers.indexOf('salary_received'), headers.indexOf('wage') + 1);
-  assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'income');
-  assert.equal(doc.querySelector('#column-strip [data-column="salary_received"] .column-name').textContent, 'expenses');
+  assert.equal(doc.querySelector('#column-strip [data-column="wage"] .column-name').textContent, 'earned');
+  assert.equal(doc.querySelector('#column-strip [data-column="salary_received"] .column-name').textContent, 'paid');
   assert(month('August 2026').querySelector('td[data-cell-id="1"][data-cell-col="datetime"]')
     .textContent.includes('2026-08-01 00:30 (Sat)'));
   assert(!doc.getElementById('content').textContent.includes('D, '), 'encoded DateTime leaked into class cells');
@@ -615,6 +626,40 @@ async function main() {
     'direct class selection needs an Attendance fetch to infer the teacher for payments');
   assert.equal(calls.fetches.filter(name => name === 'Expenses').length, 0,
     'selection changes and refreshes must never return to the previous payment table');
+  const beforeResetOptions = calls.options.length;
+  doc.getElementById('btn-reset-columns').click();
+  await waitFor(() => calls.options.slice(beforeResetOptions).some(([key]) => key === 'columnOrder'));
+  assert.deepEqual(headerOrder().slice(0, 8), canonicalOrder,
+    'Reset column layout did not restore the canonical order');
+  const resetOrder = calls.options.slice(beforeResetOptions)
+    .find(([key]) => key === 'columnOrder')[1];
+  assert.deepEqual(Array.from(resetOrder.slice(0, 8)), canonicalOrder,
+    'reset must persist the canonical order using original field IDs');
+  doc.getElementById('btn-columns').click();
+  assert.deepEqual([...doc.querySelectorAll('.column-control-row')]
+    .slice(0, 8).map(row => row.dataset.column), canonicalOrder,
+    'column control differs from the canonical header order');
+  assert.equal(doc.querySelector('.column-control-row[data-column="wage"] .column-control-name').textContent, 'earned');
+  assert.equal(doc.querySelector('.column-control-row[data-column="salary_received"] .column-control-name').textContent, 'paid');
+  doc.getElementById('btn-columns').click();
+  // The current document uses student; older documents used students.
+  attendance.student = attendance.students;
+  delete attendance.students;
+  const singularDom = new JSDOM(html, { url: 'https://arkhivar.github.io/grist/salaries.html',
+    runScripts: 'outside-only', pretendToBeVisual: true });
+  try {
+    singularDom.window.grist = win.grist;
+    const localScripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)]
+      .map(match => match[1]).filter(src => !/^https?:/.test(src)).map(src => src.split('?')[0]);
+    singularDom.window.eval(localScripts.map(read).join('\n;\n'));
+    onOptions({}, { accessLevel: 'full' });
+    onRecords([{ id: 6, performance: 'TR' }]);
+    await waitFor(() => singularDom.window.document.querySelector('[data-cell-col="student"]'));
+    assert.deepEqual([...singularDom.window.document.querySelectorAll('#column-strip th[data-column]')]
+      .slice(0, 8).map(header => header.dataset.column),
+    canonicalOrder.map(col => col === 'students' ? 'student' : col),
+    'canonical order should also recognize the singular student field');
+  } finally { singularDom.window.close(); }
   console.log('PASS salaries: complete Attendance columns, editing, linked Transactions datetime payments, teacher initials, VLAT months, missing datetime recovery, refresh, cache keys');
   win.close();
 }

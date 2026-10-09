@@ -102,6 +102,11 @@ Payment rows show `Transactions.notes` in the shared notes column even when
 Attendance notes use checkboxes. Long notes are clipped to the column width;
 hover to read the complete text. Payment dates use the visible `datetime`
 column when a hidden date helper supplies monthly grouping.
+The default column order is `datetime`, `performance`, `student`, `notes`,
+`earned`, `paid`, `count`, `sprint`, followed by other available fields. Older
+documents with `students` use the same position. `earned` displays Attendance's
+`wage`; `paid` displays Transactions' `amount`. Saved layouts take priority;
+**Reset column layout** restores this order.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
 monthly groups are derived from `datetime`, so no helper `date` column is needed.
 
