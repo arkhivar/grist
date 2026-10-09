@@ -2981,9 +2981,10 @@
   async function getWritableColumnIds() {
     if (writableColumnIdsPromise) return writableColumnIdsPromise;
     writableColumnIdsPromise = (async () => {
-      const tableId = await activeTableOps().getTableId();
-      selectedTableId = tableId;
       const tables = await grist.docApi.fetchTable('_grist_Tables');
+      const tableId = typeof salaryResolveClassTableId === 'function'
+        ? await salaryResolveClassTableId(tables) : await activeTableOps().getTableId();
+      selectedTableId = tableId;
       const tableIndex = (tables.tableId || []).indexOf(tableId);
       if (tableIndex < 0) throw new Error(`Table metadata not found for ${tableId}`);
       const tableRef = tables.id[tableIndex];

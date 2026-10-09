@@ -82,7 +82,10 @@ For the selected-teacher workflow, choose `Performance` as the widget's source
 table and link **Select By** to a teacher list using that same table. Salaries
 reads the selected teacher IDs, finds matching `Attendance.performance` links,
 and shows classes and salary payments in monthly groups. `Attendance` is the
-display name of table ID `All_att`; class edits still write to `All_att`.
+display name of the class table, now ID `ALL_ATT`. Salaries resolves the
+configured `All_att` ID from metadata: an exact match wins, followed by a
+unique match ignoring capitalization. Class reads and writes use the resolved
+ID, so changing capitalization does not require renaming it back.
 Teacher initials follow the Reference's configured display column, currently
 `Performance.A`. Existing summary `group` links and direct Attendance selections
 remain supported.

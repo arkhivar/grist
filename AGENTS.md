@@ -121,7 +121,15 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.54)
+## Current state (v7.55)
+
+- Salaries resolves its configured `All_att` class table ID from metadata:
+  exact match first, then a unique case-insensitive match (currently `ALL_ATT`).
+  Reads, writable metadata, reference source records, and every class write
+  use that resolved ID. Missing or ambiguous IDs surface the error and block
+  writes. Reuse the metadata read rather than fetching it again for resolution.
+  `tests/salaries-table-id.test.js` covers teacher, summary, and direct class
+  selections after capitalization changes, exact-match priority, and write targets.
 
 - `filters.html` is a read-only companion on the same student summary as the
   native table. It publishes matching summary IDs with `setSelectedRows`;

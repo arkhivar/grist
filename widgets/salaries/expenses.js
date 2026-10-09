@@ -197,19 +197,20 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
   try {
     const sourceId = await grist.selectedTable.getTableId();
     await getWritableColumnIds();
+    const classTableId = await salaryResolveClassTableId();
     const teacherTableId = /^(?:Ref|RefList):(.+)$/.exec(columnTypes.performance || '')?.[1];
     const teacherSource = sourceId === teacherTableId;
     // Some Grist builds report the source table ID for a summary section.
     // The selected records still carry the summary's group RefList in that case.
-    const linkedRows = sourceId === WIDGET_CONFIG.classTableId
+    const linkedRows = sourceId === classTableId
       && selectedRecords.some(row => salaryGroupIds(row.group).length);
     const [source, classes] = await Promise.all([
       linkedRows ? { id: selectedRecords.map(row => row.id),
         group: selectedRecords.map(row => row.group),
         performance: selectedRecords.map(row => row.performance) }
-        : teacherSource || sourceId === WIDGET_CONFIG.classTableId
+        : teacherSource || sourceId === classTableId
           ? null : grist.docApi.fetchTable(sourceId),
-      grist.docApi.fetchTable(WIDGET_CONFIG.classTableId),
+      grist.docApi.fetchTable(classTableId),
     ]);
     if (request !== salaryClassColumnsRequest) return;
     if (!Array.isArray(classes.id)) throw new Error('Attendance rows are unavailable');
@@ -221,7 +222,7 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
         if (id != null) teacherIds.add(id);
       });
       if (!Array.isArray(classes.performance))
-        throw new Error(`${WIDGET_CONFIG.classTableId}.performance is unavailable`);
+        throw new Error(`${classTableId}.performance is unavailable`);
       classIds = classes.id.filter((id, index) => salaryReferenceIds(classes.performance[index])
         .some(teacherId => teacherIds.has(teacherId)));
     } else if (!source) classIds = selectedRecords.map(row => salaryRawRef(row.id));
