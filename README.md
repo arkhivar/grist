@@ -103,7 +103,7 @@ Attendance notes use checkboxes. Long notes are clipped to the column width;
 hover to read the complete text. Payment dates use the visible `datetime`
 column when a hidden date helper supplies monthly grouping.
 The default column order is `datetime`, `per`, `student`, `notes`, `wage`,
-`paid`, `count`, `sprint`, followed by other available fields. Older documents
+`paid`, `count`, `sprint`, `attach_payment`, followed by other available fields. Older documents
 with `students` use the same position. `per` labels `performance`; `paid`
 displays Transactions' `amount`. Month headers sum class `wage` and `count`
 and transaction payments. `per`, `wage`, `paid`, and `count` share the minimum

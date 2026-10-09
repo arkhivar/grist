@@ -106,7 +106,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.59';
+  const WIDGET_VERSION = '7.60';
   const sharedNumberFormatter = new Intl.NumberFormat(LOCALE, {
     useGrouping: false, maximumSignificantDigits: 15,
   });

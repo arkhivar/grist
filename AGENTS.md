@@ -124,11 +124,11 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.59)
+## Current state (v7.60)
 
 - Salaries' canonical order is datetime, performance (label per), student (or legacy
   students), notes, wage, salary_received (label paid), count,
-  sprint, then other fields. Saved orders win; Reset column layout restores
+  sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
   Per, wage, paid, and count default to the shared 64px minimum width;
   saved widths win. Month headers also show the signed class count sum.
