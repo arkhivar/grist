@@ -106,7 +106,7 @@ Payment rows show `Transactions.notes` in the shared notes column even when
 Attendance notes use checkboxes. Long notes are clipped to the column width;
 hover to read the complete text. Payment dates use the visible `datetime`
 column when a hidden date helper supplies monthly grouping.
-The default column order is `datetime`, `per`, `student`, `notes`, `wage`,
+The default column order is `start` (legacy `datetime`), `per`, `student`, `notes`, `wage`,
 `paid`, `count`, `sprint`, `attach_payment`, followed by other available fields. Older documents
 with `students` use the same position. `per` labels the current `per` or legacy
 `performance` field; `paid`
@@ -118,7 +118,31 @@ absent. Explicit settings for the new field win.
 **Reset column layout** restores these defaults.
 Double-click a column's resize border to restore only that column's default width.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
-monthly groups are derived from `datetime`, so no helper `date` column is needed.
+monthly groups are derived from `start` (legacy `datetime`), so no helper `date` column is needed.
+
+### Calendar start and end fields
+
+Attendance uses `start` (formerly `datetime`) and an editable `end`, both
+DateTime fields in Vladivostok time. Existing dated records start with
+`end = start + 1 hour`; undated records keep an empty end. Grist supplies the
+same default for new records, or when an empty end first receives a start:
+
+```python
+import datetime
+return value or ($start + datetime.timedelta(hours=1) if $start else None)
+```
+
+This is a trigger formula on a data column, applied to new records and changes
+to `start`. A custom end remains editable and is preserved; later start edits
+do not automatically shift an already populated end.
+
+Both grouped widgets accept `start` and legacy `datetime`, including newest-first
+sorting, grouping, date pickers, and clipboard editing. Saved date column
+preferences follow the renamed field; explicit settings for `start` win.
+Filters also preserves saved date conditions. Reload after the schema rename.
+Transactions keeps its own `datetime`; Salaries displays those payments under
+Attendance's visible `start` field. When both field IDs exist, the legacy
+`datetime` remains the primary field until explicitly changed in the view.
 
 ### Student filter setup
 

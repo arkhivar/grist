@@ -9,7 +9,7 @@ const WIDGET_CONFIG = {
   classTableId: 'All_att',
   expensesTableId: 'Transactions',
   receivedColumn: 'salary_received',
-  defaultColumnOrder: ['datetime', 'performance', 'per', 'student', 'students', 'notes',
+  defaultColumnOrder: ['datetime', 'start', 'performance', 'per', 'student', 'students', 'notes',
     'wage', 'salary_received', 'count', 'sprint', 'attach_payment'],
   compactColumns: ['performance', 'per', 'wage', 'salary_received', 'count'],
   minimumColumnWidths: { performance: 48, per: 48 },

@@ -124,7 +124,22 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.61)
+## Current state (v7.62)
+
+- Attendance datetime is renamed to start (same column reference). End is an
+  editable DateTime:Asia/Vladivostok data column, initialized to start + 1 hour
+  for existing dated rows. Its trigger formula preserves value or supplies
+  start + datetime.timedelta(hours=1), with recalcWhen 0 and recalcDeps on
+  start; new/initially undated rows receive the same default when start is set.
+  Existing custom ends remain editable and do not move on later start edits.
+- Shared dateTimeStartColumn() accepts legacy datetime and start (exact then
+  case-insensitive, legacy priority when both exist). Both grouped widgets
+  migrate saved date grouping, row sorting, order, widths, visibility, and
+  editing preferences after a rename. Keep unavailable saved order slots until
+  metadata can identify renamed fields. Filters migrates saved date conditions.
+  Transactions.datetime stays unchanged and payment rows appear under start.
+  tests/start-columns.test.js covers defaults, delayed metadata, migration,
+  ledger dates, and editable start/end picker writes in both widgets.
 
 - Resolve teacher columns independently with `salaryTeacherColumn()`: legacy
   performance first, then per. The current class field is ALL_ATT.per;
@@ -136,7 +151,7 @@ payments.
   `tests/salaries-teacher-columns.test.js` covers mixed schemas, migration,
   raw-reference writes, payment-only teachers, and failure handling.
 
-- Salaries' canonical order is datetime, per (or legacy performance), student (or legacy
+- Salaries' canonical order is start (or legacy datetime), per (or legacy performance), student (or legacy
   students), notes, wage, salary_received (label paid), count,
   sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
@@ -242,9 +257,9 @@ payments.
   neutral button style as Cancel. Cancel and Escape discard the draft.
 - Sort groups and Sort rows are independent. Row sort is a persisted section
   option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
-  Both widgets default to `datetime` descending after options, metadata, and
+  Both widgets default to `start` (legacy `datetime`) descending after options, metadata, and
   columns are ready. Saved and manual choices, including Grist order, win;
-  absent `datetime` leaves Grist order. The automatic preference is saved once.
+  absent both date fields leaves Grist order. The automatic preference is saved once.
 - Both widgets share one sticky column strip above the group cards. Column
   names, drag reordering, keyboard reordering, and resize handles live there;
   a lightweight toolbar Columns popover offers visibility switches and drag

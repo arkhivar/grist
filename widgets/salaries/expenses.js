@@ -72,9 +72,9 @@ function salaryPaymentRowsHtml(cols, key) {
   const payments = salaryPaymentRowsFor(key);
   const teacherColumn = salaryTeacherColumn(columnTypes);
   const groupedDateColumn = parseGroupBy(groupBy).col;
-  const dateColumn = cols.includes('datetime') ? 'datetime'
-    : cols.includes(groupedDateColumn) ? groupedDateColumn
-      : cols.find(col => ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col])));
+  const dateColumn = dateTimeStartColumn(cols)
+    || (cols.includes(groupedDateColumn) ? groupedDateColumn
+      : cols.find(col => ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col]))));
   return payments.map(row => `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
     + ` title="Salary payment from ${esc(WIDGET_CONFIG.expensesTableId)} #${esc(row.id)}">`
     + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`

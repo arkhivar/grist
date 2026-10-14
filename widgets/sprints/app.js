@@ -503,7 +503,30 @@
     return Math.max(minimumColumnWidth(col), Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
   }
 
+  function migrateStartColumnOptions() {
+    const col = dateTimeStartColumn(columnTypes);
+    if (!col) return;
+    const previous = col.toLowerCase() === 'start' ? 'datetime' : 'start';
+    if (Object.keys(columnTypes).some(field => field.toLowerCase() === previous)) return;
+    if (columnOrder.includes(previous)) {
+      const hasCurrentOrder = columnOrder.includes(col);
+      columnOrder = columnOrder.flatMap(field => field === previous
+        ? hasCurrentOrder ? [] : [col] : [field]);
+    }
+    for (const settings of [columnWidths, columnVisibility]) {
+      if (!Object.prototype.hasOwnProperty.call(settings, previous)) continue;
+      if (!Object.prototype.hasOwnProperty.call(settings, col)) settings[col] = settings[previous];
+      delete settings[previous];
+    }
+    if (editableColumns.delete(previous)) editableColumns.add(col);
+    if (rowSort.column === previous) rowSort = { ...rowSort, column: col };
+    const grouping = parseGroupBy(groupBy);
+    if (grouping.col === previous)
+      groupBy = `${col}${grouping.granularity ? `::${grouping.granularity}` : ''}`;
+  }
+
   function reconcileColumnOrder() {
+    migrateStartColumnOptions();
     if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
     // Options and records arrive independently. Keep saved order until columns exist.
     if (!allColumns.length) return;
@@ -517,8 +540,13 @@
       known.has(col) && order.indexOf(col) === i);
     const order = columnOrderConfigured ? columnOrder : defaults;
     const saved = order.filter((col, i) =>
-      known.has(col) && order.indexOf(col) === i);
-    const missing = allColumns.filter(col => !saved.includes(col));
+      (known.has(col) || !metadataLoaded) && order.indexOf(col) === i);
+    // Do not append a renamed date field before metadata can move its saved slot.
+    const startColumn = dateTimeStartColumn(allColumns);
+    const pendingStartAlias = !metadataLoaded && !saved.includes(startColumn)
+      && saved.some(col => ['datetime', 'start'].includes(col.toLowerCase()))
+      ? startColumn : null;
+    const missing = allColumns.filter(col => !saved.includes(col) && col !== pendingStartAlias);
     columnOrder = [...saved, ...missing];
     if (received && !columnOrder.includes(received)) {
       const wageIndex = columnOrder.indexOf('wage');
@@ -971,6 +999,7 @@
 
     if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
       const dateColumn = allColumns.find(col => col.toLowerCase() === 'date' && salaryDateColumn(col))
+        || (salaryDateColumn(dateTimeStartColumn(allColumns)) ? dateTimeStartColumn(allColumns) : null)
         || allColumns.find(col => salaryDateColumn(col)
           && ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col])))
         || allColumns.find(col => salaryDateColumn(col));
@@ -1087,6 +1116,7 @@
       }
     }
     optionsLoaded = true;
+    migrateStartColumnOptions();
     if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
     if (!studentNavigationBridgePendingSaves) configureStudentNavigationBridge(opts);
     getWritableColumnIds().then(() => {
@@ -1236,8 +1266,7 @@
     // default. An explicit Grist-order choice is a saved preference too.
     if (rowSortConfigured || !optionsLoaded || !metadataLoaded || !allColumns.length)
       return false;
-    const datetimeColumn = allColumns.find(col => col === 'datetime')
-      || allColumns.find(col => col.toLowerCase() === 'datetime');
+    const datetimeColumn = dateTimeStartColumn(allColumns);
     if (!datetimeColumn) return false;
     rowSortConfigured = true;
     rowSort = { column: datetimeColumn, direction: 'desc' };
@@ -3075,6 +3104,7 @@
       writableColumnIds = [...result];
       writableColumnTypes = typeMap;
       columnTypes = allTypeMap;
+      migrateStartColumnOptions();
       if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
       metadataLoaded = true;
       refreshStudentNavigationBridge();

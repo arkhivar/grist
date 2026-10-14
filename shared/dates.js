@@ -8,6 +8,16 @@ const DATE_EPOCH_MAX = 4102444800;   // 2100-01-01T00:00:00Z
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(\s*(Z|[+-]\d{2}:?\d{2}))?)?$/i;
 
+function dateTimeStartColumn(columns) {
+  const names = Array.isArray(columns) ? columns : Object.keys(columns || {});
+  for (const alias of ['datetime', 'start']) {
+    const match = names.find(col => col === alias)
+      || names.find(col => col.toLowerCase() === alias);
+    if (match) return match;
+  }
+  return null;
+}
+
 // ISO string → UTC epoch seconds, or null if invalid / out of range.
 // Tolerant of import / copy-paste artifacts: invisible characters are
 // stripped first (soft hyphen, Mongolian vowel separator, ZWSP/ZWNJ/ZWJ,

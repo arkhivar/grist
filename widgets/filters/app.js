@@ -553,6 +553,13 @@ async function filterReadRecords(records, request) {
 
 function filterReconcileConfig() {
   if (!filterDataReady || !filterOptionsReady) return;
+  const startColumn = dateTimeStartColumn(filterColumns.map(column => column.id));
+  if (startColumn && startColumn.toLowerCase() === 'start') {
+    if (filterConfig.nameColumn === 'datetime') filterConfig.nameColumn = startColumn;
+    filterConfig.rules.forEach(rule => {
+      if (rule.column === 'datetime') rule.column = startColumn;
+    });
+  }
   if (!filterColumn(filterConfig.nameColumn)) {
     const student = filterColumns.find(column => /^(student|students|student_name|students_name)$/i.test(column.id));
     filterConfig.nameColumn = student?.id || filterColumns.find(column => ['Text', 'Ref', 'RefList', 'Choice'].includes(column.type.split(':')[0]))?.id || '';

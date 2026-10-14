@@ -165,6 +165,56 @@ async function main() {
     f.options({ studentFilter: { nameColumn: 'students', rules: [{ column: 'lastClass', operator: 'empty', value: '' }] } });
     await pause(5); assert.deepEqual(f.lastSelection(), [3]);
   });
+  for (const optionsFirst of [true, false]) {
+    await test(`saved datetime conditions follow start with ${optionsFirst ? 'options' : 'records'} first`, async f => {
+      const table = f.getTable();
+      table.start = table.starts;
+      delete table.starts;
+      f.metadata.colId[2] = 'start';
+      f.metadata.label[2] = 'start';
+      f.setRecords(f.getRecords().map(({ starts, ...record }) => ({ ...record, start: starts })));
+      const saved = { studentFilter: { nameColumn: 'students', rules: [
+        { column: 'datetime', operator: 'is', value: '2026-10-06' },
+      ] } };
+      if (optionsFirst) { f.options(saved); f.records(); }
+      else { f.records(); await pause(15); f.options(saved); }
+      await pause(20);
+      assert.deepEqual(f.lastSelection(), [1], 'a renamed date condition must not broaden the selection');
+      assert.equal(f.doc.querySelector('.filter-rule select').value, 'start');
+      assert.equal(f.doc.querySelector('.filter-rule input').value, '2026-10-06');
+      f.options({ studentFilter: { nameColumn: 'datetime', rules: [] } });
+      await pause(5);
+      assert.equal(f.doc.getElementById('filter-name-column').value, 'start', 'saved field settings follow the rename');
+      f.options({ studentFilter: { nameColumn: 'students', rules: [
+        { column: 'start', operator: 'is', value: '2026-10-05' },
+      ] } });
+      await pause(5);
+      assert.deepEqual(f.lastSelection(), [2], 'explicit current field choices remain intact');
+    }, { noStartup: true });
+  }
+  await test('separate datetime and start fields retain their saved conditions', async f => {
+    const table = f.getTable();
+    table.datetime = table.starts;
+    table.start = table.starts.map((value, index) => index === 0 ? null : value);
+    delete table.starts;
+    f.metadata.colId[2] = 'datetime';
+    f.metadata.label[2] = 'datetime';
+    f.metadata.id.push(8); f.metadata.parentId.push(10);
+    f.metadata.colId.push('start'); f.metadata.label.push('start');
+    f.metadata.type.push('DateTime:Asia/Vladivostok');
+    f.setRecords(f.getRecords().map(({ starts, ...record }) => ({ ...record, datetime: starts, start: null })));
+    f.options({ studentFilter: { nameColumn: 'students', rules: [
+      { column: 'datetime', operator: 'is', value: '2026-10-06' },
+    ] } });
+    f.records(); await pause(20);
+    assert.deepEqual(f.lastSelection(), [1], 'an existing datetime field must not be redirected to start');
+    assert.equal(f.doc.querySelector('.filter-rule select').value, 'datetime');
+    f.options({ studentFilter: { nameColumn: 'students', rules: [
+      { column: 'start', operator: 'empty', value: '' },
+    ] } });
+    await pause(5);
+    assert.deepEqual(f.lastSelection(), [1, 3], 'start conditions remain independent');
+  }, { noStartup: true });
   await test('Match any/all, numbers including zero, booleans, incomplete conditions and section persistence', async f => {
     const rules = [{ column: 'count', operator: 'is', value: '0' }, { column: 'active', operator: 'is', value: 'false' }];
     f.options({ studentFilter: { nameColumn: 'students', match: 'any', rules } });
