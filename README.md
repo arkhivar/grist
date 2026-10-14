@@ -80,7 +80,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 Use `https://arkhivar.github.io/grist/salaries.html` with **Full access**.
 For the selected-teacher workflow, choose `PERFORMANCE` as the widget's source
 table and link **Select By** to a teacher list using that same table. Salaries
-reads the selected teacher IDs, finds matching `Attendance.performance` links,
+reads the selected teacher IDs, finds matching `Attendance.per` links (or legacy
+`performance`),
 and shows classes and salary payments in monthly groups. `Attendance` is the
 display name of the class table, now ID `ALL_ATT`. Salaries resolves the
 configured `All_att` ID from metadata: an exact match wins, followed by a
@@ -91,6 +92,9 @@ Teacher initials follow the Reference's configured display column, currently
 remain supported.
 
 Salary payments come from `Transactions.performance`, `datetime`, and `amount`.
+`per` is also accepted for the teacher field. Attendance, summaries, and
+Transactions resolve their teacher column independently, so a rename in one
+table does not require renaming the others. Reload after changing field IDs.
 The teacher field must contain the same `PERFORMANCE` row IDs as Attendance.
 It currently uses a **Reference List to PERFORMANCE**; single References and
 legacy Int IDs also work. A transaction is included when any of its teacher
@@ -104,11 +108,15 @@ hover to read the complete text. Payment dates use the visible `datetime`
 column when a hidden date helper supplies monthly grouping.
 The default column order is `datetime`, `per`, `student`, `notes`, `wage`,
 `paid`, `count`, `sprint`, `attach_payment`, followed by other available fields. Older documents
-with `students` use the same position. `per` labels `performance`; `paid`
+with `students` use the same position. `per` labels the current `per` or legacy
+`performance` field; `paid`
 displays Transactions' `amount`. Month headers sum class `wage` and `count`
-and transaction payments. `per`, `wage`, `paid`, and `count` share the minimum
-default width (64px). Saved layouts and widths take priority;
+and transaction payments. `per` defaults to 48px; `wage`, `paid`, and `count`
+default to 64px. Saved layouts and widths take priority; preferences under
+the previous teacher field ID follow its replacement when that old field is
+absent. Explicit settings for the new field win.
 **Reset column layout** restores these defaults.
+Double-click a column's resize border to restore only that column's default width.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
 monthly groups are derived from `datetime`, so no helper `date` column is needed.
 

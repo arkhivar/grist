@@ -153,9 +153,10 @@ async function main() {
   assert.deepEqual(headerOrder().slice(0, 8), canonicalOrder,
     'fresh salary layout does not follow the canonical order');
   for (const col of compactColumns) {
-    assert.equal(headerWidth(col), '64px', `${col} should default to the shared minimum width`);
+    const expectedWidth = col === 'performance' ? '48px' : '64px';
+    assert.equal(headerWidth(col), expectedWidth, `${col} should default to its compact minimum width`);
     for (const card of cards())
-      assert.equal(card.querySelector(`col[data-column="${col}"]`).style.width, '64px',
+      assert.equal(card.querySelector(`col[data-column="${col}"]`).style.width, expectedWidth,
         `${col} width should match the fixed header in every month`);
   }
   assert(!calls.options.some(([key]) => key === 'columnOrder'),
@@ -559,7 +560,7 @@ async function main() {
   delete transactions.datetime;
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => doc.getElementById('salary-payment-status').textContent ===
-    'Payments unavailable: Transactions must have performance, datetime, and amount columns');
+    'Payments unavailable: Transactions must have datetime and amount columns');
   assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '—',
     'missing payment datetime must not show a zero subtotal');
   assert.equal(doc.querySelectorAll('.salary-payment-row').length, 0,
@@ -650,7 +651,7 @@ async function main() {
   await waitFor(() => calls.options.slice(beforeResetOptions).some(([key]) => key === 'columnOrder'));
   assert.deepEqual(headerOrder().slice(0, 8), canonicalOrder,
     'Reset column layout did not restore the canonical order');
-  assert.deepEqual(compactColumns.map(headerWidth), ['64px', '64px', '64px', '64px'],
+  assert.deepEqual(compactColumns.map(headerWidth), ['48px', '64px', '64px', '64px'],
     'Reset column layout should restore the four compact widths');
   const resetOrder = calls.options.slice(beforeResetOptions)
     .find(([key]) => key === 'columnOrder')[1];

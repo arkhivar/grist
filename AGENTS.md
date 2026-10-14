@@ -100,7 +100,7 @@ See [Editing fields](README.md#editing-fields) for the complete user workflow.
 ## Salaries widget
 
 `salaries.html` uses the shared grouped-table app. Selecting rows from the table
-referenced by `All_att.performance` filters classes by those raw teacher IDs.
+referenced by `All_att.per` (legacy `performance`) filters classes by those raw teacher IDs.
 Currently that table is `PERFORMANCE`, with initials in its `A` column (the
 Reference's configured visible column). Teacher selection works even when the
 teacher has payments but no classes. Linked `All_att` summary
@@ -109,8 +109,8 @@ display label; `ALL_ATT` is the current table ID). The widget resolves the
 configured `All_att` ID from metadata, reads those class rows with `fetchTable`,
 displays their fields, and writes class edits to the resolved ID.
 It reads `Transactions` with `fetchTable`,
-matches raw `performance` teacher IDs from the selected teacher/summary rows
-against Transactions (`All_att.performance` is a RefList), and
+matches raw teacher IDs from the selected teacher/summary rows
+against Transactions (`All_att.per` is a RefList), and
 groups payments using `Transactions.datetime` in Vladivostok time; no helper
 `date` column is required. The current
 `Transactions.performance` column is a RefList to `PERFORMANCE`; single
@@ -124,13 +124,23 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.60)
+## Current state (v7.61)
 
-- Salaries' canonical order is datetime, performance (label per), student (or legacy
+- Resolve teacher columns independently with `salaryTeacherColumn()`: legacy
+  performance first, then per. The current class field is ALL_ATT.per;
+  Transactions still uses performance. Payment matching, summary selection,
+  reference labels, and class writes use the actual source field IDs. Saved
+  order/width/visibility/editing and row-sort preferences follow the renamed
+  teacher field only when the old field is absent; explicit replacement
+  settings win. Metadata is cached, so reload after source schema changes.
+  `tests/salaries-teacher-columns.test.js` covers mixed schemas, migration,
+  raw-reference writes, payment-only teachers, and failure handling.
+
+- Salaries' canonical order is datetime, per (or legacy performance), student (or legacy
   students), notes, wage, salary_received (label paid), count,
   sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
-  Per, wage, paid, and count default to the shared 64px minimum width;
+  Per defaults to 48px; wage, paid, and count default to 64px;
   saved widths win. Month headers also show the signed class count sum.
 
 - Numeric cells, inline number editors, column labels, and group totals align

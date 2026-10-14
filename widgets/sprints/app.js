@@ -493,11 +493,18 @@
   let draggedColumn = null;
   const pendingRowAnimations = new Map();
 
-  function clampColumnWidth(width) {
-    return Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
+  function minimumColumnWidth(col) {
+    const configured = typeof WIDGET_CONFIG !== 'undefined'
+      ? WIDGET_CONFIG.minimumColumnWidths?.[col] : null;
+    return Number.isFinite(configured) && configured > 0 ? configured : MIN_COLUMN_WIDTH;
+  }
+
+  function clampColumnWidth(width, col) {
+    return Math.max(minimumColumnWidth(col), Math.min(MAX_COLUMN_WIDTH, Math.round(width)));
   }
 
   function reconcileColumnOrder() {
+    if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
     // Options and records arrive independently. Keep saved order until columns exist.
     if (!allColumns.length) return;
     const received = allColumns.length && typeof WIDGET_CONFIG !== 'undefined'
@@ -535,7 +542,7 @@
 
   function defaultColumnWidth(col) {
     if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.compactColumns?.includes(col))
-      return MIN_COLUMN_WIDTH;
+      return minimumColumnWidth(col);
     if (typeof WIDGET_CONFIG !== 'undefined' && col === WIDGET_CONFIG.receivedColumn)
       return 118;
     const type = columnBaseType(columnTypes[col]);
@@ -557,12 +564,12 @@
       } else text = String(value);
       longest = Math.max(longest, Math.min(38, text.length));
     }
-    return clampColumnWidth(longest * 7.2 + 34);
+    return clampColumnWidth(longest * 7.2 + 34, col);
   }
 
   function getColumnWidth(col) {
     const saved = Number(columnWidths[col]);
-    if (Number.isFinite(saved)) return clampColumnWidth(saved);
+    if (Number.isFinite(saved)) return clampColumnWidth(saved, col);
     if (!automaticColumnWidths.has(col))
       automaticColumnWidths.set(col, defaultColumnWidth(col));
     return automaticColumnWidths.get(col);
@@ -1071,7 +1078,7 @@
           if (value && typeof value === 'object' && !Array.isArray(value)) {
             Object.entries(value).forEach(([col, width]) => {
               if (typeof col === 'string' && Number.isFinite(Number(width)))
-                columnWidths[col] = clampColumnWidth(Number(width));
+                columnWidths[col] = clampColumnWidth(Number(width), col);
             });
           }
         } catch (_) {
@@ -1080,6 +1087,7 @@
       }
     }
     optionsLoaded = true;
+    if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
     if (!studentNavigationBridgePendingSaves) configureStudentNavigationBridge(opts);
     getWritableColumnIds().then(() => {
       applyStartupGroupDefault();
@@ -1632,7 +1640,7 @@
   window.addEventListener('pointermove', (e) => {
     if (!activeColumnResize) return;
     columnWidths[activeColumnResize.col] = clampColumnWidth(
-      activeColumnResize.startWidth + e.clientX - activeColumnResize.startX);
+      activeColumnResize.startWidth + e.clientX - activeColumnResize.startX, activeColumnResize.col);
     applyColumnWidthsToDOM();
   });
 
@@ -1720,7 +1728,7 @@
       const col = th.dataset.column;
       const step = e.shiftKey ? 25 : 10;
       columnWidths[col] = clampColumnWidth(
-        getColumnWidth(col) + (e.key === 'ArrowRight' ? step : -step));
+        getColumnWidth(col) + (e.key === 'ArrowRight' ? step : -step), col);
       saveColumnWidths();
       applyColumnWidthsToDOM();
       return;
@@ -3067,6 +3075,7 @@
       writableColumnIds = [...result];
       writableColumnTypes = typeMap;
       columnTypes = allTypeMap;
+      if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
       metadataLoaded = true;
       refreshStudentNavigationBridge();
       recordActionDiagnostic('Metadata', 'ok',
