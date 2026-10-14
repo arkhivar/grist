@@ -144,6 +144,12 @@ Transactions keeps its own `datetime`; Salaries displays those payments under
 Attendance's visible `start` field. When both field IDs exist, the legacy
 `datetime` remains the primary field until explicitly changed in the view.
 
+The document's person and teacher history formulas use indexed Attendance
+lookups rather than scanning every class for each person. Teacher/group
+overlaps are counted once. When renaming source fields, check dependent
+formulas too: Grist can miss row attributes accessed through Python
+containers or summary Reference Lists.
+
 ### Student filter setup
 
 Use `https://arkhivar.github.io/grist/filters.html` for the compact companion

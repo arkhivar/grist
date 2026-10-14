@@ -132,6 +132,18 @@ payments.
   start + datetime.timedelta(hours=1), with recalcWhen 0 and recalcDeps on
   start; new/initially undated rows receive the same default when start is set.
   Existing custom ends remain editable and do not move on later start edits.
+- Document history formulas FOLKS.lastClass/lastSprint use indexed
+  ALL_ATT.lookupRecords(student=CONTAINS($id)) instead of scanning ALL_ATT.all
+  for every person. PERFORMANCE.lastClass/lastYearClasses use per/group2
+  lookups; counts exclude overlapping row IDs. Direct lookup comprehensions
+  preserve Grist's record-type inference during future column renames.
+  All 2836 history results and 89 summary lastClass values were checked
+  against the document backup after this migration.
+- Native RenameColumn can miss row attributes reached through Python
+  containers or summary RefLists. Inspect dependent formulas after a rename,
+  including Attendance-derived summary lastClass formulas; do not assume
+  every r.datetime became r.start. Keep the datetime Python module and
+  Transactions.datetime unchanged.
 - Shared dateTimeStartColumn() accepts legacy datetime and start (exact then
   case-insensitive, legacy priority when both exist). Both grouped widgets
   migrate saved date grouping, row sorting, order, widths, visibility, and
