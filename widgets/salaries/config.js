@@ -1,4 +1,4 @@
-// Select teachers from Attendance's per/performance target, or classes via group links.
+// Select teachers from Attendance's t/per/performance target, or classes via group links.
 // Keep this widget on the shared grouped-table implementation.
 const WIDGET_CONFIG = {
   monthlyOnly: true,
@@ -9,8 +9,8 @@ const WIDGET_CONFIG = {
   classTableId: 'All_att',
   expensesTableId: 'Transactions',
   receivedColumn: 'salary_received',
-  defaultColumnOrder: ['datetime', 'start', 'performance', 'per', 'student', 'students', 'notes',
+  defaultColumnOrder: ['datetime', 'start', 'performance', 'per', 't', 'student', 'students', 'notes',
     'wage', 'salary_received', 'count', 'sprint', 'attach_payment'],
-  compactColumns: ['performance', 'per', 'wage', 'salary_received', 'count'],
-  minimumColumnWidths: { performance: 48, per: 48 },
+  compactColumns: ['performance', 'per', 't', 'wage', 'salary_received', 'count'],
+  minimumColumnWidths: { performance: 48, per: 48, t: 48 },
 };

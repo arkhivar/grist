@@ -80,19 +80,19 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 Use `https://arkhivar.github.io/grist/salaries.html` with **Full access**.
 For the selected-teacher workflow, choose `PERFORMANCE` as the widget's source
 table and link **Select By** to a teacher list using that same table. Salaries
-reads the selected teacher IDs, finds matching `Attendance.per` links (or legacy
-`performance`),
+reads the selected teacher IDs, finds matching `Attendance.t` links (or legacy
+`per` / `performance`),
 and shows classes and salary payments in monthly groups. `Attendance` is the
 display name of the class table, now ID `ALL_ATT`. Salaries resolves the
 configured `All_att` ID from metadata: an exact match wins, followed by a
 unique match ignoring capitalization. Class reads and writes use the resolved
 ID, so changing capitalization does not require renaming it back.
 Teacher initials follow the Reference's configured display column, currently
-`PERFORMANCE.A`. Existing summary `group` links and direct Attendance selections
+`PERFORMANCE.name`. Existing summary `group` links and direct Attendance selections
 remain supported.
 
 Salary payments come from `Transactions.performance`, `datetime`, and `amount`.
-`per` is also accepted for the teacher field. Attendance, summaries, and
+`per` and `t` are also accepted for the teacher field. Attendance, summaries, and
 Transactions resolve their teacher column independently, so a rename in one
 table does not require renaming the others. Reload after changing field IDs.
 The teacher field must contain the same `PERFORMANCE` row IDs as Attendance.
@@ -104,17 +104,18 @@ match it. Every teacher-tagged transaction counts as salary received, including
 Payments stay read-only; use **Refresh payments** after editing Transactions.
 Payment rows show `Transactions.notes` in the shared notes column even when
 Attendance notes use checkboxes. Long notes are clipped to the column width;
-hover to read the complete text. Payment dates use the visible `datetime`
+hover to read the complete text. Payment dates use the visible `start` (legacy `datetime`)
 column when a hidden date helper supplies monthly grouping.
 The default column order is `start` (legacy `datetime`), `per`, `student`, `notes`, `wage`,
 `paid`, `count`, `sprint`, `attach_payment`, followed by other available fields. Older documents
-with `students` use the same position. `per` labels the current `per` or legacy
-`performance` field; `paid`
+with `students` use the same position. `per` labels the current `t` or legacy
+`per` / `performance` field; `paid`
 displays Transactions' `amount`. Month headers sum class `wage` and `count`
 and transaction payments. `per` defaults to 48px; `wage`, `paid`, and `count`
 default to 64px. Saved layouts and widths take priority; preferences under
-the previous teacher field ID follow its replacement when that old field is
-absent. Explicit settings for the new field win.
+the previous teacher field ID follow its replacement when only one of these
+teacher fields remains. Explicit settings for the new field win; coexisting
+fields retain independent settings.
 **Reset column layout** restores these defaults.
 Double-click a column's resize border to restore only that column's default width.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;

@@ -100,8 +100,8 @@ See [Editing fields](README.md#editing-fields) for the complete user workflow.
 ## Salaries widget
 
 `salaries.html` uses the shared grouped-table app. Selecting rows from the table
-referenced by `All_att.per` (legacy `performance`) filters classes by those raw teacher IDs.
-Currently that table is `PERFORMANCE`, with initials in its `A` column (the
+referenced by `All_att.t` (legacy `per` / `performance`) filters classes by those raw teacher IDs.
+Currently that table is `PERFORMANCE`, with initials in its `name` column (the
 Reference's configured visible column). Teacher selection works even when the
 teacher has payments but no classes. Linked `All_att` summary
 rows supply `group` RefLists of original `All_att` row IDs (`Attendance` is the
@@ -110,7 +110,7 @@ configured `All_att` ID from metadata, reads those class rows with `fetchTable`,
 displays their fields, and writes class edits to the resolved ID.
 It reads `Transactions` with `fetchTable`,
 matches raw teacher IDs from the selected teacher/summary rows
-against Transactions (`All_att.per` is a RefList), and
+against Transactions (`All_att.t` is a RefList), and
 groups payments using `Transactions.datetime` in Vladivostok time; no helper
 `date` column is required. The current
 `Transactions.performance` column is a RefList to `PERFORMANCE`; single
@@ -124,7 +124,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.62)
+## Current state (v7.63)
 
 - Attendance datetime is renamed to start (same column reference). End is an
   editable DateTime:Asia/Vladivostok data column, initialized to start + 1 hour
@@ -134,7 +134,7 @@ payments.
   Existing custom ends remain editable and do not move on later start edits.
 - Document history formulas FOLKS.lastClass/lastSprint use indexed
   ALL_ATT.lookupRecords(student=CONTAINS($id)) instead of scanning ALL_ATT.all
-  for every person. PERFORMANCE.lastClass/lastYearClasses use per/group2
+  for every person. PERFORMANCE.lastClass/lastYearClasses use t/group2
   lookups; counts exclude overlapping row IDs. Direct lookup comprehensions
   preserve Grist's record-type inference during future column renames.
   All 2836 history results and 89 summary lastClass values were checked
@@ -154,16 +154,19 @@ payments.
   ledger dates, and editable start/end picker writes in both widgets.
 
 - Resolve teacher columns independently with `salaryTeacherColumn()`: legacy
-  performance first, then per. The current class field is ALL_ATT.per;
+  performance first, then per, then t. The current class field is ALL_ATT.t;
   Transactions still uses performance. Payment matching, summary selection,
   reference labels, and class writes use the actual source field IDs. Saved
   order/width/visibility/editing and row-sort preferences follow the renamed
-  teacher field only when the old field is absent; explicit replacement
-  settings win. Metadata is cached, so reload after source schema changes.
+  teacher field when exactly one recognized teacher field remains; explicit
+  replacement settings win and coexisting fields keep independent settings.
+  Teacher selection signatures include all three aliases so changing t does
+  not preserve a draft from the previously selected teacher. Metadata is
+  cached, so reload after source schema changes.
   `tests/salaries-teacher-columns.test.js` covers mixed schemas, migration,
   raw-reference writes, payment-only teachers, and failure handling.
 
-- Salaries' canonical order is start (or legacy datetime), per (or legacy performance), student (or legacy
+- Salaries' canonical order is start (or legacy datetime), t (label per; legacy per/performance), student (or legacy
   students), notes, wage, salary_received (label paid), count,
   sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
@@ -176,7 +179,7 @@ payments.
   values retain source precision. Keep numeric styling off Date/DateTime cells.
 - Salary payment rows show optional `Transactions.notes` as escaped, clipped
   read-only text with the complete note in its tooltip, independently of the
-  Attendance notes column's type. Prefer the visible `datetime` column for
+  Attendance notes column's type. Prefer the visible `start` (legacy `datetime`) column for
   payment dates when the monthly grouping helper is hidden.
 
 - Salaries matches scalar and list teacher references in Transactions, including

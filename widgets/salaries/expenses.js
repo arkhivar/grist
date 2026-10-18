@@ -63,7 +63,7 @@ function salaryGroupTotalsHtml(group, displayCols) {
 }
 
 function salaryColumnLabel(col) {
-  if (col === 'performance' || col === 'per') return 'per';
+  if (salaryTeacherColumnIds.includes(col)) return 'per';
   if (col === WIDGET_CONFIG.receivedColumn) return 'paid';
   return col;
 }
@@ -190,7 +190,7 @@ function salaryDisplayClassCell(col, value, record) {
 
 function salaryIsSameClassSelection(selectedRecords) {
   const key = JSON.stringify(selectedRecords.map(row => [row.id, row.group,
-    row.performance, row.per]));
+    ...salaryTeacherColumnIds.map(col => row[col])]));
   const same = selectedRecords.length > 0 && key === salaryClassSelectionKey;
   salaryClassSelectionKey = key;
   return same;

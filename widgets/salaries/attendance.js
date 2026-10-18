@@ -1,37 +1,41 @@
 // Table operations target original Attendance records behind the summary view.
 let salaryClassTableIdPromise = null;
 let salaryClassTableId = null;
+const salaryTeacherColumnIds = ['performance', 'per', 't'];
 
 function salaryTeacherColumn(fields) {
   // Each table may rename this field independently; keep the legacy ID first.
-  return ['performance', 'per'].find(col =>
+  return salaryTeacherColumnIds.find(col =>
     Object.prototype.hasOwnProperty.call(fields || {}, col)) || null;
 }
 
 function salaryRequireTeacherColumn(table, tableId) {
   const col = salaryTeacherColumn(table);
   if (!col || !Array.isArray(table[col]))
-    throw new Error(`${tableId} must have a performance or per teacher column`);
+    throw new Error(`${tableId} must have a performance, per, or t teacher column`);
   return col;
 }
 
 function salaryMigrateTeacherColumnOptions() {
   const col = salaryTeacherColumn(columnTypes);
   if (!col) return;
-  const previous = col === 'per' ? 'performance' : 'per';
-  if (Object.prototype.hasOwnProperty.call(columnTypes, previous)) return;
-  if (columnOrder.includes(previous)) {
-    const hasCurrentOrder = columnOrder.includes(col);
-    columnOrder = columnOrder.flatMap(field => field === previous
-      ? hasCurrentOrder ? [] : [col] : [field]);
+  // Coexisting fields keep separate preferences; only migrate a clear rename.
+  if (salaryTeacherColumnIds.filter(field =>
+    Object.prototype.hasOwnProperty.call(columnTypes, field)).length !== 1) return;
+  for (const previous of salaryTeacherColumnIds.filter(field => field !== col)) {
+    if (columnOrder.includes(previous)) {
+      const hasCurrentOrder = columnOrder.includes(col);
+      columnOrder = columnOrder.flatMap(field => field === previous
+        ? hasCurrentOrder ? [] : [col] : [field]);
+    }
+    for (const settings of [columnWidths, columnVisibility]) {
+      if (!Object.prototype.hasOwnProperty.call(settings, previous)) continue;
+      if (!Object.prototype.hasOwnProperty.call(settings, col)) settings[col] = settings[previous];
+      delete settings[previous];
+    }
+    if (editableColumns.delete(previous)) editableColumns.add(col);
+    if (rowSort.column === previous) rowSort = { ...rowSort, column: col };
   }
-  for (const settings of [columnWidths, columnVisibility]) {
-    if (!Object.prototype.hasOwnProperty.call(settings, previous)) continue;
-    if (!Object.prototype.hasOwnProperty.call(settings, col)) settings[col] = settings[previous];
-    delete settings[previous];
-  }
-  if (editableColumns.delete(previous)) editableColumns.add(col);
-  if (rowSort.column === previous) rowSort = { ...rowSort, column: col };
 }
 
 async function salaryResolveClassTableId(tables = null) {
