@@ -91,8 +91,8 @@ Teacher initials follow the Reference's configured display column, currently
 `PERFORMANCE.name`. Existing summary `group` links and direct Attendance selections
 remain supported.
 
-Salary payments come from `Transactions.performance`, `datetime`, and `amount`.
-`per` and `t` are also accepted for the teacher field. Attendance, summaries, and
+Salary payments come from `Transactions.per`, `datetime`, and `amount`.
+`performance` and `t` are also accepted for the teacher field. Attendance, summaries, and
 Transactions resolve their teacher column independently, so a rename in one
 table does not require renaming the others. Reload after changing field IDs.
 The teacher field must contain the same `PERFORMANCE` row IDs as Attendance.
@@ -120,6 +120,43 @@ fields retain independent settings.
 Double-click a column's resize border to restore only that column's default width.
 Payment-only teachers are shown too, with zero classes. DateTime uses VLAT;
 monthly groups are derived from `start` (legacy `datetime`), so no helper `date` column is needed.
+
+### Weekly payroll and monthly bonuses
+
+Salaries starts in **View → Calendar months**, grouping by the actual record
+date. Choose **Months & weeks** for payroll periods. Both views use the same
+class/office-hour `wage`, `count`, and read-only transaction `paid` columns.
+Office work can be logged in Attendance with `start`, `end`, the staff member
+in `t`, and a wage, just like lessons.
+
+The payroll view uses these links:
+
+- `Transactions.forWeek`: Reference to `WeekRegistry` for weekly payments.
+- `Transactions.forMonth`: Reference to `MonthRegistry` for monthly payments
+  such as bonuses. Use one period link per payment.
+- `WeekRegistry.forMonth`: editable Reference to `MonthRegistry`. Click the
+  small month button under a week heading to assign or clear its parent month.
+  This assignment is shared by everyone using that week, and supports Undo/Redo.
+
+Weeks use `weekStart` / `weekEnd` Date columns (Monday through the next Monday,
+exclusive); months use `monthStart` / `monthEnd` Date columns (first day through
+the next month's first day, exclusive). Attendance work records join their
+VLAT week by `start`. A week crossing months stays together under its manually
+assigned month; no date-based month assignment is assumed. Unassigned weeks
+remain under **Unassigned month**. Monthly payments appear under **Monthly
+items** in their assigned month, even when paid later. Payment rows always
+retain their actual transaction date.
+
+Missing, invalid, or conflicting period links appear in **Needs review**.
+Nothing is silently dropped or counted twice. Correct transaction links in
+Transactions; use **Refresh payments** after external transaction or registry
+changes. A registry read failure is shown as an error, rather than zero pay.
+
+Grouping is computed in the widget from cached registry reads, without adding
+native summary tables or making a request per week. Weeks start collapsed;
+closed periods do not build their row DOM. View and collapse settings persist
+per widget section. Add-row controls work in weeks with existing work records;
+add the first office-hour record through Attendance or Calendar.
 
 ### Calendar start and end fields
 

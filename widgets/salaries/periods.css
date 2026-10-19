@@ -1,0 +1,69 @@
+/* Registry period controls reuse the grouped widgets' compact light palette. */
+.salary-month {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.salary-month-body { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); }
+.salary-month.collapsed > .salary-month-body { display: none; }
+.salary-month.collapsed > .group-header .chevron { transform: rotate(-90deg); }
+.salary-month-body > .group { border-left: 0; border-right: 0; border-radius: 0; box-shadow: none; }
+.salary-month-body > .group:last-child { border-bottom: 0; }
+.salary-month-body > .group .group-label { font-size: 12px; font-weight: 500; }
+.salary-period-heading { position: relative; }
+.salary-week-month-row {
+  display: flex; align-items: center; min-height: 23px;
+  padding: 0 10px 4px 46px;
+}
+.salary-week-month {
+  display: inline-flex; align-items: center; gap: 5px;
+  max-width: min(250px, calc(100vw - 72px));
+  padding: 1px 5px; border: 1px solid transparent; border-radius: var(--radius);
+  background: transparent; color: var(--muted); cursor: pointer;
+  font: 11px/1.45 var(--font); text-align: left;
+}
+.salary-week-month-label {
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.salary-week-month svg { width: 12px; height: 12px; flex-shrink: 0; }
+.salary-week-month:hover, .salary-week-month[aria-expanded="true"] {
+  background: var(--bg); border-color: var(--border); color: var(--text);
+}
+.salary-week-month:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.salary-week-month:disabled { cursor: wait; opacity: .65; }
+.salary-month-picker {
+  position: fixed; z-index: 86; display: flex; flex-direction: column;
+  width: min(300px, calc(100vw - 16px));
+  max-height: min(390px, calc(100vh - 16px));
+  overflow: hidden; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text);
+  box-shadow: 0 12px 36px rgba(24,24,27,.22), 0 2px 8px rgba(24,24,27,.10);
+  font: 12px/1.45 var(--font);
+}
+.salary-month-picker[hidden] { display: none; }
+.salary-month-picker h2 {
+  padding: 9px 10px 3px; font: 600 12px/1.45 var(--font);
+}
+.salary-month-help { padding: 0 10px 6px; color: var(--muted); font-size: 11px; }
+.salary-month-picker input {
+  margin: 0 8px 7px; padding: 6px 8px; min-width: 0;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  outline: none; font: 12px var(--font);
+}
+.salary-month-picker input:focus { box-shadow: var(--focus-ring); }
+.salary-month-options { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.salary-month-option {
+  display: block; width: 100%; padding: 6px 10px; border: 0;
+  background: transparent; color: var(--text); text-align: left;
+  font: 12px/1.45 var(--font); cursor: pointer; outline: none;
+}
+.salary-month-option:hover, .salary-month-option:focus-visible,
+.salary-month-option[aria-selected="true"] { background: var(--hover-row); }
+.salary-month-option:disabled { cursor: wait; opacity: .65; }
+.salary-month-empty { padding: 8px 10px; color: var(--muted); }
+.salary-month-footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px; border-top: 1px solid var(--border);
+  color: var(--muted); font: 11px/1.4 var(--font);
+}
+#salary-month-status { min-width: 0; overflow-wrap: anywhere; }
+#salary-month-status.salary-month-error { color: #b91c1c; }

@@ -113,7 +113,7 @@ matches raw teacher IDs from the selected teacher/summary rows
 against Transactions (`All_att.t` is a RefList), and
 groups payments using `Transactions.datetime` in Vladivostok time; no helper
 `date` column is required. The current
-`Transactions.performance` column is a RefList to `PERFORMANCE`; single
+`Transactions.per` column is a RefList to `PERFORMANCE`; single
 Reference and legacy Int IDs also work. Include a transaction when any of its
 teacher IDs matches the selection, counting the row once even when multiple
 selected teachers match. Every transaction with
@@ -124,7 +124,36 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.63)
+## Current state (v7.64)
+
+- Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
+  actual record months) or `payroll` (manual months containing ISO weeks).
+  `widgets/salaries/periods.js` builds the period model; `payroll.js` handles
+  preferences and shared registry writes; `period-controls.js` supplies one
+  non-blocking month picker. Sprints does not load these payroll scripts.
+- Payroll reads `WeekRegistry` and `MonthRegistry` once per cache lifetime,
+  with generation guards and all sibling reads awaited. Date boundaries are
+  exclusive: weeks Monday to next Monday, months first to next first.
+  Attendance `start` maps to a VLAT week. Weekly payments use
+  `Transactions.forWeek`; monthly-only payments use `Transactions.forMonth`.
+  A payment with both links, neither, or invalid links goes to Needs review.
+  Every payment is counted once, with its original cash date and signed amount.
+- `WeekRegistry.forMonth` is an editable `Ref:MonthRegistry` (added empty).
+  It is the only authority for a week's parent month, including crossing weeks;
+  never infer or backfill it from a payment date. The assignment is shared for
+  everyone using that week. The picker writes raw IDs to WeekRegistry only,
+  fresh-reads metadata/value, rejects stale selections and newer assignments
+  during history replay, and preserves real API errors. Empty links show under
+  Unassigned month; monthly items show under the assigned month's Monthly items.
+- Payroll parents aggregate children without duplicate row tables. Collapsed
+  periods render no row DOM; collapse preferences have a separate saved set so
+  delayed automatic calendar grouping cannot erase them. Date edits, paste,
+  and history reveal the selected row's destination week and month. Footers
+  inherit raw selected teacher IDs and the existing week start; payment-only
+  weeks require the first work record from Attendance/Calendar. Staff office
+  hours use ordinary Attendance wages. `tests/salaries-periods.test.js` adds
+  16 checks for grouping, links, lazy rows, registry edits/history, failures,
+  races, work editing/creation, and saved settings.
 
 - Attendance datetime is renamed to start (same column reference). End is an
   editable DateTime:Asia/Vladivostok data column, initialized to start + 1 hour

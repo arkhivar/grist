@@ -1,6 +1,7 @@
 // Salary payments are read from Transactions and matched by the raw teacher
 // reference ID. Linked summary group lists select original All_att class rows.
 let salaryPaymentsByMonth = new Map();
+let salaryAllPayments = [];
 let salaryPaymentsLoaded = false;
 let salaryPaymentRequest = 0;
 let salaryClassColumnsRequest = 0;
@@ -37,7 +38,7 @@ function salaryAddPaymentGroups(groups) {
 
 function salaryGroupTotalsHtml(group, displayCols) {
   const wage = sumColumn(group.records, 'wage');
-  const payments = salaryPaymentRowsFor(group.key);
+  const payments = Array.isArray(group.payments) ? group.payments : salaryPaymentRowsFor(group.key);
   const received = payments.reduce((total, row) =>
     total + (Number.isFinite(row.amount) ? row.amount : 0), 0);
   const wageLabel = wage == null ? '—' : salaryAmount(wage);
@@ -68,8 +69,8 @@ function salaryColumnLabel(col) {
   return col;
 }
 
-function salaryPaymentRowsHtml(cols, key) {
-  const payments = salaryPaymentRowsFor(key);
+function salaryPaymentRowsHtml(cols, key, group = null) {
+  const payments = group?.payments || salaryPaymentRowsFor(key);
   const teacherColumn = salaryTeacherColumn(columnTypes);
   const groupedDateColumn = parseGroupBy(groupBy).col;
   const dateColumn = dateTimeStartColumn(cols)
@@ -200,6 +201,7 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
   const request = ++salaryClassColumnsRequest;
   ++salaryPaymentRequest;
   salaryPaymentsByMonth = new Map();
+  salaryAllPayments = [];
   salaryPaymentsLoaded = false;
   salarySelectedTeacherIds = new Set();
   salaryPaymentStatus.textContent = selectedRecords.length ? 'Loading classes…' : 'No teacher selected';
@@ -292,6 +294,7 @@ async function salaryRefreshPayments(alreadyRendered = false) {
   const request = ++salaryPaymentRequest;
   const classIds = new Set(allRecords.map(record => Number(record.id)));
   salaryPaymentsByMonth = new Map();
+  salaryAllPayments = [];
   salaryPaymentsLoaded = false;
   salaryRefreshButton.disabled = true;
   const hasSelection = classIds.size || salarySelectedTeacherIds.size;
@@ -306,14 +309,21 @@ async function salaryRefreshPayments(alreadyRendered = false) {
   try {
     await getWritableColumnIds();
     const teacherIds = new Set(salarySelectedTeacherIds);
-    const [classes, expenses] = await Promise.all([
+    const payroll = typeof salaryPayrollActive === 'function' && salaryPayrollActive();
+    const results = await Promise.allSettled([
       teacherIds.size ? null : grist.docApi.fetchTable(selectedTableId),
       grist.docApi.fetchTable(WIDGET_CONFIG.expensesTableId),
+      payroll ? salaryLoadPeriodRegistries() : null,
     ]);
     if (request !== salaryPaymentRequest) return;
+    const failure = results.find(result => result.status === 'rejected');
+    if (failure) throw failure.reason;
+    const [classes, expenses] = results.map(result => result.value);
     const expenseTeacherColumn = salaryRequireTeacherColumn(expenses, WIDGET_CONFIG.expensesTableId);
     if (!Array.isArray(expenses.id) || !Array.isArray(expenses.datetime) || !Array.isArray(expenses.amount))
       throw new Error(`${WIDGET_CONFIG.expensesTableId} must have datetime and amount columns`);
+    if (payroll && (!Array.isArray(expenses.forWeek) || !Array.isArray(expenses.forMonth)))
+      throw new Error(`${WIDGET_CONFIG.expensesTableId} must have forWeek and forMonth Reference columns for payroll periods`);
 
     if (!teacherIds.size) {
       const classTeacherColumn = salaryRequireTeacherColumn(classes, selectedTableId);
@@ -325,8 +335,10 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     }
     if (!teacherIds.size)
       throw new Error(`No Performance reference found in the selected ${selectedTableId} classes`);
+    salarySelectedTeacherIds = teacherIds;
 
     const months = new Map();
+    const payments = [];
     expenses.id.forEach((id, index) => {
       const performanceIds = salaryReferenceIds(expenses[expenseTeacherColumn][index]);
       if (!performanceIds.some(teacherId => teacherIds.has(teacherId))) return;
@@ -335,18 +347,21 @@ async function salaryRefreshPayments(alreadyRendered = false) {
         : String(bucketStartMs(dateTimeWallDate(sec).getTime() / 1000, 'month'));
       const row = {
         id, sec, performanceIds,
+        weekRef: expenses.forWeek?.[index], monthRef: expenses.forMonth?.[index],
         dateLabel: sec == null ? '—' : formatDateTimeSec(sec),
         notes: Array.isArray(expenses.notes) && expenses.notes[index] != null
           ? String(expenses.notes[index]) : '',
         amount: expenses.amount[index] == null || expenses.amount[index] === ''
           ? null : Number(expenses.amount[index]),
       };
+      payments.push(row);
       if (!months.has(key)) months.set(key, []);
       months.get(key).push(row);
     });
     months.forEach(rows => rows.sort((a, b) => (b.sec ?? -Infinity) - (a.sec ?? -Infinity)
       || Number(b.id) - Number(a.id)));
     salaryPaymentsByMonth = months;
+    salaryAllPayments = payments;
     salaryPaymentsLoaded = true;
     const presentIds = new Set([...months.values()].flat().map(row => String(row.id)));
     selectedSalaryExpenseIds.forEach(id => {
@@ -368,4 +383,7 @@ async function salaryRefreshPayments(alreadyRendered = false) {
   }
 }
 
-salaryRefreshButton.addEventListener('click', () => salaryRefreshPayments());
+salaryRefreshButton.addEventListener('click', () => {
+  if (typeof salaryInvalidatePeriodRegistries === 'function') salaryInvalidatePeriodRegistries();
+  salaryRefreshPayments();
+});

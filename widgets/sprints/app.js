@@ -758,9 +758,9 @@
       const placements = [];
       const stripColumns = new Map([...columnStrip.querySelectorAll('thead th[data-column]')]
         .map(cell => [cell.dataset.column, cell]));
-      content.querySelectorAll('.group').forEach(card => {
+      content.querySelectorAll('.group, .salary-month').forEach(card => {
         const headerRect = card.querySelector('.group-header').getBoundingClientRect();
-        card.querySelectorAll('.group-sum').forEach(sum => {
+        card.querySelector('.group-header').querySelectorAll('.group-sum').forEach(sum => {
           const cell = stripColumns.get(sum.dataset.column);
           if (!cell) return;
           const rect = cell.getBoundingClientRect();
@@ -1115,6 +1115,8 @@
         }
       }
     }
+    const salaryViewChanged = typeof salaryApplyPeriodOptions === 'function'
+      && salaryApplyPeriodOptions(opts);
     optionsLoaded = true;
     migrateStartColumnOptions();
     if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
@@ -1134,6 +1136,7 @@
     refreshEditableColumnsSection();
     refreshDiag();
     render();
+    if (salaryViewChanged) salaryRefreshPayments(true);
   });
 
   function applyIncomingRecords(records, refreshSalaryPayments = true) {
@@ -1173,6 +1176,7 @@
   grist.onRecords((records) => {
     if (typeof salaryLoadClassColumns === 'function') {
       const sameSelection = salaryIsSameClassSelection(records || []);
+      if (!sameSelection && typeof salaryClosePeriodEditor === 'function') salaryClosePeriodEditor();
       salaryLoadClassColumns(records || [], expanded => applyIncomingRecords(expanded));
       // A refresh of the same linked classes must not discard an inline draft.
       // A new selection clears immediately while its class records are loading.
@@ -1339,7 +1343,7 @@
   function syncGroupToggle() {
     const button = columnStrip.querySelector('#btn-toggle-groups');
     if (!button) return;
-    const cards = [...content.querySelectorAll('.group')];
+    const cards = [...content.querySelectorAll('.group, .salary-month')];
     const allCollapsed = cards.length > 0 && cards.every(card => card.classList.contains('collapsed'));
     const label = allCollapsed ? T.expandAll : T.collapseAll;
     button.disabled = cards.length === 0;
@@ -1351,11 +1355,19 @@
   columnStrip.addEventListener('click', (event) => {
     const button = event.target.closest('#btn-toggle-groups');
     if (!button || !columnStrip.contains(button)) return;
-    const cards = [...content.querySelectorAll('.group')];
+    const cards = [...content.querySelectorAll('.group, .salary-month')];
     if (!cards.length) return;
     const expand = cards.every(card => card.classList.contains('collapsed'));
     if (expand) collapsed.clear();
-    else getGroups().forEach(group => collapsed.add(group.key));
+    else getGroups().forEach(group => {
+      collapsed.add(group.key);
+      group.children?.forEach(child => collapsed.add(child.key));
+    });
+    if (typeof salaryPayrollActive === 'function' && salaryPayrollActive()) {
+      salarySavePayrollCollapse();
+      render();
+      return;
+    }
     cards.forEach(card => {
       card.classList.toggle('collapsed', !expand);
       card.querySelector('.group-header').setAttribute('aria-expanded', String(expand));
@@ -1367,6 +1379,17 @@
   // ── 13. Grouping ────────────────────────────────────────
   function getGroups() {
     if (!groupBy) return [];
+    if (typeof salaryPayrollActive === 'function' && salaryPayrollActive()) {
+      if (salaryPeriodRegistryStatus !== 'ready') return [];
+      const parents = salaryBuildPayrollGroups(allRecords, salaryAllPayments);
+      salaryPreparePayrollGroups(parents);
+      sortGroupRows(parents.flatMap(parent => parent.children));
+      if (sortMode === 'alpha-asc') parents.sort((a, b) =>
+        a.sortKey == null ? 1 : b.sortKey == null ? -1 : a.sortKey - b.sortKey);
+      if (sortMode === 'count-desc') parents.sort((a, b) => b.records.length - a.records.length);
+      if (sortMode === 'count-asc') parents.sort((a, b) => a.records.length - b.records.length);
+      return parents;
+    }
     const { col, granularity } = parseGroupBy(groupBy);
     // Granularity active only if the column is still date-like
     const dateMode = !!granularity && allColumns.includes(col)
@@ -1425,6 +1448,64 @@
     return groups;
   }
 
+  function renderGroupCard(group, displayCols) {
+    const payroll = typeof salaryPayrollActive === 'function' && salaryPayrollActive();
+    const parent = Array.isArray(group.children);
+    const isCollapsed = collapsed.has(group.key);
+    const isEmpty = group.key === '\x00__empty__';
+    const label = isEmpty ? T.emptyGroup : String(group.label);
+    const bodyId = 'grp-' + btoa(encodeURIComponent(group.key)).replace(/[^a-zA-Z0-9]/g, '');
+    const card = document.createElement('article');
+    card.className = (parent ? 'salary-month' : 'group') + (isCollapsed ? ' collapsed' : '');
+    card.dataset.animationKey = bodyId;
+    card.dataset.groupKey = group.key;
+    card.dataset.groupLabel = label;
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'group-header';
+    header.setAttribute('aria-expanded', String(!isCollapsed));
+    header.setAttribute('aria-controls', bodyId);
+    header.innerHTML = `${groupChevronHtml()}`
+      + `<span class="group-label${isEmpty ? ' is-empty' : ''}">${esc(label)}</span>`
+      + `<span class="group-badge" aria-label="${group.records.length}\u00a0${esc(payroll
+        ? group.records.length === 1 ? 'work record' : 'work records'
+        : group.records.length === 1 ? T.record : T.records)}">${group.records.length}</span>`
+      + (typeof salaryGroupTotalsHtml === 'function'
+        ? salaryGroupTotalsHtml(group, displayCols) : buildGroupSums(group.records, displayCols));
+    const body = document.createElement('div');
+    body.className = parent ? 'salary-month-body' : 'group-body';
+    body.id = bodyId;
+    body.setAttribute('role', 'region');
+    body.setAttribute('aria-label', T.ariaGroupRegion + label);
+    header.addEventListener('click', () => {
+      if (collapsed.has(group.key)) collapsed.delete(group.key);
+      else collapsed.add(group.key);
+      if (payroll) {
+        salarySavePayrollCollapse();
+        render();
+      } else {
+        card.classList.toggle('collapsed', collapsed.has(group.key));
+        header.setAttribute('aria-expanded', String(!collapsed.has(group.key)));
+        refreshCellRange();
+        syncGroupToggle();
+      }
+    });
+    card.appendChild(payroll ? salaryPeriodHeading(group, header) : header);
+    // Payroll rows are created only for expanded periods. Parent totals use
+    // the model, without rendering another copy of the children's records.
+    if (!payroll || !isCollapsed) {
+      if (parent) group.children.forEach(child => body.appendChild(renderGroupCard(child, displayCols)));
+      else {
+        const inner = document.createElement('div');
+        inner.className = 'group-body-inner';
+        inner.innerHTML = buildTable(displayCols, group);
+        body.appendChild(inner);
+      }
+    }
+    card.appendChild(body);
+    return card;
+  }
+
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
     automaticColumnWidths.clear();
@@ -1452,6 +1533,21 @@
 
     const hasSalaryPayments = typeof salaryPaymentsLoaded !== 'undefined'
       && salaryPaymentsLoaded && salaryPaymentsByMonth.size > 0;
+    if (typeof salaryPayrollActive === 'function' && salaryPayrollActive()
+        && salaryPeriodRegistryStatus !== 'ready'
+        && (allRecords.length || salarySelectedTeacherIds.size)) {
+      if (inlineInput) cellEditorDialog.insertBefore(inlineInput, cellEditorDateTimePanel);
+      emptyState.style.display = '';
+      emptyState.querySelector('.empty-title').textContent = salaryPeriodRegistryStatus === 'error'
+        ? 'Salary periods unavailable' : 'Loading salary periods…';
+      emptyState.querySelector('.empty-sub').textContent = salaryPeriodRegistryError
+        || 'Loading MonthRegistry and WeekRegistry';
+      columnStrip.hidden = true;
+      columnStrip.replaceChildren();
+      columnScrollbar.hidden = true;
+      if (typeof salaryReanchorPeriodEditor === 'function') salaryReanchorPeriodEditor();
+      return;
+    }
     if (!groupBy || (allRecords.length === 0 && !hasSalaryPayments)) {
       if (inlineInput) {
         cellEditorDialog.insertBefore(inlineInput, cellEditorDateTimePanel);
@@ -1481,6 +1577,7 @@
       columnScrollbar.hidden = true;
       if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
       reanchorDateTimeEditor();
+      if (typeof salaryReanchorPeriodEditor === 'function') salaryReanchorPeriodEditor();
       return;
     }
 
@@ -1494,63 +1591,12 @@
     statsbar.classList.add('visible');
     statGroups.textContent  = groups.length;
     statRecords.textContent = allRecords.length;
+    if (typeof salaryPayrollActive === 'function') {
+      statRecords.parentElement.lastChild.textContent = salaryPayrollActive() ? '\u00a0work records' : '\u00a0classes';
+      salarySyncPeriodControls();
+    }
 
-    groups.forEach(group => {
-      const isCollapsed = collapsed.has(group.key);
-      const isEmpty     = group.key === '\x00__empty__';
-      const labelTxt    = isEmpty ? T.emptyGroup : esc(String(group.label));
-      const labelCls    = isEmpty ? 'group-label is-empty' : 'group-label';
-      const bodyId      = 'grp-' + btoa(encodeURIComponent(group.key)).replace(/[^a-zA-Z0-9]/g, '');
-
-      const card = document.createElement('article');
-      card.className = 'group' + (isCollapsed ? ' collapsed' : '');
-      card.dataset.animationKey = bodyId;
-      card.dataset.groupKey = group.key;
-      card.dataset.groupLabel = isEmpty ? T.emptyGroup : String(group.label);
-
-      const header = document.createElement('button');
-      header.type = 'button';
-      header.className = 'group-header';
-      header.setAttribute('aria-expanded', String(!isCollapsed));
-      header.setAttribute('aria-controls', bodyId);
-      header.innerHTML = `
-        ${groupChevronHtml()}
-        <span class="${labelCls}">${labelTxt}</span>
-        <span class="group-badge"
-              aria-label="${group.records.length}\u00a0${group.records.length === 1 ? T.record : T.records}"
-        >${group.records.length}</span>
-        ${typeof salaryGroupTotalsHtml === 'function'
-          ? salaryGroupTotalsHtml(group, displayCols) : buildGroupSums(group.records, displayCols)}`;
-
-      header.addEventListener('click', () => {
-        if (collapsed.has(group.key)) {
-          collapsed.delete(group.key);
-          card.classList.remove('collapsed');
-          header.setAttribute('aria-expanded', 'true');
-        } else {
-          collapsed.add(group.key);
-          card.classList.add('collapsed');
-          header.setAttribute('aria-expanded', 'false');
-        }
-        refreshCellRange();
-        syncGroupToggle();
-      });
-
-      const body = document.createElement('div');
-      body.className = 'group-body';
-      body.id = bodyId;
-      body.setAttribute('role', 'region');
-      body.setAttribute('aria-label', T.ariaGroupRegion + labelTxt);
-
-      const inner = document.createElement('div');
-      inner.className = 'group-body-inner';
-      inner.innerHTML = buildTable(displayCols, group);
-
-      body.appendChild(inner);
-      card.appendChild(header);
-      card.appendChild(body);
-      content.appendChild(card);
-    });
+    groups.forEach(group => content.appendChild(renderGroupCard(group, displayCols)));
     syncGroupToggle();
     syncColumnScrollbarWidth();
     groupedApp.querySelectorAll('.scroll-inner').forEach(scroller => {
@@ -1581,6 +1627,7 @@
     refreshBoolSection();
     if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
     reanchorDateTimeEditor();
+    if (typeof salaryReanchorPeriodEditor === 'function') salaryReanchorPeriodEditor();
   }
 
   function gripIconHtml() {
@@ -1634,7 +1681,7 @@
       + `${cols.map(c => renderTableCell(rec, c)).join('')}`
       + `<td class="row-actions">${rowActionsHtml(rec)}</td></tr>`;
     }).join('') + (typeof salaryPaymentRowsHtml === 'function'
-      ? salaryPaymentRowsHtml(cols, group.key) : '');
+      ? salaryPaymentRowsHtml(cols, group.key, group) : '');
     return `<div class="scroll-inner" tabindex="0"><table class="rec-table"`
       + ` style="width:${getTableWidth(cols)}px">`
       + `${buildColGroup(cols)}
@@ -1925,6 +1972,8 @@
   }
 
   function prepareGroupingCellChanges(changes, defaultCol) {
+    if (typeof salaryPayrollActive === 'function' && salaryPayrollActive())
+      return salaryRevealChangedPayrollRows(changes, defaultCol);
     const col = parseGroupBy(groupBy).col;
     if (!isEditableGroupingColumn(col)) return false;
     const key = value => value == null || value === '' ? '\x00__empty__' : String(value);
@@ -1963,6 +2012,20 @@
     const destination = isUndo ? cellRedoStack : cellUndoStack;
     const entry = source[source.length - 1];
     if (!entry) return;
+    if (entry.kind === 'salary-week-month' && typeof salaryWriteWeekMonth === 'function') {
+      cellHistoryBusy = true;
+      updateCellHistoryControls();
+      try {
+        await salaryWriteWeekMonth(entry.weekId, isUndo ? entry.before : entry.after,
+          isUndo ? entry.after : entry.before, salaryClassSelectionKey);
+        source.pop();
+        destination.push(entry);
+        salarySavePayrollCollapse();
+        render();
+      } catch (error) { showToast(actionErrorMessage(isUndo ? T.undo : T.redo, error)); }
+      finally { cellHistoryBusy = false; updateCellHistoryControls(); }
+      return;
+    }
     if (entry.kind === 'create') {
       cellHistoryBusy = true;
       updateCellHistoryControls();
@@ -2120,6 +2183,7 @@
 
   function visibleCellRows() {
     return [...content.querySelectorAll('.group:not(.collapsed) tbody tr')]
+      .filter(row => !row.closest('.collapsed'))
       .map(row => [...row.querySelectorAll('td.data-cell')]).filter(row => row.length);
   }
 
@@ -3172,6 +3236,10 @@
   }
 
   function getAddRowContext(group) {
+    if (typeof salaryPayrollAddContext === 'function') {
+      const payroll = salaryPayrollAddContext(group);
+      if (payroll) return payroll;
+    }
     const { col } = parseGroupBy(groupBy);
     const type = columnBaseType(writableColumnTypes[col] || columnTypes[col]);
     let reason = '';
@@ -3197,6 +3265,7 @@
 
   async function getNewRowFields(context, group) {
     const fields = { [context.col]: context.value };
+    if (typeof salaryPayrollNewRowFields === 'function') Object.assign(fields, salaryPayrollNewRowFields());
     // The outer student selection is applied by Grist before onRecords.
     // Inherit only this known parent field, never unrelated common values.
     const studentCols = allColumns.filter(col => /^(students?|students?_name)$/i.test(col));
@@ -3215,7 +3284,9 @@
       : await grist.viewApi.fetchSelectedRecord(Number(sample.id), {
         cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
       });
-    if (allRecords !== records || parseGroupBy(groupBy).col !== context.col)
+    const currentGrouping = typeof salaryPayrollActive === 'function' && salaryPayrollActive()
+      ? dateTimeStartColumn(allColumns) : parseGroupBy(groupBy).col;
+    if (allRecords !== records || currentGrouping !== context.col)
       throw new Error('The selected student or grouping changed. Please click + again.');
     if (!raw || !Object.prototype.hasOwnProperty.call(raw, studentCol))
       throw new Error(`Cannot read the stored student value from "${studentCol}".`);
@@ -3231,7 +3302,8 @@
     button.classList.add('saving');
     try {
       await getWritableColumnIds();
-      const group = getGroups().find(candidate => candidate.key === groupKey);
+      const group = getGroups().flatMap(parent => parent.children || [parent])
+        .find(candidate => candidate.key === groupKey);
       if (!group) throw new Error('The destination group is no longer available');
       const context = getAddRowContext(group);
       if (!context.enabled) throw new Error(context.reason);
