@@ -35,6 +35,7 @@ async function fixture(widget, presentation = false) {
   attendance.date = attendance.datetime.map(sec => Math.floor((sec + 36000) / 86400) * 86400);
   attendance.count = [-1425, 3000, 0];
   if (presentation) {
+    attendance.date.fill(Date.parse('2026-11-01T00:00:00Z') / 1000);
     attendance.notes = [true, false, true];
     attendance.wage = [1000, 1425.1234567, 0];
   }
@@ -304,7 +305,9 @@ async function presentationChecks(widget) {
       assert.equal(win.getComputedStyle(payment.querySelector('.salary-payment-amount')).textAlign, 'right');
       assert.equal(doc.querySelector('.salary-received-sum').textContent, '25500');
       assert(payment.querySelector('.salary-payment-date').textContent.includes('2026-10-05 11:11 (Mon)'),
-        'a hidden grouping helper left the visible payment DateTime empty');
+        'a hidden date helper left the visible payment DateTime empty');
+      assert.deepEqual([...doc.querySelectorAll('.group')].map(card => card.dataset.groupLabel),
+        ['October 2026'], 'saved date helper grouping must not override the class start month');
       assert(!doc.querySelector('#column-strip th[data-column="date"]'));
     }
     assert.equal(h.calls.writes.length, 0, 'presentation changes rewrote source values');

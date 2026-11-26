@@ -6,9 +6,9 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.64">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.64">
-  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.64">
+  <link rel="stylesheet" href="shared/base.css?v=7.65">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.65">
+  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.65">
 </head>
 <body>
 <div id="app">
@@ -19,13 +19,6 @@
       <select id="salary-view-select" aria-label="Salary grouping view">
         <option value="calendar">Calendar months</option>
         <option value="payroll">Months &amp; weeks</option>
-      </select>
-    </div>
-    <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
-    <div class="toolbar-group">
-      <label for="group-select">Group by</label>
-      <select id="group-select">
-        <option value="">— choose —</option>
       </select>
     </div>
     <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
@@ -164,8 +157,8 @@
         <rect x="3" y="3" width="18" height="18" rx="2.5"/>
         <path d="M3 9h18M9 21V9"/>
       </svg>
-      <p class="empty-title">No column selected</p>
-      <p class="empty-sub">Choose a column in the toolbar above<br>to group records.</p>
+      <p class="empty-title">Loading salary records…</p>
+      <p class="empty-sub">Select a teacher in the linked Grist section.</p>
     </div>
   </main>
 
@@ -260,16 +253,16 @@
   </footer>
 </section>
 
-<script src="widgets/salaries/config.js?v=7.64"></script>
-<script src="shared/dates.js?v=7.64"></script>
-<script src="shared/core.js?v=7.64"></script>
-<script src="widgets/salaries/attendance.js?v=7.64"></script>
-<script src="shared/references.js?v=7.64"></script>
-<script src="widgets/salaries/expenses.js?v=7.64"></script>
-<script src="widgets/salaries/periods.js?v=7.64"></script>
-<script src="widgets/salaries/payroll.js?v=7.64"></script>
-<script src="widgets/salaries/period-controls.js?v=7.64"></script>
-  <script src="widgets/sprints/app.js?v=7.64"></script>
-  <script src="widgets/sprints/actions.js?v=7.64"></script>
+<script src="widgets/salaries/config.js?v=7.65"></script>
+<script src="shared/dates.js?v=7.65"></script>
+<script src="shared/core.js?v=7.65"></script>
+<script src="widgets/salaries/attendance.js?v=7.65"></script>
+<script src="shared/references.js?v=7.65"></script>
+<script src="widgets/salaries/expenses.js?v=7.65"></script>
+<script src="widgets/salaries/periods.js?v=7.65"></script>
+<script src="widgets/salaries/payroll.js?v=7.65"></script>
+<script src="widgets/salaries/period-controls.js?v=7.65"></script>
+  <script src="widgets/sprints/app.js?v=7.65"></script>
+  <script src="widgets/sprints/actions.js?v=7.65"></script>
 </body>
 </html>

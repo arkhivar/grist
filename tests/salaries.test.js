@@ -234,9 +234,9 @@ async function main() {
   columnsButton.click();
   assert(columnsPanel.hidden, 'salary column control did not close');
   assert.equal(calls.ready[0].requiredAccess, 'full');
-  assert(calls.options.some(([key, value]) => key === 'groupBy' && value === 'datetime::month'));
-  assert.equal(doc.getElementById('group-select').value, 'datetime::month');
-  assert.deepEqual([...doc.querySelectorAll('#group-select option')].map(option => option.value), ['', 'datetime::month']);
+  assert(!calls.options.some(([key]) => key === 'groupBy'), 'fixed grouping must not be saved as a section option');
+  assert.equal(doc.querySelector('#group-select, label[for="group-select"]'), null,
+    'Salaries should have no grouping control');
   assert.equal(cards().length, 3);
   assert.equal(cards()[0].dataset.groupLabel, 'July 2026');
   const augustHeader = month('August 2026').querySelector('.group-header');
@@ -623,11 +623,9 @@ async function main() {
   await waitFor(() => cards().length === 0);
   assert(doc.querySelector('.empty-title').textContent.includes('No classes'));
 
-  // A typed DateTime column remains selectable when this teacher has no dates yet.
+  // An undated class remains visible under the fixed calendar grouping.
   onRecords([{ id: 93, group: ['L', 4], performance: 'VP' }]);
-  await waitFor(() => cards().some(card => card.dataset.groupLabel === '(empty)'));
-  assert.equal(doc.getElementById('group-select').value, 'datetime::month');
-  assert(cards().some(card => card.dataset.groupLabel === '(empty)'));
+  await waitFor(() => month('(empty)')?.querySelector('tr[data-record-id="4"]'));
 
   summary.group[3] = ['L'];
   onRecords([{ id: 94, group: ['L'], performance: 'VP' }]);

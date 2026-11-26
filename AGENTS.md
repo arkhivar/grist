@@ -124,10 +124,12 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.64)
+## Current state (v7.65)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   actual record months) or `payroll` (manual months containing ISO weeks).
+  Calendar groups classes by `start` (legacy `datetime`) and payments by
+  `Transactions.datetime`. Salaries derives the grouping and ignores saved `groupBy`.
   `widgets/salaries/periods.js` builds the period model; `payroll.js` handles
   preferences and shared registry writes; `period-controls.js` supplies one
   non-blocking month picker. Sprints does not load these payroll scripts.
@@ -175,9 +177,10 @@ payments.
   Transactions.datetime unchanged.
 - Shared dateTimeStartColumn() accepts legacy datetime and start (exact then
   case-insensitive, legacy priority when both exist). Both grouped widgets
-  migrate saved date grouping, row sorting, order, widths, visibility, and
-  editing preferences after a rename. Keep unavailable saved order slots until
-  metadata can identify renamed fields. Filters migrates saved date conditions.
+  migrate saved row sorting, order, widths, visibility, and editing preferences
+  after a rename. Sprints also migrates saved date grouping. Keep unavailable
+  saved order slots until metadata can identify renamed fields. Filters migrates
+  saved date conditions.
   Transactions.datetime stays unchanged and payment rows appear under start.
   tests/start-columns.test.js covers defaults, delayed metadata, migration,
   ledger dates, and editable start/end picker writes in both widgets.

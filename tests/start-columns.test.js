@@ -32,6 +32,7 @@ function fixture(widget, { dateColumn = 'start', both = false, extraStart = fals
     id: [11, 12, 13],
     [dateColumn]: ['2026-09-01T01:00:00Z', '2026-09-03T01:00:00Z', '2026-09-02T01:00:00Z'].map(sec),
     end: ['2026-09-01T02:00:00Z', '2026-09-03T02:00:00Z', '2026-09-02T02:00:00Z'].map(sec),
+    Created_at: Array(3).fill(sec('2026-10-01T01:00:00Z')),
     per: [['L', 7], ['L', 7], ['L', 7]],
     notes: ['Oldest', 'Newest', 'Middle'], wage: [100, 200, 300],
     sprint: ['Sprint 01', 'Sprint 01', 'Sprint 01'],
@@ -42,7 +43,7 @@ function fixture(widget, { dateColumn = 'start', both = false, extraStart = fals
     datetime: [sec('2026-09-04T00:00:00Z')], amount: [50], notes: ['Salary payment'] };
   const calls = { options: [], writes: [], metadata: 0 };
   const fields = Object.keys(attendance).filter(col => col !== 'id');
-  const types = fields.map(col => [dateColumn, 'datetime', 'Start', 'end'].includes(col)
+  const types = fields.map(col => [dateColumn, 'datetime', 'Start', 'end', 'Created_at'].includes(col)
     ? 'DateTime:Asia/Vladivostok' : col === 'per' ? 'RefList:PERFORMANCE'
       : col === 'wage' ? 'Numeric' : 'Text');
   let onOptions;
@@ -147,7 +148,8 @@ async function main() {
         assert(h.cell('start').querySelector('.cell-edit-btn'));
         assert(h.cell('end').querySelector('.cell-edit-btn'), 'end must use the normal DateTime picker');
         if (widget === 'salaries') {
-          assert.equal(h.doc.getElementById('group-select').value, 'start::month');
+          assert.deepEqual([...h.doc.querySelectorAll('.group')].map(card => card.dataset.groupLabel),
+            ['September 2026']);
           const date = h.doc.querySelector('.salary-payment-date');
           assert(date.textContent.includes('2026-09-04 10:00 (Fri)'));
           const payment = date.parentElement;
@@ -162,7 +164,8 @@ async function main() {
 
     for (const recordsFirst of [false, true]) {
       await test(`${widget}: saved datetime preferences migrate to start with ${recordsFirst ? 'records' : 'options'} first`, () => {
-        const options = { groupBy: 'datetime::month', rowSort: JSON.stringify({ column: 'datetime', direction: 'asc' }),
+        const options = { groupBy: widget === 'salaries' ? 'Created_at::month' : 'datetime::month',
+          rowSort: JSON.stringify({ column: 'datetime', direction: 'asc' }),
           columnOrder: JSON.stringify(['notes', 'datetime', 'wage', 'end']),
           columnWidths: { datetime: 246, notes: 120 },
           columnVisibility: { datetime: false }, editableColumns: JSON.stringify(['notes', 'datetime']) };
@@ -171,7 +174,13 @@ async function main() {
           h.releaseMetadata();
           await h.loaded();
           const saved = h.state();
-          assert.equal(saved.groupBy, 'start::month');
+          if (widget === 'salaries') {
+            assert.deepEqual([...h.doc.querySelectorAll('.group')].map(card => card.dataset.groupLabel),
+              ['September 2026'], 'saved Created_at grouping must not override the class start month');
+            assert(!h.calls.options.some(([key]) => key === 'groupBy'));
+          } else {
+            assert.equal(saved.groupBy, 'start::month');
+          }
           assert.deepEqual(saved.rowSort, { column: 'start', direction: 'asc' });
           assert.deepEqual(h.order(), [11, 13, 12]);
           assert.deepEqual(saved.order.filter(col => ['notes', 'start', 'wage', 'end', 'datetime'].includes(col)),

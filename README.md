@@ -104,8 +104,8 @@ match it. Every teacher-tagged transaction counts as salary received, including
 Payments stay read-only; use **Refresh payments** after editing Transactions.
 Payment rows show `Transactions.notes` in the shared notes column even when
 Attendance notes use checkboxes. Long notes are clipped to the column width;
-hover to read the complete text. Payment dates use the visible `start` (legacy `datetime`)
-column when a hidden date helper supplies monthly grouping.
+hover to read the complete text. The visible `start` (legacy `datetime`) column
+shows the transaction date on payment rows.
 The default column order is `start` (legacy `datetime`), `per`, `student`, `notes`, `wage`,
 `paid`, `count`, `sprint`, `attach_payment`, followed by other available fields. Older documents
 with `students` use the same position. `per` labels the current `t` or legacy
@@ -123,9 +123,10 @@ monthly groups are derived from `start` (legacy `datetime`), so no helper `date`
 
 ### Weekly payroll and monthly bonuses
 
-Salaries starts in **View → Calendar months**, grouping by the actual record
-date. Choose **Months & weeks** for payroll periods. Both views use the same
-class/office-hour `wage`, `count`, and read-only transaction `paid` columns.
+Salaries starts in **View → Calendar months**, grouping classes by `start`
+and payments by `Transactions.datetime`. Choose **Months & weeks** for payroll
+periods. Both views use the same class/office-hour `wage`, `count`, and read-only
+transaction `paid` columns.
 Office work can be logged in Attendance with `start`, `end`, the staff member
 in `t`, and a wage, just like lessons.
 
@@ -531,8 +532,8 @@ every non-empty value must match the ISO pattern, parse successfully, and fall
 in the 1980 → 2100 range. Values without a timezone designator are interpreted
 as UTC (`YYYY-MM-DD HH:mm` is normalized to `YYYY-MM-DDTHH:mmZ` before parsing).
 
-Date-like columns (numeric or ISO text) get three extra granularities in the
-**Group by** dropdown, in addition to the plain exact-value option:
+In Sprints, date-like columns (numeric or ISO text) get three extra
+granularities in the **Group by** dropdown, in addition to the plain exact-value option:
 
 - `Column — by day` → one group per calendar day (label e.g. *7 Apr 2025*)
 - `Column — by month` → one group per month (label e.g. *April 2025*)

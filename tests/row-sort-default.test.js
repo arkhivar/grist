@@ -121,8 +121,9 @@ async function main() {
         assert.equal(h.doc.getElementById('row-sort-direction').value, 'desc');
         assert.equal(h.doc.getElementById('row-sort-direction').selectedOptions[0].textContent, 'Newest first');
         assert.equal(h.doc.getElementById('sort-select').value, 'alpha-asc', 'row sorting must not change group sorting');
-        assert.equal(h.doc.getElementById('group-select').value,
-          widget === 'salaries' ? 'datetime::month' : 'sprint', 'grouping must remain independent');
+        const group = h.doc.querySelector('.group').dataset.groupLabel;
+        assert.equal(group, widget === 'salaries' ? 'September 2026' : 'Sprint 01',
+          'grouping must remain independent of row sorting');
         assert.equal(h.sorts().length, 1);
         h.records();
         h.options({ sortMode: 'alpha-asc' });

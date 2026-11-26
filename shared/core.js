@@ -93,20 +93,19 @@
       boolLabels: ['✓ / ✗', 'Yes / No', 'True / False', '● badge', '1 / 0'],
   };
   if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
-    T.groupBy = 'Month from';
     T.groups = 'months';
     T.records = 'classes';
     T.record = 'class';
     T.ariaContent = 'Monthly classes';
     T.ariaGroupRegion = 'Classes — ';
-    T.emptyTitle = 'No date column selected';
-    T.emptySub = 'Choose a date column to group classes by month.';
+    T.emptyTitle = 'Loading salary records…';
+    T.emptySub = 'Select a teacher in the linked Grist section.';
     T.emptyTitleNoRec = 'No classes for this selection';
     T.emptySubNoRec = 'Select a teacher in the linked Grist section.';
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.64';
+  const WIDGET_VERSION = '7.65';
   const sharedNumberFormatter = new Intl.NumberFormat(LOCALE, {
     useGrouping: false, maximumSignificantDigits: 15,
   });
@@ -229,13 +228,15 @@
 
   // ── 5. Apply strings to the static DOM ─────────────────────
   function applyI18nToDOM() {
-    document.querySelector('label[for="group-select"]').textContent = T.groupBy;
+    if (groupSelect) {
+      document.querySelector('label[for="group-select"]').textContent = T.groupBy;
+      groupSelect.options[0].textContent = T.chooseCol;
+    }
     document.querySelector('label[for="sort-select"]').textContent  = T.sortBy;
     document.getElementById('btn-settings').setAttribute('aria-label', T.settingsLabel);
     btnColumns.setAttribute('aria-label', T.columnsLabel);
     btnColumns.title = T.columnsLabel;
     document.querySelector('.history-controls').setAttribute('aria-label', `${T.undo} / ${T.redo}`);
-    document.querySelector('#group-select option').textContent      = T.chooseCol;
     const sortOpts = document.querySelectorAll('#sort-select option');
     sortOpts[0].textContent = T.sortAlphaAsc;
     sortOpts[1].textContent = T.sortAlphaDesc;

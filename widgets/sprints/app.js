@@ -984,45 +984,36 @@
     if (!value) return false;
     const { col, granularity } = parseGroupBy(value);
     if (!allColumns.includes(col)) return false;
-    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly)
-      return granularity === 'month' && salaryDateColumn(col);
     return !granularity
       || (knownDateCols.has(col) && DATE_GRANULARITIES.includes(granularity));
   }
 
   function applyStartupGroupDefault() {
     // Options, records, and table metadata are delivered independently by Grist.
-    // Wait for all three so a saved grouping always wins and the fallback can
-    // distinguish single-value Choice columns from ChoiceList columns.
-    if (!optionsLoaded || !metadataLoaded || allColumns.length === 0) return false;
-    if (isValidGroupByOption(groupBy)) return false;
-
-    if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
-      const dateColumn = allColumns.find(col => col.toLowerCase() === 'date' && salaryDateColumn(col))
-        || (salaryDateColumn(dateTimeStartColumn(allColumns)) ? dateTimeStartColumn(allColumns) : null)
+    if (!optionsLoaded || !metadataLoaded) return;
+    if (!groupSelect) {
+      const startColumn = dateTimeStartColumn(allColumns);
+      const dateColumn = (startColumn && salaryDateColumn(startColumn) ? startColumn : null)
+        || allColumns.find(col => col.toLowerCase() === 'date' && salaryDateColumn(col))
         || allColumns.find(col => salaryDateColumn(col)
           && ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col])))
         || allColumns.find(col => salaryDateColumn(col));
-      if (!dateColumn) {
-        groupBy = '';
-        groupSelect.value = '';
-        return false;
-      }
-      groupBy = `${dateColumn}::month`;
-      collapsed.clear();
-      rebuildColumnSelect();
-      groupSelect.value = groupBy;
-      grist.setOption('groupBy', groupBy);
-      recordActionDiagnostic('Auto grouping', 'ok', `column=${dateColumn} · month`);
-      return true;
+      const nextGroupBy = dateColumn ? `${dateColumn}::month` : '';
+      if (groupBy === nextGroupBy) return;
+      groupBy = nextGroupBy;
+      if (dateColumn) recordActionDiagnostic('Auto grouping', 'ok', `column=${dateColumn} · month`);
+      return;
     }
+
+    // A valid saved Sprints grouping takes precedence over defaults.
+    if (isValidGroupByOption(groupBy)) return;
 
     // Sprint is the natural default even when Grist stores it as plain Text.
     const defaultColumn = allColumns.find(col => col === 'sprint')
       || allColumns.find(col => col.toLowerCase() === 'sprint')
       || allColumns.find(col =>
         columnBaseType(columnTypes[col] || writableColumnTypes[col]) === 'Choice');
-    if (!defaultColumn) return false;
+    if (!defaultColumn) return;
 
     groupBy = defaultColumn;
     collapsed.clear();
@@ -1031,7 +1022,6 @@
     grist.setOption('groupBy', defaultColumn);
     recordActionDiagnostic('Auto grouping', 'ok',
       `column=${defaultColumn} · type=${columnBaseType(columnTypes[defaultColumn] || writableColumnTypes[defaultColumn])}`);
-    return true;
   }
 
   grist.onOptions((opts, settings) => {
@@ -1039,7 +1029,7 @@
       ? settings.accessLevel
       : 'unknown';
     if (opts) {
-      if (opts.groupBy)  { groupBy  = opts.groupBy;  groupSelect.value = groupBy;  }
+      if (groupSelect && opts.groupBy) { groupBy = opts.groupBy; groupSelect.value = groupBy; }
       if (opts.sortMode) { sortMode = opts.sortMode; sortSelect.value  = sortMode; }
       if (Object.prototype.hasOwnProperty.call(opts, 'rowSort') && !pendingRowSortSaves) {
         rowSortConfigured = true;
@@ -1157,8 +1147,6 @@
         if (isDateLikeColumn(c)) knownDateCols.add(c);
         else knownDateCols.delete(c);
       });
-      if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly
-          && groupBy && !isValidGroupByOption(groupBy)) groupBy = '';
     }
     // Always rebuild: already-known columns stay offered
     // even when the current filter returns no records.
@@ -1192,15 +1180,10 @@
 
   // ── 12. Column selector ──────────────────────────────
   function rebuildColumnSelect() {
+    if (!groupSelect) return;
     const prev = groupSelect.value;
     groupSelect.innerHTML = `<option value="">${T.chooseCol}</option>`;
     allColumns.forEach(col => {
-      if (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.monthlyOnly) {
-        if (!salaryDateColumn(col)) return;
-        const option = new Option(`${col} — ${T.byMonth}`, `${col}::month`);
-        groupSelect.add(option);
-        return;
-      }
       const opt = document.createElement('option');
       opt.value = col; opt.textContent = col;
       groupSelect.appendChild(opt);
@@ -1220,7 +1203,7 @@
     if (target && values.includes(target)) groupSelect.value = target;
   }
 
-  groupSelect.addEventListener('change', () => {
+  groupSelect?.addEventListener('change', () => {
     groupBy = groupSelect.value;
     collapsed.clear();
     grist.setOption('groupBy', groupBy);

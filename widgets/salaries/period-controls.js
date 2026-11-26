@@ -12,10 +12,6 @@ let salaryPeriodViewChanging = false;
 function salarySyncPeriodControls() {
   salaryViewSelect.value = salaryPeriodView;
   salaryViewSelect.disabled = salaryPeriodViewChanging;
-  const grouping = document.getElementById('group-select');
-  grouping.disabled = salaryPayrollActive();
-  grouping.title = salaryPayrollActive()
-    ? 'Months and weeks follow the salary registries' : '';
   if (!salaryPayrollActive()) salaryClosePeriodEditor();
 }
 

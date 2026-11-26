@@ -126,7 +126,6 @@ async function main() {
   assert.equal(doc.getElementById('stat-records').textContent, '0');
   assert(doc.querySelector('#column-strip th[data-column="datetime"]'),
     'Attendance metadata must supply date columns before any classes have been selected');
-  assert.equal(doc.getElementById('group-select').value, 'datetime::month');
   assert.deepEqual(teacherPills(paymentOnlyMonth.querySelector('.salary-payment-row')), ['ZZ']);
   assert(paymentOnlyMonth.querySelector('.salary-payment-date').textContent.includes('2026-08-01 00:30'),
     'Transactions.datetime did not use the Vladivostok month boundary');
