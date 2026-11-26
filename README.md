@@ -15,11 +15,12 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Date-aware grouping** — Date/DateTime columns (epoch seconds **or** ISO 8601 text) can be grouped **by day, month or year**, with chronological sorting; DateTime buckets use Vladivostok calendar dates
 - **Fold / unfold** each group by clicking its header; **expand all / collapse all** in one click
 - **Group sort**: Z→A by default, or A→Z / record count ascending or descending
-- **Independent row sort**: `datetime` defaults to **Newest first** in both
-  widgets when no row sort is saved. Choose a column under **Sort rows** and its direction
-  to order records inside every group. DateTime uses Oldest/Newest first;
-  numeric fields use Lowest/Highest first. Empty values stay last, equal values
-  retain incoming order, and **Grist order** restores the original sequence.
+- **Independent row sort**: `start` (legacy `datetime`) defaults to newest first
+  when no row sort is saved. In Salaries, click a column’s right-hand sort
+  button to cycle through ascending (↑), descending (↓), and Grist order (↕).
+  It sorts class and payment rows together within each group. In Sprints,
+  choose a column and direction under **Sort rows**. Empty values stay last
+  while sorting, and equal values retain their original order.
   Preferences persist per widget section; sorting never rewrites record data.
 - **Row actions** — duplicate ⧉ and delete ✕ any record inline, always visible (two-step delete, requires **Full access**, see below)
 - **Group-footer row creation** — click **+** below any group to create a
@@ -412,8 +413,10 @@ same session Undo/Redo as other cell edits. Formula numbers have a read-only
 tooltip: edit their source fields or formula in Grist rather than overwriting
 the calculated value.
 
-Numeric cells, number editors, column labels, and group totals are right-aligned
-in both widgets. Cells and totals use the same plain number format (`1000`,
+Numeric cells, number editors, and group totals are right-aligned in both
+widgets. Salaries header labels are left-aligned, with the sort button on the
+right. Sprints numeric header labels are right-aligned. Cells and totals use
+the same plain number format (`1000`,
 `1425.5`) without thousands separators. Editing and copying use the original
 value.
 

@@ -703,15 +703,30 @@
     return true;
   }
 
-  function buildColumnFooter(col) {
+  function buildColumnHeader(col) {
     const label = typeof salaryColumnLabel === 'function' ? salaryColumnLabel(col) : col;
-    return `<th scope="col" class="column-header${isNumericDisplayColumn(col) ? ' column-number' : ''}" draggable="true" tabindex="0"`
+    const sortable = typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.sortInHeaders;
+    const direction = sortable && rowSort.column === col ? rowSort.direction : '';
+    const sortState = direction ? ` aria-sort="${direction === 'asc' ? 'ascending' : 'descending'}"` : '';
+    const headerClass = sortable ? ' column-sortable' : isNumericDisplayColumn(col) ? ' column-number' : '';
+    return `<th scope="col" class="column-header${headerClass}" tabindex="0"`
+      + (sortable ? sortState : ' draggable="true"')
       + ` title="${esc(col)} — ${esc(T.reorderColumn)}" data-column="${esc(col)}">`
-      + `<span class="column-footer-content"><span class="column-name">${esc(label)}</span>`
+      + `<span class="column-footer-content"><span class="column-name"`
+      + (sortable ? ' draggable="true"' : '') + `>${esc(label)}</span>`
+      + (sortable ? columnSortButtonHtml(label, direction) : '')
       + `</span>`
       + `<span class="column-resize-handle" draggable="false" tabindex="0"`
       + ` role="separator" aria-orientation="vertical"`
       + ` aria-label="${esc(T.resizeColumn)} ${esc(col)}"></span></th>`;
+  }
+
+  function columnSortButtonHtml(label, direction) {
+    const glyph = direction === 'asc' ? '↑' : direction === 'desc' ? '↓' : '↕';
+    const action = direction === 'desc' ? `Restore Grist row order (sorted by ${label})`
+      : `Sort ${label} ${direction === 'asc' ? 'descending' : 'ascending'}`;
+    return `<button type="button" class="column-sort-button" draggable="false"`
+      + ` title="${esc(action)}" aria-label="${esc(action)}">${glyph}</button>`;
   }
 
   function groupChevronHtml() {
@@ -730,7 +745,7 @@
       + `<th scope="col" class="col-grip"><button id="btn-toggle-groups"`
       + ` class="group-toggle-all" type="button" aria-label="${esc(T.collapseAll)}"`
       + ` title="${esc(T.collapseAll)}">${groupChevronHtml()}</button></th>`
-      + cols.map(col => buildColumnFooter(col)).join('')
+      + cols.map(col => buildColumnHeader(col)).join('')
       + `<th class="col-actions" aria-hidden="true"></th>`
       + `</tr></thead></table></div>`;
     columnScrollbar.hidden = false;
@@ -1263,6 +1278,7 @@
   }
 
   function refreshRowSortControls() {
+    if (!rowSortSelect) return;
     rowSortSelect.replaceChildren(new Option('Grist order', ''));
     allColumns.forEach(col => rowSortSelect.add(new Option(col, col)));
     if (rowSort.column && !allColumns.includes(rowSort.column)) {
@@ -1281,46 +1297,53 @@
     rowSortDirection.disabled = !rowSort.column || !allColumns.includes(rowSort.column);
   }
 
-  function changeRowSort() {
+  function changeRowSort(column, direction) {
     rowSortConfigured = true;
-    rowSort = { column: rowSortSelect.value, direction: rowSortDirection.value };
+    rowSort = { column, direction };
     // Reordering changes what lies between range endpoints: retain just the
     // active cell, rather than silently selecting a different rectangle.
     cellRangeEnd = null;
     render();
     saveRowSort();
   }
-  rowSortSelect.addEventListener('change', changeRowSort);
-  rowSortDirection.addEventListener('change', changeRowSort);
+  const changeToolbarRowSort = () => changeRowSort(rowSortSelect.value, rowSortDirection.value);
+  rowSortSelect?.addEventListener('change', changeToolbarRowSort);
+  rowSortDirection?.addEventListener('change', changeToolbarRowSort);
 
-  function sortGroupRows(groups) {
-    if (!rowSort.column || !allColumns.includes(rowSort.column)) return;
-    const type = rowSortColumnType();
+  columnStrip.addEventListener('click', event => {
+    const button = event.target.closest('.column-sort-button');
+    if (!button) return;
+    const { column } = button.closest('th').dataset;
+    if (rowSort.column !== column) changeRowSort(column, 'asc');
+    else if (rowSort.direction === 'asc') changeRowSort(column, 'desc');
+    else changeRowSort('', 'asc');
+  });
+
+  function rowSortKey(value, type) {
+    if (value == null || value === '') return null;
+    if (type === 'Date' || type === 'DateTime') {
+      const seconds = parseDateValueSec(value);
+      return Number.isFinite(seconds) ? seconds : null;
+    }
+    if (type === 'Int' || type === 'Numeric' || type === 'Bool' || typeof value === 'number') {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+    return String(value);
+  }
+
+  function sortRowsByKey(rows, keyFor) {
+    if (rows.length < 2) return rows;
     const direction = rowSort.direction === 'desc' ? -1 : 1;
-    const keyFor = value => {
-      if (value == null || value === '') return null;
-      if (type === 'Date' || type === 'DateTime') {
-        const seconds = parseDateValueSec(value);
-        return Number.isFinite(seconds) ? seconds : null;
-      }
-      if (type === 'Int' || type === 'Numeric' || type === 'Bool' || typeof value === 'number') {
-        const number = Number(value);
-        return Number.isFinite(number) ? number : null;
-      }
-      return String(value);
-    };
-    groups.forEach(group => {
-      // Parse once per row, not on every comparator call. Tie order remains
-      // the incoming Grist order in either direction; blanks always go last.
-      group.records = group.records.map((record, index) => ({ record, index, key: keyFor(record[rowSort.column]) }))
-        .sort((a, b) => {
-          if (a.key == null || b.key == null)
-            return a.key == null && b.key == null ? a.index - b.index : a.key == null ? 1 : -1;
-          const comparison = typeof a.key === 'number' && typeof b.key === 'number'
-            ? a.key - b.key : rowSortCollator.compare(String(a.key), String(b.key));
-          return comparison * direction || a.index - b.index;
-        }).map(item => item.record);
-    });
+    // Calculate each key once. Keep blanks last and preserve the original order of ties.
+    return rows.map((row, index) => ({ row, index, key: keyFor(row) }))
+      .sort((a, b) => {
+        if (a.key == null || b.key == null)
+          return a.key == null && b.key == null ? a.index - b.index : a.key == null ? 1 : -1;
+        const comparison = typeof a.key === 'number' && typeof b.key === 'number'
+          ? a.key - b.key : rowSortCollator.compare(String(a.key), String(b.key));
+        return comparison * direction || a.index - b.index;
+      }).map(item => item.row);
   }
 
   function syncGroupToggle() {
@@ -1366,7 +1389,6 @@
       if (salaryPeriodRegistryStatus !== 'ready') return [];
       const parents = salaryBuildPayrollGroups(allRecords, salaryAllPayments);
       salaryPreparePayrollGroups(parents);
-      sortGroupRows(parents.flatMap(parent => parent.children));
       if (sortMode === 'alpha-asc') parents.sort((a, b) =>
         a.sortKey == null ? 1 : b.sortKey == null ? -1 : a.sortKey - b.sortKey);
       if (sortMode === 'count-desc') parents.sort((a, b) => b.records.length - a.records.length);
@@ -1413,7 +1435,12 @@
     });
     if (typeof salaryAddPaymentGroups === 'function') salaryAddPaymentGroups(map);
     const groups = Array.from(map.values());
-    sortGroupRows(groups);
+    if (typeof salaryTableRowsHtml !== 'function' && allColumns.includes(rowSort.column)) {
+      const type = rowSortColumnType();
+      groups.forEach(group => {
+        group.records = sortRowsByKey(group.records, record => rowSortKey(record[rowSort.column], type));
+      });
+    }
     groups.sort((a, b) => {
       if (a.key === '\x00__empty__') return  1;
       if (b.key === '\x00__empty__') return -1;
@@ -1508,6 +1535,7 @@
     const focusedHeader = columnStrip.contains(document.activeElement)
       ? { col: document.activeElement.closest('th[data-column]')?.dataset.column,
         resize: document.activeElement.classList.contains('column-resize-handle'),
+        sort: document.activeElement.classList.contains('column-sort-button'),
         toggle: document.activeElement.id === 'btn-toggle-groups' }
       : null;
     Array.from(content.children).forEach(c => {
@@ -1603,8 +1631,9 @@
     } else if (focusedHeader?.col) {
       const header = [...columnStrip.querySelectorAll('th[data-column]')]
         .find(cell => cell.dataset.column === focusedHeader.col);
-      (focusedHeader.resize ? header?.querySelector('.column-resize-handle') : header)
-        ?.focus({ preventScroll: true });
+      const control = focusedHeader.resize ? header?.querySelector('.column-resize-handle')
+        : focusedHeader.sort ? header?.querySelector('.column-sort-button') : header;
+      control?.focus({ preventScroll: true });
     }
     scheduleGroupSumAlignment();
     refreshBoolSection();
@@ -1630,7 +1659,6 @@
   function buildTable(cols, group) {
     // Per-row selection/drag control first, actions column last. The table's
     // structural controls and aggregates live in a footer below the records.
-    const records = group.records;
     const groupLabel = group.key === '\x00__empty__' ? T.emptyGroup : String(group.label);
     const addContext = getAddRowContext(group);
     const addLabel = addContext.enabled
@@ -1644,7 +1672,7 @@
       + '<th class="col-actions" aria-hidden="true"></th>';
     const moveContext = getRecordMoveContext();
     const dragEnabled = moveContext.enabled;
-    const tbody = records.map(rec => {
+    const classRowHtml = rec => {
       const idStr = String(rec.id);
       const sel   = selectedIds.has(idStr);
       const rowAnimation = pendingRowAnimations.get(idStr);
@@ -1663,8 +1691,9 @@
       + ` aria-label="${esc(gripLabel)} ${esc(idStr)}">${gripIconHtml()}</button></td>`
       + `${cols.map(c => renderTableCell(rec, c)).join('')}`
       + `<td class="row-actions">${rowActionsHtml(rec)}</td></tr>`;
-    }).join('') + (typeof salaryPaymentRowsHtml === 'function'
-      ? salaryPaymentRowsHtml(cols, group.key, group) : '');
+    };
+    const tbody = typeof salaryTableRowsHtml === 'function'
+      ? salaryTableRowsHtml(cols, group, classRowHtml) : group.records.map(classRowHtml).join('');
     return `<div class="scroll-inner" tabindex="0"><table class="rec-table"`
       + ` style="width:${getTableWidth(cols)}px">`
       + `${buildColGroup(cols)}
@@ -1689,6 +1718,7 @@
       col,
       startX: e.clientX,
       startWidth: getColumnWidth(col),
+      draggable: th.draggable,
       handle,
     };
     handle.classList.add('resizing');
@@ -1707,7 +1737,7 @@
     if (!activeColumnResize) return;
     const th = activeColumnResize.handle.closest('th[data-column]');
     activeColumnResize.handle.classList.remove('resizing');
-    if (th) th.draggable = true;
+    if (th) th.draggable = activeColumnResize.draggable;
     activeColumnResize = null;
     saveColumnWidths();
     if (settingsPanel.classList.contains('open')) refreshDiag();

@@ -268,6 +268,21 @@ async function main() {
       assert(visibleMonthly.querySelector('[data-expense-id="1002"]'), 'June bonus paid in July moved to July');
       assert(h.leaf('payroll-review').querySelector('[data-expense-id="1006"]'),
         'conflicting week/month links were silently resolved');
+      const sortColumn = col => h.doc.querySelector(
+        `#column-strip th[data-column="${col}"] .column-sort-button`).click();
+      const leafRowIds = key => [...h.leaf(key).querySelectorAll('tbody tr')]
+        .map(row => Number(row.dataset.recordId || row.dataset.expenseId));
+      assert.deepEqual(leafRowIds('payroll-week:101'), [1001, 13], 'start desc should place the later cash date first');
+      sortColumn('start');
+      assert.deepEqual(leafRowIds('payroll-week:101'), [13, 1001], 'clearing sort restores the regular payroll row order');
+      sortColumn('salary_received');
+      assert.deepEqual(leafRowIds('payroll-week:101'), [1001, 13]);
+      assert.deepEqual(leafRowIds('payroll-review'), [1005, 1006]);
+      sortColumn('salary_received');
+      assert.deepEqual(leafRowIds('payroll-review'), [1006, 1005], 'Paid should sort a payment-only payroll period');
+      assert.equal(h.parent('payroll-unassigned').querySelector('.group-sum[data-column="salary_received"]').textContent, '51');
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert.deepEqual(h.calls.writes, []);
     });
 
   await test('payment-only teacher works; cached registry reads survive teacher changes', { view: 'payroll', paymentOnly: true },

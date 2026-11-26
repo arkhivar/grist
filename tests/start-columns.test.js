@@ -115,6 +115,9 @@ function fixture(widget, { dateColumn = 'start', both = false, extraStart = fals
     releaseMetadata() { releaseMetadata?.(); },
     state: () => plain(win.datePreferenceState()),
     order: () => [...doc.querySelectorAll('tr[data-record-id]')].map(row => Number(row.dataset.recordId)),
+    descendingSortColumn: () => salary
+      ? doc.querySelector('#column-strip th[aria-sort="descending"]')?.dataset.column
+      : doc.getElementById('row-sort-select').value,
     async loaded() {
       await waitFor(() => doc.querySelectorAll('tr[data-record-id]').length === 3
         && (!salary || doc.getElementById('salary-payment-status').textContent === '1 payment'), `${widget} dates and payments`);
@@ -139,8 +142,8 @@ async function main() {
       withFixture(widget, {}, async h => {
         await h.loaded();
         assert.deepEqual(h.order(), [12, 13, 11]);
-        assert.equal(h.doc.getElementById('row-sort-select').value, 'start');
-        assert.equal(h.doc.getElementById('row-sort-direction').value, 'desc');
+        assert.equal(h.descendingSortColumn(), 'start');
+        if (widget === 'sprints') assert.equal(h.doc.getElementById('row-sort-direction').value, 'desc');
         assert.deepEqual(h.calls.options.filter(([key]) => key === 'rowSort').map(([, value]) => value),
           [{ column: 'start', direction: 'desc' }]);
         assert(h.cell('start').textContent.includes('2026-09-01 11:00 (Tue)'));
@@ -196,6 +199,8 @@ async function main() {
           h.applyOptions({ ...options, columnVisibility: { datetime: true } });
           await waitFor(() => h.cell('start'), 'visible migrated start');
           assert.equal(h.doc.querySelector('#column-strip col[data-column="start"]').style.width, '246px');
+          if (widget === 'salaries')
+            assert.equal(h.doc.querySelector('#column-strip th[aria-sort="ascending"]')?.dataset.column, 'start');
         });
       });
     }
@@ -223,7 +228,7 @@ async function main() {
       for (const config of [{ dateColumn: 'datetime' }, { both: true }]) {
         await withFixture(widget, config, async h => {
           await h.loaded();
-          assert.equal(h.doc.getElementById('row-sort-select').value, 'datetime');
+          assert.equal(h.descendingSortColumn(), 'datetime');
           assert.deepEqual(h.order(), config.both ? [13, 12, 11] : [12, 13, 11]);
           assert(h.cell('datetime').textContent.includes('2026-09-01 11:00 (Tue)'));
         });
@@ -234,7 +239,7 @@ async function main() {
       for (const config of [{ extraStart: true }, { dateColumn: 'Start' }]) {
         await withFixture(widget, config, async h => {
           await h.loaded();
-          assert.equal(h.doc.getElementById('row-sort-select').value, config.dateColumn || 'start');
+          assert.equal(h.descendingSortColumn(), config.dateColumn || 'start');
           assert.deepEqual(h.order(), [12, 13, 11]);
         });
       }

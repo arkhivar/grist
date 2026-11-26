@@ -400,6 +400,28 @@
     }
     .column-strip .rec-table thead th.column-header:active { cursor: grabbing; }
     .column-strip .column-name { padding-right: 8px; }
+    .column-strip .rec-table thead th.column-sortable,
+    .column-strip .rec-table thead th.column-sortable:active { cursor: default; }
+    .column-sortable .column-footer-content {
+      margin-inline: -6px -3px; gap: 1px;
+    }
+    .column-strip .column-sortable .column-name {
+      flex: 1 1 auto; padding-right: 0; cursor: grab;
+      text-align: left; user-select: none;
+    }
+    .column-strip .column-sortable .column-name:active { cursor: grabbing; }
+    .column-sort-button {
+      display: grid; place-items: center; flex: 0 0 16px;
+      width: 16px; height: 22px;
+      border: 0; border-radius: var(--radius);
+      background: transparent; color: var(--muted); cursor: pointer;
+      font: 600 13px/1 var(--font);
+    }
+    .column-sortable[aria-sort] .column-sort-button { color: var(--accent); }
+    .column-sort-button:hover { background: var(--hover-row); color: var(--accent); }
+    .column-sort-button:focus-visible {
+      outline: 1px solid var(--accent); outline-offset: -1px; color: var(--accent);
+    }
     .column-strip .column-resize-handle { right: -6.5px; width: 12px; }
     .column-strip .column-resize-handle::after {
       top: 4px; bottom: 4px; left: 50%; width: 2px;

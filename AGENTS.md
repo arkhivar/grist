@@ -124,7 +124,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.65)
+## Current state (v7.66)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   actual record months) or `payroll` (manual months containing ISO weeks).
@@ -205,8 +205,10 @@ payments.
   Per defaults to 48px; wage, paid, and count default to 64px;
   saved widths win. Month headers also show the signed class count sum.
 
-- Numeric cells, inline number editors, column labels, and group totals align
-  to the right in both grouped widgets. `formatNumberValue()` in shared core
+- Numeric cells, inline number editors, and group totals align to the right
+  in both grouped widgets. Sprints numeric headers are right-aligned. Salaries
+  labels are left-aligned, with the sort button on the right.
+  `formatNumberValue()` in shared core
   formats plain numbers without grouping separators; editor and clipboard
   values retain source precision. Keep numeric styling off Date/DateTime cells.
 - Salary payment rows show optional `Transactions.notes` as escaped, clipped
@@ -302,8 +304,11 @@ payments.
   through refreshes, scroll, and resize. Removed or hidden target cells close them.
   Clicking outside saves the chosen date/time; OK also saves and uses the same
   neutral button style as Cancel. Cancel and Escape discard the draft.
-- Sort groups and Sort rows are independent. Row sort is a persisted section
-  option (`rowSort: {column, direction}`), view-only, stable, and empty-last.
+- Group and row sorts are independent. Salaries sorts class and payment rows
+  together within each month or payroll period. Its header buttons cycle through
+  ascending, descending, and Grist order. Sprints uses Sort rows dropdowns.
+  Row sort is a persisted section option (`rowSort: {column, direction}`),
+  view-only, stable, and empty-last.
   Both widgets default to `start` (legacy `datetime`) descending after options, metadata, and
   columns are ready. Saved and manual choices, including Grist order, win;
   absent both date fields leaves Grist order. The automatic preference is saved once.

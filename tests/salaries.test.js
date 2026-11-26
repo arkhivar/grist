@@ -440,6 +440,23 @@ async function main() {
     .cells[performanceIndex].querySelectorAll('.cell-ref-pill')].map(pill => pill.textContent);
   assert.deepEqual(paymentTeacher(11), ['VP'], 'VP payment picked up another selected teacher');
   assert.deepEqual(paymentTeacher(13), ['TR'], 'TR payment picked up another selected teacher');
+  const sortColumn = col => doc.querySelector(
+    `#column-strip th[data-column="${col}"] .column-sort-button`).click();
+  const augustRowIds = () => [...month('August 2026').querySelectorAll('tbody tr')]
+    .map(row => Number(row.dataset.recordId || row.dataset.expenseId));
+  const updatesBeforeSort = calls.updates.length;
+  sortColumn('salary_received');
+  assert.deepEqual(augustRowIds(), [11, 13, 1, 2, 6], 'Paid should put the smallest payment first and blanks last');
+  sortColumn('salary_received');
+  assert.deepEqual(augustRowIds(), [13, 11, 1, 2, 6], 'descending Paid should keep blank class amounts last');
+  sortColumn('salary_received');
+  assert.deepEqual(augustRowIds(), [1, 2, 6, 13, 11], 'Grist order should restore the original class and payment order');
+  sortColumn('datetime');
+  assert.deepEqual(augustRowIds(), [1, 11, 2, 6, 13], 'sort start and cash dates together, keeping ties stable');
+  sortColumn('datetime');
+  assert.deepEqual(augustRowIds(), [2, 6, 13, 1, 11]);
+  assert.equal(month('August 2026').querySelector('.group-sum[data-column="salary_received"]').textContent, '300');
+  assert.equal(calls.updates.length, updatesBeforeSort, 'sorting should not write any class records');
   onRecords(records);
   await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments'
     && !doc.querySelector('[data-expense-id="13"]'));

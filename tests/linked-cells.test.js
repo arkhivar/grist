@@ -281,8 +281,15 @@ async function presentationChecks(widget) {
       const button = h.cell(col).querySelector('.cell-edit-btn');
       if (button) assert.equal(win.getComputedStyle(button).textAlign, 'right', 'the editing wrapper overrode numeric alignment');
       const header = doc.querySelector(`#column-strip th[data-column="${col}"]`);
-      assert.equal(win.getComputedStyle(header).textAlign, 'right');
-      assert.equal(win.getComputedStyle(header.querySelector('.column-footer-content')).justifyContent, 'flex-end');
+      if (widget === 'salaries') {
+        const label = header.querySelector('.column-name');
+        const alignment = win.getComputedStyle(label).textAlign || win.getComputedStyle(header).textAlign;
+        assert.equal(alignment, 'left');
+        assert(header.querySelector('button.column-sort-button'));
+      } else {
+        assert.equal(win.getComputedStyle(header).textAlign, 'right');
+        assert.equal(win.getComputedStyle(header.querySelector('.column-footer-content')).justifyContent, 'flex-end');
+      }
     }
     assert.equal(win.getComputedStyle(doc.querySelector('.group-sum[data-column="wage"]')).textAlign, 'right');
     assert(!h.cell('datetime').classList.contains('cell-number'), 'DateTime was aligned as a number');

@@ -69,14 +69,31 @@ function salaryColumnLabel(col) {
   return col;
 }
 
-function salaryPaymentRowsHtml(cols, key, group = null) {
-  const payments = group?.payments || salaryPaymentRowsFor(key);
+function salaryTableRowsHtml(cols, group, classRowHtml) {
+  const payments = group.payments || salaryPaymentRowsFor(group.key);
   const teacherColumn = salaryTeacherColumn(columnTypes);
   const groupedDateColumn = parseGroupBy(groupBy).col;
   const dateColumn = dateTimeStartColumn(cols)
     || (cols.includes(groupedDateColumn) ? groupedDateColumn
       : cols.find(col => ['Date', 'DateTime'].includes(columnBaseType(columnTypes[col]))));
-  return payments.map(row => `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
+  const rows = group.records.map(record => ({ record })).concat(payments.map(payment => ({ payment })));
+  const col = rowSort.column;
+  const type = rowSortColumnType();
+  const ordered = col && (allColumns.includes(col) || col === WIDGET_CONFIG.receivedColumn)
+    ? sortRowsByKey(rows, ({ record, payment }) => {
+      if (record) return col === WIDGET_CONFIG.receivedColumn ? null : rowSortKey(record[col], type);
+      if (col === dateColumn) return payment.sec;
+      if (col === teacherColumn) return payment.performanceIds.map(id => referenceDisplayLabel(col, id)).join(', ');
+      if (col === WIDGET_CONFIG.receivedColumn) return rowSortKey(payment.amount, 'Numeric');
+      if (col === 'notes') return rowSortKey(payment.notes, 'Text');
+      return null;
+    }) : rows;
+  return ordered.map(({ record, payment }) => record
+    ? classRowHtml(record) : salaryPaymentRowHtml(cols, payment, dateColumn, teacherColumn)).join('');
+}
+
+function salaryPaymentRowHtml(cols, row, dateColumn, teacherColumn) {
+  return `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
     + ` title="Salary payment from ${esc(WIDGET_CONFIG.expensesTableId)} #${esc(row.id)}">`
     + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`
     + ` data-expense-id="${esc(row.id)}" draggable="false"`
@@ -94,7 +111,7 @@ function salaryPaymentRowsHtml(cols, key, group = null) {
         return `<td class="salary-payment-notes"><span class="cell-display-value" title="${esc(row.notes)}">${esc(row.notes)}</span></td>`;
       return '<td></td>';
     }).join('')
-    + '<td class="row-actions"></td></tr>').join('');
+    + '<td class="row-actions"></td></tr>';
 }
 
 function salaryRefreshExpenseSelection() {
