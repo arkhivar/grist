@@ -250,8 +250,10 @@ async function main() {
   const headers = [...doc.querySelectorAll('#column-strip thead th[data-column]')]
     .map(cell => cell.dataset.column);
   assert(doc.querySelector('.toolbar > #statsbar.visible + .toolbar-right'), 'salary counts should precede the toolbar actions');
-  assert(doc.querySelector('#content + #column-scrollbar:not([hidden])'),
-    'the scrollbar should sit below the scrolling view');
+  assert(doc.querySelector('#widget-scroll > .toolbar ~ #content > #column-strip'),
+    'the toolbar and column strip should share the vertical scroll container');
+  assert(doc.querySelector('#widget-scroll + #column-scrollbar:not([hidden])'),
+    'the horizontal scrollbar should sit outside and below the scrolling view');
   assert.equal(doc.querySelector('#column-scrollbar .column-scrollbar-width').style.width,
     doc.querySelector('#column-strip .rec-table').style.width,
     'the salary scrollbar does not cover every displayed column');

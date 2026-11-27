@@ -124,7 +124,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.68)
+## Current state (v7.69)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   actual record months) or `payroll` (manual months containing ISO weeks).
@@ -312,9 +312,10 @@ payments.
   after options, metadata, and columns are ready and save the default once.
   If neither field exists or a legacy saved option has an empty column, rows
   start in incoming order until a sort is selected.
-- Both widgets share one sticky column strip above the group cards. Column
-  names, drag reordering, keyboard reordering, and resize handles live there;
-  a lightweight toolbar Columns popover offers visibility switches and drag
+- The toolbar and its settings scroll with the rows in both grouped widgets.
+  The column strip sticks at the top once reached. Column names, drag
+  reordering, keyboard reordering, and resize handles live there.
+  The toolbar Columns popover offers visibility switches and drag
   grips for every field, including hidden fields. Alt+Up/Down reorders from
   the popover. Column visibility and full order persist per widget section;
   hidden fields keep their position. The grouped field in Sprints starts

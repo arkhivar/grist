@@ -362,8 +362,10 @@ await test('D11: sums stay in the group header when expanded and collapsed', asy
   assert(!card.querySelector('tfoot .footer-aggregate'), 'sum remains in footer');
   assert(!card.querySelector('tfoot .column-name'), 'footer labels are still repeated');
   assert(doc.querySelector('#column-strip thead .column-name'), 'fixed column headers missing');
-  assert(doc.querySelector('#content + #column-scrollbar:not([hidden])'),
-    'the only horizontal scrollbar should sit below the scrolling view');
+  assert(doc.querySelector('#widget-scroll > .toolbar ~ #content > #column-strip'),
+    'the toolbar and column strip should share the vertical scroll container');
+  assert(doc.querySelector('#widget-scroll + #column-scrollbar:not([hidden])'),
+    'the only horizontal scrollbar should sit outside and below the scrolling view');
   assert(doc.querySelector('.toolbar > #statsbar.visible + .toolbar-right'), 'record counts should precede the toolbar actions');
   assertEq(sum.textContent, '-2850', 'sum of -1425 + -1425');
   click(badge);
@@ -538,7 +540,7 @@ await test('F14: Text selects on first click and edits inside its cell on second
   assertEq(doc.activeElement, text, 'second click did not focus the Text editor');
   assertEq(text.value, 'V..Petrichenko', 'second click replaced existing text');
   assertEq(text.getAttribute('aria-label'), 'Edit text: students', 'Text editor accessible label');
-  doc.getElementById('content').dispatchEvent(new win.Event('scroll'));
+  doc.getElementById('widget-scroll').dispatchEvent(new win.Event('scroll'));
   assert(!text.hidden && text.closest('td') === cellEl(1, 'students'),
     'table scrolling dismissed or detached the Text editor');
   const before = calls.update.length;
@@ -1580,6 +1582,29 @@ await test('R: toolbar column control hides, restores, and persists a column', a
   click(button);
   assert(panel.hidden, 'second toolbar click did not close column control');
   assertEq(button.getAttribute('aria-expanded'), 'false', 'closed control is still announced as open');
+
+  const scroller = doc.getElementById('widget-scroll');
+  const originalButtonRect = button.getBoundingClientRect;
+  const originalScrollerRect = scroller.getBoundingClientRect;
+  let buttonTop = 16;
+  button.getBoundingClientRect = () => ({ top: buttonTop, bottom: buttonTop + 24, right: 800 });
+  scroller.getBoundingClientRect = () => ({ top: 0, bottom: 480, height: 480 });
+  try {
+    click(button);
+    assert(!panel.hidden, 'column control did not reopen');
+    const initialTop = parseFloat(panel.style.top);
+    buttonTop -= 12;
+    scroller.dispatchEvent(new win.Event('scroll'));
+    assert(!panel.hidden, 'column control closed while its button was still in view');
+    assertEq(parseFloat(panel.style.top), initialTop - 12, 'column control did not follow its button');
+    buttonTop = -30;
+    scroller.dispatchEvent(new win.Event('scroll'));
+    assert(panel.hidden, 'column control stayed open after its button scrolled away');
+    assertEq(button.getAttribute('aria-expanded'), 'false', 'scrolling did not update the expanded state');
+  } finally {
+    button.getBoundingClientRect = originalButtonRect;
+    scroller.getBoundingClientRect = originalScrollerRect;
+  }
 });
 
 await test('R: hidden columns can be reordered with keyboard and drag grips', async () => {

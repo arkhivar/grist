@@ -158,8 +158,18 @@ async function main() {
           'record refresh did not rebuild the date cell');
         h.onOptions(h.options, { accessLevel: 'full' });
         await tick();
-        h.doc.getElementById('content').dispatchEvent(new h.win.Event('scroll'));
+        const anchor = h.cell().querySelector('.cell-edit-btn');
+        const dialog = h.doc.getElementById('cell-editor-dialog');
+        let anchorTop = 120;
+        anchor.getBoundingClientRect = () => ({
+          top: anchorTop, bottom: anchorTop + 30, left: 32, right: 152,
+        });
         h.win.dispatchEvent(new h.win.Event('resize'));
+        const initialTop = parseFloat(dialog.style.top);
+        anchorTop -= 40;
+        h.doc.getElementById('widget-scroll').dispatchEvent(new h.win.Event('scroll'));
+        assert.equal(parseFloat(dialog.style.top), initialTop - 40,
+          'the picker did not follow its date cell as the widget scrolled');
         const picker = h.doc.getElementById('cell-editor');
         assert.equal(picker.hidden, false, 'refresh and repositioning discarded the open picker');
         assert.equal(h.doc.getElementById('cell-editor-datetime').value, '2026-08-31T09:30',

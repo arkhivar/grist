@@ -741,7 +741,6 @@
       + `</tr></thead></table></div>`;
     columnScrollbar.hidden = false;
     columnScrollbar.querySelector('.column-scrollbar-width').style.width = `${tableWidth}px`;
-    syncColumnScrollbarWidth();
   }
 
   function buildGroupSums(records, cols) {
@@ -1480,6 +1479,7 @@
 
   // ── 14. Rendering ─────────────────────────────────────────────
   function render() {
+    const scrollTop = widgetScroll.scrollTop;
     automaticColumnWidths.clear();
     if (!columnControl.hidden) {
       renderColumnControlList();
@@ -1571,6 +1571,7 @@
     groups.forEach(group => content.appendChild(renderGroupCard(group, displayCols)));
     syncGroupToggle();
     syncColumnScrollbarWidth();
+    widgetScroll.scrollTop = scrollTop;
     groupedApp.querySelectorAll('.scroll-inner').forEach(scroller => {
       scroller.scrollLeft = sharedTableScrollLeft;
     });
@@ -1965,13 +1966,13 @@
     const cell = findDataCell(selectedCell.recordId, selectedCell.col);
     if (!cell) return;
     const scroller = cell.closest('.scroll-inner');
-    const topPadding = content.style.scrollPaddingTop;
+    const topPadding = widgetScroll.style.scrollPaddingTop;
     const bottomPadding = scroller.style.scrollPaddingBottom;
     // Keep the moved cell clear of both sticky controls, including capped groups.
-    content.style.scrollPaddingTop = `${columnStrip.getBoundingClientRect().height}px`;
+    widgetScroll.style.scrollPaddingTop = `${columnStrip.getBoundingClientRect().height}px`;
     scroller.style.scrollPaddingBottom = `${scroller.querySelector('tfoot th').getBoundingClientRect().height}px`;
     cell.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-    content.style.scrollPaddingTop = topPadding;
+    widgetScroll.style.scrollPaddingTop = topPadding;
     scroller.style.scrollPaddingBottom = bottomPadding;
   }
 
@@ -2241,6 +2242,11 @@
   function positionColumnControl() {
     if (columnControl.hidden) return;
     const button = btnColumns.getBoundingClientRect();
+    const viewport = widgetScroll.getBoundingClientRect();
+    if (button.bottom < viewport.top || button.top > viewport.bottom) {
+      closeColumnControl();
+      return;
+    }
     const panel = columnControl.getBoundingClientRect();
     const width = panel.width || 300;
     const height = panel.height || 250;
@@ -2281,6 +2287,7 @@
     }
   });
   window.addEventListener('resize', positionColumnControl);
+  widgetScroll.addEventListener('scroll', positionColumnControl, { passive: true });
 
   columnControlList.addEventListener('change', e => {
     const toggle = e.target.closest('.column-control-toggle');
@@ -3694,7 +3701,7 @@
     }
   });
   window.addEventListener('resize', positionFieldEditorPopover);
-  content.addEventListener('scroll', positionFieldEditorPopover, { passive: true });
+  widgetScroll.addEventListener('scroll', positionFieldEditorPopover, { passive: true });
 
   function onEditorKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
