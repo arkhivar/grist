@@ -41,6 +41,9 @@ npm test      # discovers and runs every tests/*.test.js suite
 4. Write operations require `requiredAccess: 'full'` and must surface the real
    Grist API error (never a generic "needs Full access" message).
 5. Comments and UI strings: English only.
+6. **Markdown filenames** use a leading underscore and uppercase words
+   separated by underscores, as in `_RELEASE_NOTES.md`. Keep `README.md` and
+   `AGENTS.md` under their exact conventional names.
 
 ## Grist quirks we learned the hard way (do not rediscover)
 
@@ -83,7 +86,8 @@ standard. Preserve it when extending editing or adding another widget:
   an explicitly saved visibility choice wins. Feedback stays in the fixed
   bottom-right live region without moving rows or taking focus.
 
-See [Editing fields](README.md#editing-fields) for the complete user workflow.
+The shared design language and shortcuts are documented in [_DESIGN.md](_DESIGN.md).
+For the complete user workflow, see [Editing fields](README.md#editing-fields).
 
 ## Workflow
 

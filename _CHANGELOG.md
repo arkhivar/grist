@@ -292,9 +292,9 @@ All notable changes to the widgets in this repo (formerly the grist-sprints grou
 
 - Adopt the three-digit `6.7x` release sequence so small iterations can advance
   through `6.71`, `6.72`, and so on without racing toward v7.
-- Expand `ARCHITECTURE.md` with the concrete Grist APIs, persisted option keys,
+- Expand `_ARCHITECTURE.md` with the concrete Grist APIs, persisted option keys,
   record-write lifecycle, metadata tables, and state ownership boundaries.
-- Extend `ROADMAP.md` with long-horizon school products, clearly separating
+- Extend `_ROADMAP.md` with long-horizon school products, clearly separating
   Grist + GitHub Pages projects from ideas that require external services.
 - Bump the live widget badge and every static asset cache key to v6.71.
 
@@ -350,7 +350,7 @@ All notable changes to the widgets in this repo (formerly the grist-sprints grou
   feedback after Grist confirms the update.
 - Add move eligibility and complete move outcomes to Diagnostics, preserve
   reduced-motion behavior, and document deferred date/Choice List rules in
-  `ROADMAP.md`.
+  `_ROADMAP.md`.
 - Bumped static asset cache keys so the interaction update loads.
 
 ## v6.3 — 2026-07-31

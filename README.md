@@ -1,6 +1,6 @@
 # grist — Grist custom widgets
 
-> Grist custom widget — collapsible grouped view, Airtable/Notion-style. Groups records by any column with fold/unfold, group sorting, automatic numeric sums, large Text-field editing, DateTime picking, and persisted options via `grist.setOption()`.
+> Grist custom widget — collapsible grouped view, inspired by Airtable and SeaTable. Groups records by any column with fold/unfold, group sorting, automatic numeric sums, in-cell editing, DateTime picking, and persisted options via `grist.setOption()`.
 
 Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacoste/grist-widget-grouped-view). Since v5.0 the interface is **English-only**.
 
@@ -26,8 +26,8 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
   blank record already assigned to that group
 - **In-cell text editing** — enable writable Text columns in Settings, then
   select a cell and click again to edit notes and emoji content at the pointer
-- **DateTime editor** — click any visible, writable DateTime cell to choose its
-  Vladivostok (VLAT) date and time without finding the record in the source table
+- **DateTime editor** — select a writable DateTime cell and click it
+  again to choose its Vladivostok (VLAT) date and time
 - **In-cell number editing** — type to replace a selected Int/Numeric value,
   or click again to place the caret; validation, Enter/Tab-to-save, and session Undo/Redo
 - **Spreadsheet-style cells** — click once to select, click again to edit,
@@ -45,10 +45,9 @@ Fork of [maximelacoste/grist-widget-grouped-view](https://github.com/maximelacos
 - **Automatic sums** — every Grist Numeric/Int column shows its group total
   in the group header in both collapsed and expanded states, aligned with its
   column, including numeric formula columns
-- **Shared adjustable columns** — every group uses the same widths; drag a
-  footer column edge to resize a column everywhere
-- **Column reordering** — drag footer columns left/right to change the order
-  globally
+- **Shared adjustable columns** — every group uses the same widths. Drag a
+  column edge in the strip to resize it everywhere
+- **Column reordering** — drag a header label left or right to reorder the column
 - **Purposeful motion** — added and duplicated rows enter with a brief
   highlight, and sorted groups visibly move into their new positions
 - **Row count beside every group name**
@@ -331,7 +330,7 @@ writable, non-formula, non-date Grist **Text** or single **Choice** column. The
 widget writes the destination group's exact underlying value—not its visible
 label—and waits for Grist to confirm the update before rendering the move.
 Choice List, Date/DateTime buckets, references, numeric fields, and formulas
-remain guarded. See [ROADMAP.md](ROADMAP.md) for the deferred rules.
+remain guarded. See [_ROADMAP.md](_ROADMAP.md) for the deferred rules.
 
 These are **write operations**: the widget must be configured with **Full
 access** in Grist (step 3 above). If access is insufficient, the operation is
@@ -351,10 +350,10 @@ with no double-click timing requirement or extra activation click. The caret
 lands where you aimed, so you can edit the middle of a value immediately.
 New widgets and editing features should reuse this shared behavior.
 
-The **Editable fields** section in Settings lists visible, writable Text
-columns. The `C` column is enabled automatically when it has that type; every
-listed Text column can be enabled or disabled independently. Visible, writable
-DateTime columns are enabled automatically.
+In Sprints, **Editable fields** in Settings lets you choose visible, writable
+Text columns. Writable `notes` and legacy `C` are enabled by default in new
+sections. Salaries enables writable Text and Choice fields automatically.
+DateTime editing is available on supported writable columns.
 
 Click an enabled Text or Choice cell once to select it and a second time to
 place the caret and edit **inside the cell**, in both Sprints and Salaries.
@@ -377,10 +376,10 @@ was collapsed. Undo/Redo restores the value and group; paste and fill work too.
 Regrouping clears an extended cell range so it cannot select unrelated rows.
 Ordinary Text editing preferences remain unchanged.
 
-Click a DateTime cell to open the widget's compact, non-blocking calendar
-popover beside that cell. It chooses an above/below placement automatically,
-stays inside the viewport, and saves the selected date and time on an outside
-click, including empty table space. Use the arrow buttons to change months, choose
+Select a writable DateTime cell and click it again to open its compact calendar
+popover. **Enter** and **F2** open it from the selected cell too. The popover
+fits above or below the cell and saves when you click elsewhere, including
+empty table space. Use the arrow buttons to change months, choose
 a day from the Monday-first calendar, choose a half-hour slot from the
 scrollable time rail, or use the left-aligned Today/Clear footer actions;
 Cancel/OK remain together on the right with matching neutral styles. OK also
@@ -474,7 +473,7 @@ unlimited default (checkbox unticked).
 
 Every visible Grist **Numeric** or **Int** column automatically shows the sum
 of that group's rows in the group header, visible when collapsed or expanded
-and horizontally aligned with its column. Column names stay in the footer.
+and horizontally aligned with its column. Column names are in the sticky strip.
 Formula columns are included when their declared Grist result type is
 numeric. Each compact total contains only the number—there is no `Σ` or
 function name.
@@ -485,20 +484,20 @@ configurable Aggregates settings and saved rules are ignored as of v6.0.
 
 ## Column layout
 
-All groups share one column layout, so a long note in one group cannot shift
-the columns in that group away from the others.
+The toolbar scrolls with the rows. The column strip sticks at the top of the
+widget once reached. All groups share one column layout so values and totals
+stay aligned across groups.
 
 - Use the toolbar's **Columns** control to show or hide a field. Grouping does
   not hide its column by default. Visibility choices persist per section;
   **Reset column layout** restores default visibility, widths, and order.
-- Drag the right edge of any footer column to resize that column in every
-  group. Double-click the edge to restore its automatic width.
-- Drag a footer column left or right to reorder it across every group.
-- Keyboard controls are available: focus a footer column and use
-  **Alt+Left/Right** to reorder; focus its resize edge and use
-  **Left/Right** to resize (hold **Shift** for larger steps).
+- Drag a column edge in the strip to resize it in every group. Double-click
+  the edge to restore its automatic width.
+- Drag a header label left or right to reorder the column across every group.
+- Focus a column header and use **Alt+Left/Right** to reorder it. Focus its
+  resize edge and use **Left/Right** to resize. Hold **Shift** for larger steps.
 - Wider layouts scroll horizontally. Scrolling one group synchronizes the
-  others, keeping footer labels and automatic sums aligned.
+  others, keeping the strip and automatic sums aligned.
 - Widths and order are saved automatically in this Grist widget section's
   options. Layout writes are serialized and awaited, so rapid adjustments
   cannot silently race each other. If Grist highlights the section-options
@@ -623,6 +622,7 @@ the same repo, so no extra hosting steps are needed:
 | `salaries.html` | Teacher salary counter combining Attendance classes and Transactions payments |
 | `filters.html` | Compact student search, conditions, and recent-student navigation |
 | `AGENTS.md` | Guidance for AI coding agents working in this repo |
+| [_DESIGN.md](_DESIGN.md) | Design principles, shared interactions, and keyboard shortcuts |
 | `shared/base.css` | Design system (styles) shared by every widget |
 | `shared/core.js` | English UI strings, version, grouped-table state, and Grist helpers |
 | `shared/dates.js` | Shared tolerant date parsing and VLAT formatting, independent of grouped-table DOM |
@@ -634,8 +634,8 @@ the same repo, so no extra hosting steps are needed:
 | `tests/sprints.test.js` | Test suite for the sprints widget (Node + jsdom, no test framework) |
 | `tests/filters.test.js` | Progressive filtering, dates, persistence, request races, history, and input focus |
 | `tests/navigation.test.js` | Scoped companion messages, raw student identity, and the Sprints bridge |
-| `ARCHITECTURE.md` | GitHub Pages/Grist responsibilities, persistence lifecycle, data access, and backend boundaries |
-| `ROADMAP.md` | Deferred drag semantics for dates, Choice Lists, references, and other types |
+| `_ARCHITECTURE.md` | GitHub Pages/Grist responsibilities, persistence lifecycle, data access, and backend boundaries |
+| `_ROADMAP.md` | Deferred drag semantics for dates, Choice Lists, references, and other types |
 
 ## Repo layout (widget family)
 
