@@ -134,8 +134,13 @@ the transaction date and is flagged in the toolbar. If the month registry
 cannot be loaded, the widget shows the error and leaves payment totals
 unavailable. **Refresh payments** reloads both payments and needed registry data.
 
-Choose **Months & weeks** for payroll periods. Both views use the same
-class and office-hour `wage` and `count` columns and the read-only `paid` column.
+Choose **Weekly** for payroll periods grouped into months and weeks. Both
+views show `wage` and `count` for classes and office hours and the read-only
+`paid` column for payments.
+Use **Columns** to show the optional `forMonth` and `forWeek` fields from
+Transactions. Payment rows show the linked month or ISO week. A linked ID is
+shown if its label is unavailable. Edit these links in Transactions and use
+**Refresh payments** to update the widget.
 Office work can be logged in Attendance with `start`, `end`, the staff member
 in `t`, and a wage, just like lessons.
 
@@ -498,8 +503,9 @@ The toolbar scrolls with the rows. The column strip sticks at the top of the
 widget once reached. All groups share one column layout so values and totals
 stay aligned across groups.
 
-- Use the toolbar's **Columns** control to show or hide a field. Grouping does
-  not hide its column by default. Visibility choices persist per section;
+- Use the toolbar's **Columns** control to show or hide a field. Search by its
+  label or field ID to narrow the list. Grouping fields are visible by
+  default. Visibility choices persist per section.
   **Reset column layout** restores default visibility, widths, and order.
 - Drag a column edge in the strip to resize it in every group. Double-click
   the edge to restore its automatic width.

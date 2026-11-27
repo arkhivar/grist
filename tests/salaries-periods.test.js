@@ -24,7 +24,8 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
   weekFailure = false, wrongMonthType = false, formulaMonth = false,
   deferMonths = false, monthFailure = '', monthRefs = [0, 201, 0, 0, 0, 201, 201],
   transactionMonthType = 'Ref:MonthRegistry',
-  commonStudent = false, savedCollapsed } = {}) {
+  commonStudent = false, savedCollapsed, savedLayout = {}, deferTransactions = false,
+  attendanceWeek = false } = {}) {
   const html = read('salaries.html');
   const dom = new JSDOM(html, { url: 'https://arkhivar.github.io/grist/salaries.html',
     runScripts: 'outside-only', pretendToBeVisual: true });
@@ -39,6 +40,7 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
     wage: [100, -25, 200], count: [-1000, -250, -2000], sprint: ['Office', 'Office', 'Office'],
   };
   if (commonStudent) attendance.student = [41, 41, 41];
+  if (attendanceWeek) attendance.forWeek = ['School week A', 'School week B', 'School week C'];
   const transactions = {
     id: [1001, 1002, 1003, 1004, 1005, 1006, 1007],
     per: [['L', 7], ['L', 7], ['L', 7], ['L', 7], ['L', 7], ['L', 7], ['L', 8]],
@@ -101,6 +103,9 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
   const weekGate = deferWeeks ? new Promise(resolve => { releaseWeeks = resolve; }) : null;
   let releaseMonths;
   const monthGate = deferMonths ? new Promise(resolve => { releaseMonths = resolve; }) : null;
+  let releaseTransactions;
+  const transactionsGate = deferTransactions
+    ? new Promise(resolve => { releaseTransactions = resolve; }) : null;
   win.grist = {
     ready(value) { assert.equal(value.requiredAccess, 'full'); },
     onRecords(callback) { onRecords = callback; }, onOptions(callback) { onOptions = callback; },
@@ -114,7 +119,10 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
         if (name === 'ALL_ATT') return attendance;
         if (name === 'PERFORMANCE') return { id: [7, 8], name: ['me', 'zz'] };
         if (name === 'FOLKS') return { id: [41], Name: ['Common student'] };
-        if (name === 'Transactions') return transactions;
+        if (name === 'Transactions') {
+          if (transactionsGate) await transactionsGate;
+          return transactions;
+        }
         if (name === 'WeekRegistry') {
           if (weekGate) await weekGate;
           if (weekFailure) throw new Error('Registry read denied by document rule');
@@ -162,7 +170,7 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
     window.payrollRangeTestState = () => ({ selected: selectedCell, rangeEnd: cellRangeEnd });
   `);
   function select(id = paymentOnly ? 8 : 7) { onRecords([{ id, name: id === 7 ? 'me' : 'zz' }]); }
-  onOptions({ salaryPeriodView: view,
+  onOptions({ salaryPeriodView: view, ...savedLayout,
     ...(savedCollapsed === undefined ? {} : { salaryPeriodCollapsed: savedCollapsed }) },
   { accessLevel: 'full' });
   select();
@@ -194,6 +202,7 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
     payment: id => doc.querySelector(`tr[data-expense-id="${id}"]`),
     releaseWeeks() { releaseWeeks?.(); },
     releaseMonths() { releaseMonths?.(); },
+    releaseTransactions() { releaseTransactions?.(); },
     failMonthReads(message) { monthReadFailure = message; },
     failWrites(message) { writeFailure = message ? new Error(message) : null; },
     status: () => doc.getElementById('salary-payment-status').textContent,
@@ -216,6 +225,17 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
       choice.click();
     },
   };
+}
+
+function columnStripHeaders(doc) {
+  return [...doc.querySelectorAll('#column-strip th')];
+}
+
+function tableCell(doc, row, column) {
+  const index = columnStripHeaders(doc).findIndex(header => header.dataset.column === column);
+  assert(index >= 0, `expected a visible header for ${column}`);
+  assert(row?.cells[index], `expected a cell for ${column}`);
+  return row.cells[index];
 }
 
 let passed = 0;
@@ -276,6 +296,11 @@ async function main() {
       assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
       assert(!h.calls.fetches.some(name => /Registry$/.test(name)),
         'a month registry read was started without a matching payment with an explicit month');
+      if (kind === 'absent') {
+        h.doc.getElementById('btn-columns').click();
+        assert(!h.doc.querySelector('.column-control-row[data-column="salary_forMonth"]'),
+          'a missing ledger field was offered as an optional column');
+      }
     });
   }
 
@@ -401,6 +426,86 @@ async function main() {
       assert.deepEqual(leafRowIds('payroll-review'), [1006, 1005], 'Paid should sort a payment-only payroll period');
       assert.equal(h.parent('payroll-unassigned').querySelector('.group-sum[data-column="salary_received"]').textContent, '51');
       assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert.deepEqual(h.calls.writes, []);
+    });
+
+  await test('Weekly offers optional period columns that show the original ledger links',
+    { view: 'payroll' }, async h => {
+      await h.loaded();
+      const select = h.doc.getElementById('salary-view-select');
+      assert.equal(select.value, 'payroll', 'renaming the view changed its saved value');
+      assert.equal(select.selectedOptions[0].textContent.trim(), 'Weekly');
+      h.expandAll();
+      h.doc.getElementById('btn-columns').click();
+      for (const [column, label] of [['salary_forMonth', 'forMonth'], ['salary_forWeek', 'forWeek']]) {
+        assert(!columnStripHeaders(h.doc).some(header => header.dataset.column === column),
+          `${column} was visible by default`);
+        const control = h.doc.querySelector(`.column-control-row[data-column="${column}"]`);
+        assert(control, `missing Columns control for ${label}`);
+        assert.equal(control.querySelector('.column-control-name').textContent.trim(), label);
+        const toggle = control.querySelector('.column-control-toggle');
+        assert.equal(toggle.checked, false);
+        toggle.click();
+        const header = columnStripHeaders(h.doc).find(cell => cell.dataset.column === column);
+        assert.equal(header?.querySelector('.column-name').textContent.trim(), label);
+      }
+      await waitFor(() => h.calls.options.some(([key, value]) => key === 'columnVisibility'
+        && value.salary_forMonth === true && value.salary_forWeek === true), 'saved period visibility');
+
+      const monthly = h.payment(1002);
+      const weekly = h.payment(1001);
+      const conflict = h.payment(1006);
+      assert.equal(tableCell(h.doc, monthly, 'salary_forMonth').textContent.trim(), 'June 2026');
+      assert.match(tableCell(h.doc, monthly, 'salary_forWeek').textContent.trim(), /^(?:—)?$/);
+      assert.equal(tableCell(h.doc, weekly, 'salary_forWeek').textContent.trim(), '2026-W27');
+      assert.match(tableCell(h.doc, weekly, 'salary_forMonth').textContent.trim(), /^(?:—)?$/,
+        'a parent month was displayed as an explicit transaction month link');
+      assert.equal(tableCell(h.doc, conflict, 'salary_forMonth').textContent.trim(), 'June 2026');
+      assert.equal(tableCell(h.doc, conflict, 'salary_forWeek').textContent.trim(), '2026-W40');
+      assert.equal(conflict.closest('.group'), h.leaf('payroll-review'));
+
+      const attendanceRow = h.doc.querySelector('tr[data-record-id="13"]');
+      for (const column of ['salary_forMonth', 'salary_forWeek']) {
+        assert.match(tableCell(h.doc, attendanceRow, column).textContent.trim(), /^(?:—)?$/,
+          'an Attendance row showed an inferred ledger assignment');
+        for (const row of [attendanceRow, monthly, weekly, conflict]) {
+          const cell = tableCell(h.doc, row, column);
+          assert.notEqual(cell.dataset.cellWritable, 'true');
+          assert(!cell.querySelector('button, input, [contenteditable="true"]'), 'ledger assignment can be edited');
+        }
+      }
+      assert.equal(h.parent('payroll-month:201').querySelector('.salary-received-sum').textContent, '350');
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert.deepEqual(h.calls.writes, []);
+    });
+
+  await test('saved period columns survive options arriving before Transactions',
+    { deferTransactions: true, attendanceWeek: true, savedLayout: {
+      columnVisibility: { salary_forMonth: true, salary_forWeek: true },
+      columnOrder: ['start', 'salary_forWeek', 'notes', 'salary_forMonth', 'forWeek'],
+    } }, async h => {
+      await waitFor(() => h.calls.fetches.includes('Transactions')
+        && columnStripHeaders(h.doc).some(header => header.dataset.column === 'start'),
+      'Attendance headers while the ledger is loading');
+      h.releaseTransactions();
+      await h.loaded();
+
+      assert.deepEqual(columnStripHeaders(h.doc).filter(header => header.dataset.column)
+        .slice(0, 5).map(header => header.dataset.column),
+      ['start', 'salary_forWeek', 'notes', 'salary_forMonth', 'forWeek']);
+      assert.equal(tableCell(h.doc, h.payment(1002), 'salary_forMonth').textContent.trim(), 'June 2026');
+      await waitFor(() => tableCell(h.doc, h.payment(1001), 'salary_forWeek').textContent.trim() === '2026-W27',
+        'Calendar week label after restoring its visibility');
+      const julyPaymentIds = () => [...h.calendarMonth('July 2026').querySelectorAll('tr[data-expense-id]')]
+        .map(row => Number(row.dataset.expenseId));
+      assert.deepEqual(julyPaymentIds(), [1004, 1001]);
+      h.doc.querySelector('#column-strip th[data-column="salary_forWeek"] .column-sort-button').click();
+      assert.deepEqual(julyPaymentIds(), [1001, 1004], 'forWeek should sort payment rows by their assigned week');
+      const attendanceRow = h.doc.querySelector('tr[data-record-id="13"]');
+      const attendanceWeek = tableCell(h.doc, attendanceRow, 'forWeek');
+      assert.equal(attendanceWeek.textContent.trim(), 'School week C');
+      assert.equal(attendanceWeek.dataset.cellWritable, 'true');
+      assert.match(tableCell(h.doc, attendanceRow, 'salary_forWeek').textContent.trim(), /^(?:—)?$/);
       assert.deepEqual(h.calls.writes, []);
     });
 
@@ -619,6 +724,12 @@ async function main() {
       assert(h.calls.fetches.includes('MonthRegistry'), 'a failed sibling skipped the remaining registry read');
       h.changeView('calendar');
       await waitFor(() => h.classIds().length === 3 && h.paymentIds().length === 6);
+      h.doc.getElementById('btn-columns').click();
+      h.doc.querySelector('.column-control-row[data-column="salary_forWeek"] .column-control-toggle').click();
+      await waitFor(() => tableCell(h.doc, h.payment(1001), 'salary_forWeek').textContent.includes('#101'),
+        'raw week reference when registry labels are unavailable');
+      assert.equal(h.status(), '6 payments');
+      assert.equal(h.calendarMonth('July 2026').querySelector('.salary-received-sum').textContent, '340');
     });
 
   for (const config of [{ wrongMonthType: true }, { formulaMonth: true }]) {

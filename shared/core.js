@@ -105,7 +105,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.70';
+  const WIDGET_VERSION = '7.71';
   const sharedNumberFormatter = new Intl.NumberFormat(LOCALE, {
     useGrouping: false, maximumSignificantDigits: 15,
   });
@@ -193,6 +193,7 @@
   const btnSettings   = document.getElementById('btn-settings');
   const btnColumns    = document.getElementById('btn-columns');
   const columnControl = document.getElementById('column-control');
+  const columnControlSearch = document.getElementById('column-control-search');
   const columnControlList = document.getElementById('column-control-list');
   const btnUndo       = document.getElementById('btn-undo');
   const btnRedo       = document.getElementById('btn-redo');

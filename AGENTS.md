@@ -128,10 +128,10 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.70)
+## Current state (v7.71)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
-  month groups) or `payroll` (manual months containing ISO weeks).
+  Calendar months) or `payroll` (Weekly, with manual months containing ISO weeks).
   Calendar groups classes by `start` (legacy `datetime`). A payment’s valid
   `Transactions.forMonth` link to `MonthRegistry` overrides its cash month, even
   when `forWeek` is also set. Keep the original cash date, signed amount, and
@@ -142,6 +142,12 @@ payments.
   `widgets/salaries/periods.js` builds the period model; `payroll.js` handles
   preferences and shared registry writes; `period-controls.js` supplies one
   non-blocking month picker. Sprints does not load these payroll scripts.
+- Salaries offers optional read-only `forMonth` and `forWeek` columns for
+  payment rows when the ledger exposes those fields. Their saved layout IDs
+  are `salary_forMonth` and `salary_forWeek`. Preserve their positions before
+  the ledger schema is available. The columns show the actual assigned links
+  and default to hidden. Calendar reads week labels on demand when the column
+  is visible. Label failures preserve payment grouping and fall back to raw IDs.
 - Calendar loads `MonthRegistry` on demand for matching explicit month links.
   Payroll shares that cache and also loads `WeekRegistry`. Refresh payments
   invalidates both. Keep generation guards and await every sibling read.
@@ -326,9 +332,9 @@ payments.
 - The toolbar and its settings scroll with the rows in both grouped widgets.
   The column strip sticks at the top once reached. Column names, drag
   reordering, keyboard reordering, and resize handles live there.
-  The toolbar Columns popover offers visibility switches and drag
-  grips for every field, including hidden fields. Alt+Up/Down reorders from
-  the popover. Column visibility and full order persist per widget section;
+  The toolbar Columns popover offers visibility switches and drag grips for
+  every field, including hidden fields. Its search matches labels and field
+  IDs. Alt+Up/Down reorders among the matching fields. Column visibility and full order persist per widget section;
   hidden fields keep their position. The grouped field in Sprints starts
   visible; explicitly saved visibility choices remain respected. At least one
   data column stays visible. Reset column layout restores order, widths, and visibility.

@@ -3,6 +3,11 @@
 let salaryPaymentsByMonth = new Map();
 let salaryAllPayments = [];
 let salaryPaymentsLoaded = false;
+const salaryPaymentPeriodFields = { salary_forMonth: 'forMonth', salary_forWeek: 'forWeek' };
+let salaryAvailablePaymentColumns = [WIDGET_CONFIG.receivedColumn];
+let salaryPaymentMonthRegistry = null;
+let salaryPaymentWeekRegistry = null;
+let salaryWeekLabelsRequest = -1;
 let salaryPaymentRequest = 0;
 let salaryClassColumnsRequest = 0;
 let salaryClassSelectionKey = null;
@@ -63,10 +68,54 @@ function salaryGroupTotalsHtml(group, displayCols) {
     + '</span>';
 }
 
+function salaryPaymentColumns() {
+  return salaryAvailablePaymentColumns;
+}
+
+function salaryIsPaymentPeriodColumn(col) {
+  return Object.hasOwn(salaryPaymentPeriodFields, col);
+}
+
+function salaryPaymentPeriodTarget(field, table, { tables, columns }) {
+  const column = salaryPeriodRegistryColumnMeta(WIDGET_CONFIG.expensesTableId, field, tables, columns);
+  return column?.type === `Ref:${table}` || column?.type === `RefList:${table}`;
+}
+
+function salaryPaymentPeriodCell(row, col) {
+  const monthly = col === 'salary_forMonth';
+  const ref = salaryPeriodReference(monthly ? row.monthRef : row.weekRef);
+  if (ref.empty) return { label: '', sortKey: null };
+  if (!ref.valid) return { label: 'Invalid link', sortKey: null };
+  const registry = monthly ? salaryPaymentMonthRegistry : salaryPaymentWeekRegistry;
+  const period = registry?.get(ref.id);
+  return period?.valid
+    ? { label: monthly ? period.label : period.isoKey, sortKey: period.sortKey }
+    : { label: `#${ref.id}`, sortKey: ref.id };
+}
+
+async function salaryLoadVisibleWeekLabels(cols) {
+  const request = salaryPaymentRequest;
+  if (!cols.includes('salary_forWeek') || salaryPayrollActive() || request === salaryWeekLabelsRequest
+      || !salaryAllPayments.some(row => salaryPeriodReference(row.weekRef).id)) return;
+  salaryWeekLabelsRequest = request;
+  try {
+    const metadata = await salaryLoadPeriodMetadata();
+    if (request !== salaryPaymentRequest || !salaryPaymentPeriodTarget('forWeek', 'WeekRegistry', metadata)) return;
+    const { weeks } = await salaryLoadPeriodRegistries();
+    if (request !== salaryPaymentRequest) return;
+    salaryPaymentWeekRegistry = weeks;
+    render();
+  } catch (_) {
+    // Calendar payments stay available with reference IDs if week labels cannot load.
+  }
+}
+
 function salaryColumnLabel(col) {
   if (salaryTeacherColumnIds.includes(col)) return 'per';
   if (col === WIDGET_CONFIG.receivedColumn) return 'paid';
-  return col;
+  if (!salaryIsPaymentPeriodColumn(col)) return col;
+  const field = salaryPaymentPeriodFields[col];
+  return allColumns.includes(field) ? `${field} (payment)` : field;
 }
 
 function salaryTableRowsHtml(cols, group, classRowHtml) {
@@ -79,9 +128,10 @@ function salaryTableRowsHtml(cols, group, classRowHtml) {
   const rows = group.records.map(record => ({ record })).concat(payments.map(payment => ({ payment })));
   const col = rowSort.column;
   const type = rowSortColumnType();
-  const ordered = col && (allColumns.includes(col) || col === WIDGET_CONFIG.receivedColumn)
+  const ordered = col && isDisplayColumn(col)
     ? sortRowsByKey(rows, ({ record, payment }) => {
-      if (record) return col === WIDGET_CONFIG.receivedColumn ? null : rowSortKey(record[col], type);
+      if (record) return isPaymentDisplayColumn(col) ? null : rowSortKey(record[col], type);
+      if (salaryIsPaymentPeriodColumn(col)) return salaryPaymentPeriodCell(payment, col).sortKey;
       if (col === dateColumn) return payment.sec;
       if (col === teacherColumn) return payment.performanceIds.map(id => referenceDisplayLabel(col, id)).join(', ');
       if (col === WIDGET_CONFIG.receivedColumn) return rowSortKey(payment.amount, 'Numeric');
@@ -109,6 +159,8 @@ function salaryPaymentRowHtml(cols, row, dateColumn, teacherColumn) {
         return `<td>${renderReferencePills(row.performanceIds.map(id => referenceDisplayLabel(col, id)))}</td>`;
       if (col === WIDGET_CONFIG.receivedColumn)
         return `<td class="cell-number salary-payment-amount"><span class="cell-display-value cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
+      if (salaryIsPaymentPeriodColumn(col))
+        return `<td data-payment-period="${salaryPaymentPeriodFields[col]}">${renderReferencePills([salaryPaymentPeriodCell(row, col).label])}</td>`;
       if (col === 'notes')
         return `<td class="salary-payment-notes"><span class="cell-display-value" title="${esc(row.notes)}">${esc(row.notes)}</span></td>`;
       return '<td></td>';
@@ -338,10 +390,12 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     if (request !== salaryPaymentRequest) return;
     const failure = results.find(result => result.status === 'rejected');
     if (failure) throw failure.reason;
-    const [classes, expenses] = results.map(result => result.value);
+    const [classes, expenses, payrollPeriods] = results.map(result => result.value);
     const expenseTeacherColumn = salaryRequireTeacherColumn(expenses, WIDGET_CONFIG.expensesTableId);
     if (!Array.isArray(expenses.id) || !Array.isArray(expenses.datetime) || !Array.isArray(expenses.amount))
       throw new Error(`${WIDGET_CONFIG.expensesTableId} must have datetime and amount columns`);
+    salaryAvailablePaymentColumns = [WIDGET_CONFIG.receivedColumn,
+      ...Object.keys(salaryPaymentPeriodFields).filter(col => Array.isArray(expenses[salaryPaymentPeriodFields[col]]))];
     if (payroll && (!Array.isArray(expenses.forWeek) || !Array.isArray(expenses.forMonth)))
       throw new Error(`${WIDGET_CONFIG.expensesTableId} must have forWeek and forMonth Reference columns for payroll periods`);
 
@@ -376,15 +430,17 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     const monthRefs = !payroll && Array.isArray(expenses.forMonth)
       ? payments.map(row => salaryPeriodReference(row.monthRef)) : [];
     let assignedMonths = null;
-    if (monthRefs.some(ref => ref.id > 0)) {
-      const { tables, columns } = await salaryLoadPeriodMetadata();
+    let displayedWeeks = null;
+    if (payroll || monthRefs.some(ref => ref.id > 0)) {
+      const metadata = await salaryLoadPeriodMetadata();
       if (request !== salaryPaymentRequest) return;
-      const column = salaryPeriodRegistryColumnMeta(WIDGET_CONFIG.expensesTableId, 'forMonth', tables, columns);
-      if (/^(Ref|RefList):MonthRegistry$/.test(column?.type || '')) {
-        const { months } = await salaryLoadMonthRegistry();
+      if (salaryPaymentPeriodTarget('forMonth', 'MonthRegistry', metadata)) {
+        const { months } = payrollPeriods || await salaryLoadMonthRegistry();
         if (request !== salaryPaymentRequest) return;
         assignedMonths = months;
       }
+      if (payrollPeriods && salaryPaymentPeriodTarget('forWeek', 'WeekRegistry', metadata))
+        displayedWeeks = payrollPeriods.weeks;
     }
 
     let invalidAssignments = 0;
@@ -411,6 +467,8 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     months.forEach(rows => rows.sort((a, b) => (b.sec ?? -Infinity) - (a.sec ?? -Infinity)
       || Number(b.id) - Number(a.id)));
     salaryPaymentsByMonth = months;
+    salaryPaymentMonthRegistry = assignedMonths;
+    salaryPaymentWeekRegistry = displayedWeeks;
     salaryAllPayments = payments;
     salaryPaymentsLoaded = true;
     const presentIds = new Set(payments.map(row => String(row.id)));

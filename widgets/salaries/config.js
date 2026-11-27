@@ -9,6 +9,7 @@ const WIDGET_CONFIG = {
   classTableId: 'All_att',
   expensesTableId: 'Transactions',
   receivedColumn: 'salary_received',
+  hiddenDisplayColumns: ['salary_forMonth', 'salary_forWeek'],
   defaultColumnOrder: ['datetime', 'start', 'performance', 'per', 't', 'student', 'students', 'notes',
     'wage', 'salary_received', 'count', 'sprint', 'attach_payment'],
   compactColumns: ['performance', 'per', 't', 'wage', 'salary_received', 'count'],

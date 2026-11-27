@@ -6,9 +6,9 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.70">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.70">
-  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.70">
+  <link rel="stylesheet" href="shared/base.css?v=7.71">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.71">
+  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.71">
 </head>
 <body>
 <div id="app">
@@ -19,7 +19,7 @@
       <label for="salary-view-select">View</label>
       <select id="salary-view-select" aria-label="Salary grouping view">
         <option value="calendar">Calendar months</option>
-        <option value="payroll">Months &amp; weeks</option>
+        <option value="payroll">Weekly</option>
       </select>
     </div>
     <div class="toolbar-sep" role="separator" aria-orientation="vertical"></div>
@@ -135,6 +135,9 @@
 
   <section class="column-control" id="column-control" aria-label="Columns" hidden>
     <h2 class="column-control-title">Columns</h2>
+    <input class="column-control-search" id="column-control-search" type="search" autocomplete="off"
+           spellcheck="false" placeholder="Filter columns…" aria-label="Filter columns"
+           aria-controls="column-control-list">
     <div class="column-control-list" id="column-control-list"></div>
   </section>
 
@@ -244,16 +247,16 @@
   </footer>
 </section>
 
-<script src="widgets/salaries/config.js?v=7.70"></script>
-<script src="shared/dates.js?v=7.70"></script>
-<script src="shared/core.js?v=7.70"></script>
-<script src="widgets/salaries/attendance.js?v=7.70"></script>
-<script src="shared/references.js?v=7.70"></script>
-<script src="widgets/salaries/expenses.js?v=7.70"></script>
-<script src="widgets/salaries/periods.js?v=7.70"></script>
-<script src="widgets/salaries/payroll.js?v=7.70"></script>
-<script src="widgets/salaries/period-controls.js?v=7.70"></script>
-  <script src="widgets/sprints/app.js?v=7.70"></script>
-  <script src="widgets/sprints/actions.js?v=7.70"></script>
+<script src="widgets/salaries/config.js?v=7.71"></script>
+<script src="shared/dates.js?v=7.71"></script>
+<script src="shared/core.js?v=7.71"></script>
+<script src="widgets/salaries/attendance.js?v=7.71"></script>
+<script src="shared/references.js?v=7.71"></script>
+<script src="widgets/salaries/expenses.js?v=7.71"></script>
+<script src="widgets/salaries/periods.js?v=7.71"></script>
+<script src="widgets/salaries/payroll.js?v=7.71"></script>
+<script src="widgets/salaries/period-controls.js?v=7.71"></script>
+  <script src="widgets/sprints/app.js?v=7.71"></script>
+  <script src="widgets/sprints/actions.js?v=7.71"></script>
 </body>
 </html>

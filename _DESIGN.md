@@ -31,6 +31,7 @@ clear place to resume after every edit.
   gesture or Shift+wheel moves them together.
 
 The **Columns** popover manages visibility and order, including hidden fields.
+Its search matches the displayed name or field ID.
 Drag a header label to reorder it and drag its edge to resize it. The sort
 button is its own target. Keep grouping fields visible by default and honor
 saved visibility. Save view preferences per Grist widget section so a reload
@@ -109,12 +110,13 @@ changes beyond this widget session.
   groups is available for those field types. Sprints enables writable `notes`
   or legacy `C` for new sections and lets users configure other Text fields.
 - **Salaries** offers **Calendar months** for class dates and payment dates or
-  their explicitly assigned months. **Months & weeks** shows assigned payroll
-  periods. The payment row always displays the actual date. Classes and payments
-  use the same grid and sort within each group. Earned wages, received payments,
+  their explicitly assigned months. **Weekly** shows payroll periods by month
+  and week. Payment rows display the actual cash date. Classes and payments use
+  the same grid and sort within each group. Earned wages, received payments,
   and class counts each have their own aligned subtotal. Payment grips select
-  ledger rows. Edit payments in Transactions and use **Refresh payments** to
-  update Salaries.
+  ledger rows. Show `forMonth` and `forWeek` in **Columns** to inspect each
+  payment’s original assignment. Edit payments in Transactions and use
+  **Refresh payments** to update Salaries.
 - **Filters** uses the same typography, colors, and compact controls for
   live name search, typed conditions, and recent-student chips. It links
   matching rows into Grist’s selection chain. Recent students are personal to

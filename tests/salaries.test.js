@@ -197,7 +197,14 @@ async function main() {
   columnsButton.click();
   assert(!columnsPanel.hidden && columnsButton.getAttribute('aria-expanded') === 'true',
     'salary column control did not open');
-  assert(!columnsPanel.querySelector('input[type="search"]'), 'column search was not requested');
+  const columnSearch = columnsPanel.querySelector('#column-control-search');
+  assert.equal(columnSearch?.type, 'search', 'salary Columns search is missing');
+  columnSearch.value = 'PaId';
+  columnSearch.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.deepEqual([...columnsPanel.querySelectorAll('.column-control-row')].map(row => row.dataset.column),
+    ['salary_received'], 'search should match the displayed salary label');
+  columnSearch.value = '';
+  columnSearch.dispatchEvent(new win.Event('input', { bubbles: true }));
   const receivedRow = () => columnsPanel.querySelector('.column-control-row[data-column="salary_received"]');
   assert(receivedRow(), 'synthetic expenses column is missing from the control');
   assert(receivedRow().textContent.includes('paid'), 'synthetic column lacks its salary label');

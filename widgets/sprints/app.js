@@ -251,7 +251,7 @@
   function editKindForColumn(col) {
     // Called for every rendered cell: check this column directly rather than
     // rebuilding candidate lists across all columns for each cell.
-    if (!writableColumnIds.includes(col)) return null;
+    if (!writableColumnIds.includes(col) || isPaymentDisplayColumn(col)) return null;
     const type = writableColumnTypes[col];
     if (isNumericColumnType(type)) return 'number';
     // Group values already support drag, paste, and fill. Use the same text
@@ -530,23 +530,24 @@
     if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
     // Options and records arrive independently. Keep saved order until columns exist.
     if (!allColumns.length) return;
-    const received = allColumns.length && typeof WIDGET_CONFIG !== 'undefined'
-      ? WIDGET_CONFIG.receivedColumn : null;
-    const known = new Set(allColumns);
-    if (received) known.add(received);
+    const received = typeof WIDGET_CONFIG !== 'undefined' ? WIDGET_CONFIG.receivedColumn : null;
+    const extraColumns = typeof salaryPaymentColumns === 'function' ? salaryPaymentColumns() : [];
+    const known = new Set([...allColumns, ...extraColumns]);
     const preferred = typeof WIDGET_CONFIG !== 'undefined'
       ? WIDGET_CONFIG.defaultColumnOrder || [] : [];
-    const defaults = [...preferred, ...allColumns].filter((col, i, order) =>
+    const defaults = [...preferred, ...known].filter((col, i, order) =>
       known.has(col) && order.indexOf(col) === i);
     const order = columnOrderConfigured ? columnOrder : defaults;
     const saved = order.filter((col, i) =>
-      (known.has(col) || !metadataLoaded) && order.indexOf(col) === i);
+      (known.has(col) || !metadataLoaded
+        || (typeof salaryIsPaymentPeriodColumn === 'function' && salaryIsPaymentPeriodColumn(col)))
+      && order.indexOf(col) === i);
     // Do not append a renamed date field before metadata can move its saved slot.
     const startColumn = dateTimeStartColumn(allColumns);
     const pendingStartAlias = !metadataLoaded && !saved.includes(startColumn)
       && saved.some(col => ['datetime', 'start'].includes(col.toLowerCase()))
       ? startColumn : null;
-    const missing = allColumns.filter(col => !saved.includes(col) && col !== pendingStartAlias);
+    const missing = [...known].filter(col => col !== received && !saved.includes(col) && col !== pendingStartAlias);
     columnOrder = [...saved, ...missing];
     if (received && !columnOrder.includes(received)) {
       const wageIndex = columnOrder.indexOf('wage');
@@ -559,9 +560,17 @@
     return columnOrder.filter(col => isColumnVisible(col, groupCol));
   }
 
+  function isPaymentDisplayColumn(col) {
+    return typeof salaryPaymentColumns === 'function' && salaryPaymentColumns().includes(col);
+  }
+
+  function isDisplayColumn(col) {
+    return allColumns.includes(col) || isPaymentDisplayColumn(col);
+  }
+
   function isColumnVisible(col, groupCol) {
     const config = typeof WIDGET_CONFIG === 'undefined' ? null : WIDGET_CONFIG;
-    if (!allColumns.includes(col) && col !== config?.receivedColumn) return false;
+    if (!isDisplayColumn(col)) return false;
     if (Object.prototype.hasOwnProperty.call(columnVisibility, col)
         && typeof columnVisibility[col] === 'boolean') return columnVisibility[col];
     return !(config?.hiddenDisplayColumns || []).includes(col)
@@ -1602,6 +1611,7 @@
     if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
     reanchorDateTimeEditor();
     if (typeof salaryReanchorPeriodEditor === 'function') salaryReanchorPeriodEditor();
+    if (typeof salaryLoadVisibleWeekLabels === 'function') salaryLoadVisibleWeekLabels(displayCols);
   }
 
   function gripIconHtml() {
@@ -1881,7 +1891,7 @@
   }
 
   function isWritableCellColumn(col) {
-    return writableColumnIds.includes(col) && isSupportedCellColumn(col);
+    return !isPaymentDisplayColumn(col) && writableColumnIds.includes(col) && isSupportedCellColumn(col);
   }
 
   function cellHistoryValue(value, type) {
@@ -2215,11 +2225,14 @@
     const focusGrip = focused?.classList.contains('column-control-grip');
     const scrollTop = columnControlList.scrollTop;
     const groupCol = parseGroupBy(groupBy).col;
-    const columns = columnOrder.filter(col => allColumns.includes(col)
-      || col === (typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.receivedColumn));
+    const columns = columnOrder.filter(isDisplayColumn);
     const visibleCount = columns.filter(col => isColumnVisible(col, groupCol)).length;
-    columnControlList.innerHTML = columns.length ? columns.map(col => {
+    const query = columnControlSearch.value.trim().toLowerCase();
+    const matches = columns.map(col => {
       const label = typeof salaryColumnLabel === 'function' ? salaryColumnLabel(col) : col;
+      return { col, label };
+    }).filter(({ col, label }) => col.toLowerCase().includes(query) || label.toLowerCase().includes(query));
+    columnControlList.innerHTML = matches.length ? matches.map(({ col, label }) => {
       const visible = isColumnVisible(col, groupCol);
       return `<div class="column-control-row" data-column="${esc(col)}" data-visible="${visible}">`
         + `<button class="column-control-grip" type="button" draggable="true"`
@@ -2229,7 +2242,8 @@
         + `<input class="column-control-toggle" type="checkbox"`
         + ` aria-label="Show ${esc(label)}" ${visible ? 'checked' : ''}`
         + ` ${visible && visibleCount === 1 ? 'disabled' : ''}></div>`;
-    }).join('') : '<div class="column-control-empty">Columns appear when records load.</div>';
+    }).join('') : `<div class="column-control-empty">${columns.length
+      ? 'No matching columns.' : 'Columns appear when records load.'}</div>`;
     columnControlList.scrollTop = scrollTop;
     if (focusColumn) {
       const row = [...columnControlList.querySelectorAll('.column-control-row')]
@@ -2259,6 +2273,8 @@
   function closeColumnControl(restoreFocus = false) {
     if (columnControl.hidden) return;
     columnControl.hidden = true;
+    columnControlSearch.value = '';
+    columnControlList.scrollTop = 0;
     btnColumns.classList.remove('active');
     btnColumns.setAttribute('aria-expanded', 'false');
     if (restoreFocus) btnColumns.focus({ preventScroll: true });
@@ -2272,6 +2288,13 @@
     columnControl.hidden = false;
     btnColumns.classList.add('active');
     btnColumns.setAttribute('aria-expanded', 'true');
+    renderColumnControlList();
+    positionColumnControl();
+    if (!columnControl.hidden) columnControlSearch.focus({ preventScroll: true });
+  });
+
+  columnControlSearch.addEventListener('input', () => {
+    columnControlList.scrollTop = 0;
     renderColumnControlList();
     positionColumnControl();
   });
@@ -2372,10 +2395,11 @@
     const grip = e.target.closest('.column-control-grip');
     if (!grip || !e.altKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
     e.preventDefault();
-    const col = grip.closest('.column-control-row')?.dataset.column;
-    const index = columnOrder.indexOf(col);
-    const target = columnOrder[index + (e.key === 'ArrowDown' ? 1 : -1)];
-    if (target && moveColumnInControl(col, target, e.key === 'ArrowDown')) {
+    const row = grip.closest('.column-control-row');
+    const col = row.dataset.column;
+    const down = e.key === 'ArrowDown';
+    const target = down ? row.nextElementSibling : row.previousElementSibling;
+    if (target && moveColumnInControl(col, target.dataset.column, down)) {
       const moved = [...columnControlList.querySelectorAll('.column-control-row')]
         .find(row => row.dataset.column === col);
       if (typeof moved?.scrollIntoView === 'function')
@@ -2602,8 +2626,7 @@
   }
 
   function renderTableCell(rec, col) {
-    const rendered = typeof WIDGET_CONFIG !== 'undefined' && col === WIDGET_CONFIG.receivedColumn
-      ? '' : renderCell(rec[col], col, rec);
+    const rendered = isPaymentDisplayColumn(col) ? '' : renderCell(rec[col], col, rec);
     const editKind = editKindForColumn(col);
     const id = esc(String(rec.id));
     const colAttr = esc(col);

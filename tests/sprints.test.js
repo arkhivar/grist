@@ -1543,13 +1543,26 @@ await test('R: toolbar column control hides, restores, and persists a column', a
   click(button);
   assert(!panel.hidden, 'column control did not open');
   assertEq(button.getAttribute('aria-expanded'), 'true', 'open control is not announced');
-  assert(!panel.querySelector('input[type="search"]'), 'column search was not requested');
+  const search = panel.querySelector('input[type="search"]');
+  assert(search, 'column search field is missing');
+  assertEq(doc.activeElement, search, 'opening Columns did not focus its filter');
   assert(panel.querySelectorAll('.column-control-row').length >= 8,
     'column control omits available fields');
 
+  const writesBeforeSearch = calls.setOption.length;
+  search.value = 'no such column';
+  search.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert(panel.textContent.includes('No matching columns.'), 'empty search state is missing');
+  search.value = ' CoUnT ';
+  search.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assertEq(panel.querySelectorAll('.column-control-row').length, 1, 'search did not narrow the list');
+  assertEq(doc.activeElement, search, 'filtering moved focus out of the search field');
+  assertEq(calls.setOption.length, writesBeforeSearch, 'the search changed saved options');
+
   const row = panel.querySelector('.column-control-row[data-column="count"]');
   const toggle = row?.querySelector('.column-control-toggle');
-  assert(toggle && toggle.checked, 'count is not shown as enabled');
+  assert(toggle && toggle.checked && !toggle.disabled,
+    'filtered count can still be hidden while other columns are visible');
   const saveCount = calls.setOption.length;
   toggle.click();
   await waitFor(() => calls.setOption.slice(saveCount).some(([key]) => key === 'columnVisibility'),
@@ -1570,6 +1583,8 @@ await test('R: toolbar column control hides, restores, and persists a column', a
   onRecordsCb(RECORDS);
   assert(!doc.querySelector('#column-strip th[data-column="count"]'),
     'saved hidden state did not survive Grist refresh');
+  assertEq(search.value, ' CoUnT ', 'record refresh cleared the active search');
+  assertEq(panel.querySelectorAll('.column-control-row').length, 1, 'refresh restored filtered-out rows');
   const restore = panel.querySelector('.column-control-row[data-column="count"] .column-control-toggle');
   assert(restore && !restore.checked, 'hidden switch is not off');
   restore.click();
@@ -1582,6 +1597,7 @@ await test('R: toolbar column control hides, restores, and persists a column', a
   click(button);
   assert(panel.hidden, 'second toolbar click did not close column control');
   assertEq(button.getAttribute('aria-expanded'), 'false', 'closed control is still announced as open');
+  assertEq(search.value, '', 'closing Columns did not clear its filter');
 
   const scroller = doc.getElementById('widget-scroll');
   const originalButtonRect = button.getBoundingClientRect;
@@ -1659,6 +1675,28 @@ await test('R: hidden columns can be reordered with keyboard and drag grips', as
     'dragging the grip did not restore the original order');
   assert(!panel.querySelector('.column-control-row[data-column="sprint"] .column-control-toggle').checked,
     'dragging toggled a hidden column');
+
+  const search = panel.querySelector('input[type="search"]');
+  search.value = 'AT';
+  search.dispatchEvent(new win.Event('input', { bubbles: true }));
+  const matches = before.filter(col => col.toLowerCase().includes('at'));
+  assertEq(JSON.stringify(rowOrder()), JSON.stringify(matches), 'column search ignored field names');
+  assert(matches.length > 1, 'fixture must have two matching fields for keyboard reorder');
+  const last = matches.at(-1);
+  const lastGrip = panel.querySelector(`.column-control-row[data-column="${last}"] .column-control-grip`);
+  lastGrip.focus();
+  lastGrip.dispatchEvent(new win.KeyboardEvent('keydown', {
+    key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true,
+  }));
+  const expected = [...matches.slice(0, -2), last, matches.at(-2)];
+  assertEq(JSON.stringify(rowOrder()), JSON.stringify(expected), 'keyboard moved to a filtered-out field');
+  assertEq(doc.activeElement.closest('.column-control-row')?.dataset.column,
+    last, 'keyboard reorder lost focus after filtering');
+  search.value = '';
+  search.dispatchEvent(new win.Event('input', { bubbles: true }));
+  const unmatched = columns => columns.filter(col => !matches.includes(col));
+  assertEq(JSON.stringify(unmatched(rowOrder())), JSON.stringify(unmatched(before)),
+    'filtered reorder changed the relative order of other columns');
   click(button);
 });
 
