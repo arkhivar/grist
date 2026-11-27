@@ -124,7 +124,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.67)
+## Current state (v7.68)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   actual record months) or `payroll` (manual months containing ISO weeks).

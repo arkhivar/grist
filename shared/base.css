@@ -313,16 +313,13 @@
     .bool-btn.selected      { background: var(--accent); border-color: var(--accent); color: #fff; }
     .bool-btn:focus-visible { box-shadow: var(--focus-ring); }
 
-    /* ── Stats bar ── */
+    /* ── Toolbar counts ── */
     .statsbar {
-      display: none; align-items: center; gap: 12px; padding: 4px 10px;
-      background: var(--group-stripe); border-bottom: 1px solid var(--border);
-      flex-shrink: 0; font-size: 11px; color: var(--muted);
+      display: none; align-items: center; flex-wrap: wrap; gap: 2px 12px;
+      min-width: 0; max-width: 100%; padding: 0 2px;
+      font-size: 11px; color: var(--muted); overflow-wrap: anywhere;
     }
     .statsbar.visible { display: flex; }
-    .toolbar .statsbar {
-      width: 100%; padding: 0 2px; border: 0; background: transparent;
-    }
     .stat-val { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 
     /* ── Content area ── */

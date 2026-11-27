@@ -6,9 +6,9 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.67">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.67">
-  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.67">
+  <link rel="stylesheet" href="shared/base.css?v=7.68">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.68">
+  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.68">
 </head>
 <body>
 <div id="app">
@@ -30,6 +30,13 @@
         <option value="count-desc">Count ↓</option>
         <option value="count-asc">Count ↑</option>
       </select>
+    </div>
+    <div class="statsbar" id="statsbar" role="status" aria-live="polite" aria-atomic="true">
+      <span><span class="stat-val" id="stat-groups">0</span> groups</span>
+      <span aria-hidden="true">·</span>
+      <span><span class="stat-val" id="stat-records">0</span> records</span>
+      <span aria-hidden="true">·</span>
+      <span id="salary-payment-status">Loading payments…</span>
     </div>
     <div class="toolbar-right">
       <div class="history-controls" role="group" aria-label="Cell edit history">
@@ -78,13 +85,6 @@
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
-    </div>
-    <div class="statsbar" id="statsbar" role="status" aria-live="polite" aria-atomic="true">
-      <span><span class="stat-val" id="stat-groups">0</span> groups</span>
-      <span aria-hidden="true">·</span>
-      <span><span class="stat-val" id="stat-records">0</span> records</span>
-      <span aria-hidden="true">·</span>
-      <span id="salary-payment-status">Loading payments…</span>
     </div>
   </header>
 
@@ -242,16 +242,16 @@
   </footer>
 </section>
 
-<script src="widgets/salaries/config.js?v=7.67"></script>
-<script src="shared/dates.js?v=7.67"></script>
-<script src="shared/core.js?v=7.67"></script>
-<script src="widgets/salaries/attendance.js?v=7.67"></script>
-<script src="shared/references.js?v=7.67"></script>
-<script src="widgets/salaries/expenses.js?v=7.67"></script>
-<script src="widgets/salaries/periods.js?v=7.67"></script>
-<script src="widgets/salaries/payroll.js?v=7.67"></script>
-<script src="widgets/salaries/period-controls.js?v=7.67"></script>
-  <script src="widgets/sprints/app.js?v=7.67"></script>
-  <script src="widgets/sprints/actions.js?v=7.67"></script>
+<script src="widgets/salaries/config.js?v=7.68"></script>
+<script src="shared/dates.js?v=7.68"></script>
+<script src="shared/core.js?v=7.68"></script>
+<script src="widgets/salaries/attendance.js?v=7.68"></script>
+<script src="shared/references.js?v=7.68"></script>
+<script src="widgets/salaries/expenses.js?v=7.68"></script>
+<script src="widgets/salaries/periods.js?v=7.68"></script>
+<script src="widgets/salaries/payroll.js?v=7.68"></script>
+<script src="widgets/salaries/period-controls.js?v=7.68"></script>
+  <script src="widgets/sprints/app.js?v=7.68"></script>
+  <script src="widgets/sprints/actions.js?v=7.68"></script>
 </body>
 </html>

@@ -249,7 +249,7 @@ async function main() {
   assert.equal(augustBadge.getAttribute('aria-label'), '2\u00a0classes');
   const headers = [...doc.querySelectorAll('#column-strip thead th[data-column]')]
     .map(cell => cell.dataset.column);
-  assert(doc.querySelector('.toolbar #statsbar.visible'), 'salary counts were not moved into the toolbar');
+  assert(doc.querySelector('.toolbar > #statsbar.visible + .toolbar-right'), 'salary counts should precede the toolbar actions');
   assert(doc.querySelector('#content + #column-scrollbar:not([hidden])'),
     'the scrollbar should sit below the scrolling view');
   assert.equal(doc.querySelector('#column-scrollbar .column-scrollbar-width').style.width,

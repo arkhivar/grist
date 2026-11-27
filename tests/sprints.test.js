@@ -364,7 +364,7 @@ await test('D11: sums stay in the group header when expanded and collapsed', asy
   assert(doc.querySelector('#column-strip thead .column-name'), 'fixed column headers missing');
   assert(doc.querySelector('#content + #column-scrollbar:not([hidden])'),
     'the only horizontal scrollbar should sit below the scrolling view');
-  assert(doc.querySelector('.toolbar #statsbar.visible'), 'record counts were not moved into the toolbar');
+  assert(doc.querySelector('.toolbar > #statsbar.visible + .toolbar-right'), 'record counts should precede the toolbar actions');
   assertEq(sum.textContent, '-2850', 'sum of -1425 + -1425');
   click(badge);
   assert(card.classList.contains('collapsed'), 'group did not collapse');
