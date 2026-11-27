@@ -115,9 +115,7 @@ function fixture(widget, { dateColumn = 'start', both = false, extraStart = fals
     releaseMetadata() { releaseMetadata?.(); },
     state: () => plain(win.datePreferenceState()),
     order: () => [...doc.querySelectorAll('tr[data-record-id]')].map(row => Number(row.dataset.recordId)),
-    descendingSortColumn: () => salary
-      ? doc.querySelector('#column-strip th[aria-sort="descending"]')?.dataset.column
-      : doc.getElementById('row-sort-select').value,
+    descendingSortColumn: () => doc.querySelector('#column-strip th[aria-sort="descending"]')?.dataset.column,
     async loaded() {
       await waitFor(() => doc.querySelectorAll('tr[data-record-id]').length === 3
         && (!salary || doc.getElementById('salary-payment-status').textContent === '1 payment'), `${widget} dates and payments`);
@@ -143,7 +141,6 @@ async function main() {
         await h.loaded();
         assert.deepEqual(h.order(), [12, 13, 11]);
         assert.equal(h.descendingSortColumn(), 'start');
-        if (widget === 'sprints') assert.equal(h.doc.getElementById('row-sort-direction').value, 'desc');
         assert.deepEqual(h.calls.options.filter(([key]) => key === 'rowSort').map(([, value]) => value),
           [{ column: 'start', direction: 'desc' }]);
         assert(h.cell('start').textContent.includes('2026-09-01 11:00 (Tue)'));
@@ -199,8 +196,7 @@ async function main() {
           h.applyOptions({ ...options, columnVisibility: { datetime: true } });
           await waitFor(() => h.cell('start'), 'visible migrated start');
           assert.equal(h.doc.querySelector('#column-strip col[data-column="start"]').style.width, '246px');
-          if (widget === 'salaries')
-            assert.equal(h.doc.querySelector('#column-strip th[aria-sort="ascending"]')?.dataset.column, 'start');
+          assert.equal(h.doc.querySelector('#column-strip th[aria-sort="ascending"]')?.dataset.column, 'start');
         });
       });
     }

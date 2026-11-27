@@ -274,7 +274,8 @@ async function main() {
         .map(row => Number(row.dataset.recordId || row.dataset.expenseId));
       assert.deepEqual(leafRowIds('payroll-week:101'), [1001, 13], 'start desc should place the later cash date first');
       sortColumn('start');
-      assert.deepEqual(leafRowIds('payroll-week:101'), [13, 1001], 'clearing sort restores the regular payroll row order');
+      assert.equal(h.doc.querySelector('#column-strip th[data-column="start"]').getAttribute('aria-sort'), 'ascending');
+      assert.deepEqual(leafRowIds('payroll-week:101'), [13, 1001], 'start asc should place the earlier class first');
       sortColumn('salary_received');
       assert.deepEqual(leafRowIds('payroll-week:101'), [1001, 13]);
       assert.deepEqual(leafRowIds('payroll-review'), [1005, 1006]);

@@ -705,28 +705,19 @@
 
   function buildColumnHeader(col) {
     const label = typeof salaryColumnLabel === 'function' ? salaryColumnLabel(col) : col;
-    const sortable = typeof WIDGET_CONFIG !== 'undefined' && WIDGET_CONFIG.sortInHeaders;
-    const direction = sortable && rowSort.column === col ? rowSort.direction : '';
-    const sortState = direction ? ` aria-sort="${direction === 'asc' ? 'ascending' : 'descending'}"` : '';
-    const headerClass = sortable ? ' column-sortable' : isNumericDisplayColumn(col) ? ' column-number' : '';
-    return `<th scope="col" class="column-header${headerClass}" tabindex="0"`
-      + (sortable ? sortState : ' draggable="true"')
+    const direction = rowSort.column === col ? rowSort.direction : '';
+    const ascending = direction === 'asc';
+    const sortState = direction ? ` aria-sort="${ascending ? 'ascending' : 'descending'}"` : '';
+    const glyph = direction ? (ascending ? '↑' : '↓') : '↕';
+    const action = `Sort ${label} ${ascending ? 'descending' : 'ascending'}`;
+    return `<th scope="col" class="column-header" tabindex="0"${sortState}`
       + ` title="${esc(col)} — ${esc(T.reorderColumn)}" data-column="${esc(col)}">`
-      + `<span class="column-footer-content"><span class="column-name"`
-      + (sortable ? ' draggable="true"' : '') + `>${esc(label)}</span>`
-      + (sortable ? columnSortButtonHtml(label, direction) : '')
-      + `</span>`
+      + `<span class="column-footer-content"><span class="column-name" draggable="true">${esc(label)}</span>`
+      + `<button type="button" class="column-sort-button" draggable="false"`
+      + ` title="${esc(action)}" aria-label="${esc(action)}">${glyph}</button></span>`
       + `<span class="column-resize-handle" draggable="false" tabindex="0"`
       + ` role="separator" aria-orientation="vertical"`
       + ` aria-label="${esc(T.resizeColumn)} ${esc(col)}"></span></th>`;
-  }
-
-  function columnSortButtonHtml(label, direction) {
-    const glyph = direction === 'asc' ? '↑' : direction === 'desc' ? '↓' : '↕';
-    const action = direction === 'desc' ? `Restore Grist row order (sorted by ${label})`
-      : `Sort ${label} ${direction === 'asc' ? 'descending' : 'ascending'}`;
-    return `<button type="button" class="column-sort-button" draggable="false"`
-      + ` title="${esc(action)}" aria-label="${esc(action)}">${glyph}</button>`;
   }
 
   function groupChevronHtml() {
@@ -1264,8 +1255,8 @@
   }
 
   function applyStartupRowSortDefault() {
-    // Wait for the saved preference and source columns before choosing a
-    // default. An explicit Grist-order choice is a saved preference too.
+    // Wait for the saved preference and source columns before choosing a default.
+    // A saved empty column from an older widget still means unsorted.
     if (rowSortConfigured || !optionsLoaded || !metadataLoaded || !allColumns.length)
       return false;
     const datetimeColumn = dateTimeStartColumn(allColumns);
@@ -1277,46 +1268,17 @@
     return true;
   }
 
-  function refreshRowSortControls() {
-    if (!rowSortSelect) return;
-    rowSortSelect.replaceChildren(new Option('Grist order', ''));
-    allColumns.forEach(col => rowSortSelect.add(new Option(col, col)));
-    if (rowSort.column && !allColumns.includes(rowSort.column)) {
-      const missing = new Option(`${rowSort.column} (unavailable)`, rowSort.column);
-      missing.disabled = true;
-      rowSortSelect.add(missing);
-    }
-    rowSortSelect.value = rowSort.column;
-    const type = rowSortColumnType();
-    const labels = type === 'Date' || type === 'DateTime' ? ['Oldest first', 'Newest first']
-      : type === 'Int' || type === 'Numeric' ? ['Lowest first', 'Highest first']
-      : type === 'Bool' ? ['False first', 'True first'] : ['A → Z', 'Z → A'];
-    rowSortDirection.options[0].textContent = labels[0];
-    rowSortDirection.options[1].textContent = labels[1];
-    rowSortDirection.value = rowSort.direction;
-    rowSortDirection.disabled = !rowSort.column || !allColumns.includes(rowSort.column);
-  }
-
-  function changeRowSort(column, direction) {
-    rowSortConfigured = true;
-    rowSort = { column, direction };
-    // Reordering changes what lies between range endpoints: retain just the
-    // active cell, rather than silently selecting a different rectangle.
-    cellRangeEnd = null;
-    render();
-    saveRowSort();
-  }
-  const changeToolbarRowSort = () => changeRowSort(rowSortSelect.value, rowSortDirection.value);
-  rowSortSelect?.addEventListener('change', changeToolbarRowSort);
-  rowSortDirection?.addEventListener('change', changeToolbarRowSort);
-
   columnStrip.addEventListener('click', event => {
     const button = event.target.closest('.column-sort-button');
     if (!button) return;
     const { column } = button.closest('th').dataset;
-    if (rowSort.column !== column) changeRowSort(column, 'asc');
-    else if (rowSort.direction === 'asc') changeRowSort(column, 'desc');
-    else changeRowSort('', 'asc');
+    const direction = rowSort.column === column && rowSort.direction === 'asc' ? 'desc' : 'asc';
+    rowSortConfigured = true;
+    rowSort = { column, direction };
+    // Sorting can change which cells lie between range endpoints.
+    cellRangeEnd = null;
+    render();
+    saveRowSort();
   });
 
   function rowSortKey(value, type) {
@@ -1528,7 +1490,6 @@
     const inlineSelection = inlineInput && [inlineInput.selectionStart, inlineInput.selectionEnd,
       inlineInput.selectionDirection];
     const inlineScroll = inlineInput && [inlineInput.scrollLeft, inlineInput.scrollTop];
-    refreshRowSortControls();
     if (typeof closeRowContextMenu === 'function') closeRowContextMenu(false);
     const restoreCellFocus = content.contains(document.activeElement)
       && document.activeElement.closest('td.data-cell');
@@ -1718,11 +1679,9 @@
       col,
       startX: e.clientX,
       startWidth: getColumnWidth(col),
-      draggable: th.draggable,
       handle,
     };
     handle.classList.add('resizing');
-    th.draggable = false;
     if (handle.setPointerCapture) handle.setPointerCapture(e.pointerId);
   });
 
@@ -1735,9 +1694,7 @@
 
   function finishColumnResize() {
     if (!activeColumnResize) return;
-    const th = activeColumnResize.handle.closest('th[data-column]');
     activeColumnResize.handle.classList.remove('resizing');
-    if (th) th.draggable = activeColumnResize.draggable;
     activeColumnResize = null;
     saveColumnWidths();
     if (settingsPanel.classList.contains('open')) refreshDiag();

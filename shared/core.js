@@ -105,7 +105,7 @@
     T.emptyNoDataTitle = 'No classes for this selection';
     T.emptyNoDataSub = 'Select a teacher in the linked Grist section.';
   }
-  const WIDGET_VERSION = '7.66';
+  const WIDGET_VERSION = '7.67';
   const sharedNumberFormatter = new Intl.NumberFormat(LOCALE, {
     useGrouping: false, maximumSignificantDigits: 15,
   });
@@ -184,8 +184,6 @@
   // ── 4. DOM refs ───────────────────────────────────────────
   const groupSelect   = document.getElementById('group-select');
   const sortSelect    = document.getElementById('sort-select');
-  const rowSortSelect = document.getElementById('row-sort-select');
-  const rowSortDirection = document.getElementById('row-sort-direction');
   const content       = document.getElementById('content');
   const columnStrip   = document.getElementById('column-strip');
   const statsbar      = document.getElementById('statsbar');

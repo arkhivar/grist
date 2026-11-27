@@ -395,21 +395,16 @@
     .group-toggle-all:hover { background: var(--hover-row); color: var(--accent); }
     .group-toggle-all:focus-visible { box-shadow: var(--focus-ring); color: var(--accent); }
     .group-toggle-all:disabled { opacity: .4; cursor: default; }
-    .column-strip .rec-table thead th.column-header {
-      cursor: grab; touch-action: none;
+    .column-strip .rec-table thead th.column-header { touch-action: none; }
+    .column-footer-content {
+      display: flex; align-items: center; gap: 1px; min-width: 0;
+      margin-inline: -6px -3px;
     }
-    .column-strip .rec-table thead th.column-header:active { cursor: grabbing; }
-    .column-strip .column-name { padding-right: 8px; }
-    .column-strip .rec-table thead th.column-sortable,
-    .column-strip .rec-table thead th.column-sortable:active { cursor: default; }
-    .column-sortable .column-footer-content {
-      margin-inline: -6px -3px; gap: 1px;
+    .column-name {
+      flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+      cursor: grab; text-align: left; user-select: none;
     }
-    .column-strip .column-sortable .column-name {
-      flex: 1 1 auto; padding-right: 0; cursor: grab;
-      text-align: left; user-select: none;
-    }
-    .column-strip .column-sortable .column-name:active { cursor: grabbing; }
+    .column-name:active { cursor: grabbing; }
     .column-sort-button {
       display: grid; place-items: center; flex: 0 0 16px;
       width: 16px; height: 22px;
@@ -417,7 +412,7 @@
       background: transparent; color: var(--muted); cursor: pointer;
       font: 600 13px/1 var(--font);
     }
-    .column-sortable[aria-sort] .column-sort-button { color: var(--accent); }
+    .column-header[aria-sort] .column-sort-button { color: var(--accent); }
     .column-sort-button:hover { background: var(--hover-row); color: var(--accent); }
     .column-sort-button:focus-visible {
       outline: 1px solid var(--accent); outline-offset: -1px; color: var(--accent);
@@ -562,17 +557,6 @@
       box-shadow: inset -3px 0 0 var(--accent);
     }
     .rec-table tfoot th.column-add-spacer { padding: 0; height: 27px; }
-    .column-footer-content {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      min-width: 0;
-    }
-    .column-name {
-      display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-      padding-right: 5px;
-    }
-    .column-strip .rec-table th.column-number { text-align: right; }
-    .column-number .column-footer-content { justify-content: flex-end; }
-    .column-number .column-name { padding-right: 0; }
     .group-sums { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
     .group-sum {
       position: absolute; top: 50%; transform: translateY(-50%);

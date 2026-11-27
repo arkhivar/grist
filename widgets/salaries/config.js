@@ -2,7 +2,6 @@
 // Keep this widget on the shared grouped-table implementation.
 const WIDGET_CONFIG = {
   monthlyOnly: true,
-  sortInHeaders: true,
   sumColumns: ['wage', 'count'],
   showGroupingColumn: true,
   editAllWritableText: true,

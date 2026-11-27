@@ -450,7 +450,7 @@ async function main() {
   sortColumn('salary_received');
   assert.deepEqual(augustRowIds(), [13, 11, 1, 2, 6], 'descending Paid should keep blank class amounts last');
   sortColumn('salary_received');
-  assert.deepEqual(augustRowIds(), [1, 2, 6, 13, 11], 'Grist order should restore the original class and payment order');
+  assert.deepEqual(augustRowIds(), [11, 13, 1, 2, 6], 'third Paid click should return to ascending');
   sortColumn('datetime');
   assert.deepEqual(augustRowIds(), [1, 11, 2, 6, 13], 'sort start and cash dates together, keeping ties stable');
   sortColumn('datetime');

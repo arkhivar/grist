@@ -1197,16 +1197,17 @@ await test('M: DateTime day grouping uses local calendar boundaries', async () =
 });
 
 // ── N. Independent row sorting ───────────────────────────────
-const rowSortColumnControl = doc.getElementById('row-sort-select');
-const rowSortDirectionControl = doc.getElementById('row-sort-direction');
+const sortHeader = column => doc.querySelector(`#column-strip th[data-column="${column}"]`);
+const sortButton = column => sortHeader(column).querySelector('.column-sort-button');
+const activeSortHeader = () => doc.querySelector('#column-strip th[aria-sort]');
 function rowIds(groupLabel) {
   const card = [...doc.querySelectorAll('.group')].find(el => el.dataset.groupLabel === groupLabel);
   return [...card.querySelectorAll('tbody tr')].map(row => Number(row.dataset.recordId));
 }
 async function setRowSort(column, direction = 'asc') {
-  rowSortColumnControl.value = column;
-  rowSortDirectionControl.value = direction;
-  rowSortColumnControl.dispatchEvent(new win.Event('change', { bubbles: true }));
+  const target = direction === 'asc' ? 'ascending' : 'descending';
+  if (!sortHeader(column).hasAttribute('aria-sort')) sortButton(column).click();
+  if (sortHeader(column).getAttribute('aria-sort') !== target) sortButton(column).click();
   await flush();
 }
 const sortRecords = RECORDS.map((record, i) => ({ ...record, sprint: i < 5 ? 'Sprint 14' : 'Sprint 15',
@@ -1219,7 +1220,7 @@ await test('N: DateTime row sorting handles transport formats, ties, blanks, and
   const mutations = calls.update.length + calls.create.length + calls.destroy.length + calls.actions.length;
   await setRowSort('startsAt');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[2,4,3,1,5]', 'ascending chronological rows');
-  assertEq(rowSortDirectionControl.options[0].textContent, 'Oldest first', 'date direction label');
+  assertEq(sortButton('startsAt').textContent.trim(), '↑', 'ascending date icon');
   await setRowSort('startsAt', 'desc');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,3,2,4,5]', 'descending rows with stable ties and empty last');
   doc.getElementById('sort-select').value = 'alpha-asc';
@@ -1230,16 +1231,21 @@ await test('N: DateTime row sorting handles transport formats, ties, blanks, and
   assertEq(sortRecords.map(r => r.id).join(','), '1,2,3,4,5,6', 'sorting mutated input order');
 });
 
-await test('N: numeric and natural text ordering; Grist order restores the incoming sequence', async () => {
+await test('N: numeric and natural text ordering toggle in both directions', async () => {
   await setRowSort('count');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[2,3,1,4,5]', 'numeric rather than lexical order');
   await setRowSort('count', 'desc');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,4,3,2,5]', 'descending numeric order');
   await setRowSort('students');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[3,2,4,1,5]', 'natural text order');
-  await setRowSort('');
-  assert(rowSortDirectionControl.disabled, 'Grist order has an active direction');
-  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,2,3,4,5]', 'original Grist order not restored');
+  assertEq(sortButton('count').textContent.trim(), '↕', 'old column remains visibly active');
+  sortButton('students').click();
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,2,4,3,5]', 'descending natural text order with stable ties');
+  assertEq(sortButton('students').textContent.trim(), '↓', 'descending text icon');
+  sortButton('students').click();
+  assertEq(JSON.stringify(rowIds('Sprint 14')), '[3,2,4,1,5]', 'third click should return to ascending');
+  assertEq(sortHeader('students').getAttribute('aria-sort'), 'ascending', 'ascending text state');
+  await flush();
 });
 
 await test('N: row sorting persists and survives options arriving before the chosen column', async () => {
@@ -1249,15 +1255,15 @@ await test('N: row sorting persists and survives options arriving before the cho
   onRecordsCb(sortRecords.map(({ startsAt, ...record }) => record));
   onOptionsCb({ rowSort: saved }, { accessLevel: 'full' });
   await flush();
-  assert(rowSortDirectionControl.disabled, 'missing sort column still enabled');
+  assert(!activeSortHeader(), 'missing sort column still marked active');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,2,3,4,5]', 'missing column scrambled rows');
   onRecordsCb(sortRecords);
-  assertEq(rowSortColumnControl.value, 'startsAt', 'sort column was forgotten');
-  assertEq(rowSortDirectionControl.value, 'desc', 'sort direction was forgotten');
+  assertEq(activeSortHeader()?.dataset.column, 'startsAt', 'sort column was forgotten');
+  assertEq(sortHeader('startsAt').getAttribute('aria-sort'), 'descending', 'sort direction was forgotten');
   assertEq(JSON.stringify(rowIds('Sprint 14')), '[1,3,2,4,5]', 'saved sort not applied to arriving records');
   onOptionsCb({ rowSort: '{broken' }, { accessLevel: 'full' });
   await flush();
-  assertEq(rowSortColumnControl.value, '', 'malformed option not safely reset');
+  assert(!activeSortHeader(), 'malformed option not safely reset');
 });
 
 await test('N: ranges copy in displayed order; changing sorting keeps only the active cell', async () => {
@@ -1300,7 +1306,7 @@ await test('N: rapid sort saves are serialized and failures surface the real err
     await setRowSort('startsAt', 'desc');
     assertEq(received.length, 1, 'sort saves ran concurrently');
     onOptionsCb({ rowSort: received[0] }, { accessLevel: 'full' });
-    assertEq(rowSortDirectionControl.value, 'desc', 'stale echo overwrote current direction');
+    assertEq(sortHeader('startsAt').getAttribute('aria-sort'), 'descending', 'stale echo overwrote current direction');
     finishSave();
     await waitFor(() => received.length === 2, 'queued row sort save');
     await flush();
@@ -1490,7 +1496,7 @@ await test('P: typing replaces Text inline with the first character; second clic
   assert(text.hidden, 'Escape did not cancel inline Text editing');
 });
 
-await test('Q: fixed header supports saved keyboard reordering', async () => {
+await test('Q: fixed header supports saved keyboard and drag reordering', async () => {
   const strip = doc.getElementById('column-strip');
   assert(!strip.hidden, 'fixed column strip is hidden');
   const before = [...strip.querySelectorAll('th[data-column]')].map(th => th.dataset.column);
@@ -1508,6 +1514,23 @@ await test('Q: fixed header supports saved keyboard reordering', async () => {
   assertEq(after[index], before[index + 1], 'next column did not move left');
   assertEq(after[index + 1], 'students', 'students did not move right');
   assertEq(doc.activeElement.dataset.column, 'students', 'header focus was lost after reorder');
+  const moved = strip.querySelector('th[data-column="students"]');
+  const label = moved.querySelector('.column-name');
+  const sort = moved.querySelector('.column-sort-button');
+  assert(label.draggable && !moved.draggable && !sort.draggable,
+    'column drag target should be the label, separate from the sort button');
+  const dropTarget = strip.querySelector(`th[data-column="${before[index + 1]}"]`);
+  dropTarget.getBoundingClientRect = () => ({ left: 20, width: 100 });
+  const dragSaveCount = calls.setOption.length;
+  label.dispatchEvent(new win.Event('dragstart', { bubbles: true, cancelable: true }));
+  dropTarget.dispatchEvent(new win.MouseEvent('dragover', {
+    bubbles: true, cancelable: true, clientX: 21,
+  }));
+  dropTarget.dispatchEvent(new win.MouseEvent('drop', { bubbles: true, cancelable: true }));
+  await waitFor(() => calls.setOption.slice(dragSaveCount).some(([key]) => key === 'columnOrder'),
+    'header label drag order save');
+  const restored = [...strip.querySelectorAll('th[data-column]')].map(th => th.dataset.column);
+  assertEq(restored.join(','), before.join(','), 'dragging the label did not restore the original order');
 });
 
 await test('R: toolbar column control hides, restores, and persists a column', async () => {

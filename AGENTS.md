@@ -124,7 +124,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.66)
+## Current state (v7.67)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   actual record months) or `payroll` (manual months containing ISO weeks).
@@ -206,11 +206,10 @@ payments.
   saved widths win. Month headers also show the signed class count sum.
 
 - Numeric cells, inline number editors, and group totals align to the right
-  in both grouped widgets. Sprints numeric headers are right-aligned. Salaries
-  labels are left-aligned, with the sort button on the right.
-  `formatNumberValue()` in shared core
-  formats plain numbers without grouping separators; editor and clipboard
-  values retain source precision. Keep numeric styling off Date/DateTime cells.
+  in both grouped widgets. Header labels are left-aligned, with the sort button
+  on the right. `formatNumberValue()` in shared core formats plain numbers
+  without grouping separators. Editor and clipboard values retain source
+  precision. Keep numeric styling off Date/DateTime cells.
 - Salary payment rows show optional `Transactions.notes` as escaped, clipped
   read-only text with the complete note in its tooltip, independently of the
   Attendance notes column's type. Prefer the visible `start` (legacy `datetime`) column for
@@ -304,14 +303,15 @@ payments.
   through refreshes, scroll, and resize. Removed or hidden target cells close them.
   Clicking outside saves the chosen date/time; OK also saves and uses the same
   neutral button style as Cancel. Cancel and Escape discard the draft.
-- Group and row sorts are independent. Salaries sorts class and payment rows
-  together within each month or payroll period. Its header buttons cycle through
-  ascending, descending, and Grist order. Sprints uses Sort rows dropdowns.
-  Row sort is a persisted section option (`rowSort: {column, direction}`),
-  view-only, stable, and empty-last.
-  Both widgets default to `start` (legacy `datetime`) descending after options, metadata, and
-  columns are ready. Saved and manual choices, including Grist order, win;
-  absent both date fields leaves Grist order. The automatic preference is saved once.
+- Group and row sorts are independent. Both widgets use the right-hand header
+  buttons to sort within each group. Click a column to sort ascending, then
+  toggle between ascending and descending. Salaries sorts class and payment
+  rows together. Row sort is a persisted section option
+  (`rowSort: {column, direction}`), view-only, stable, and empty-last. With no
+  saved sort, both widgets default to `start` (legacy `datetime`) descending
+  after options, metadata, and columns are ready and save the default once.
+  If neither field exists or a legacy saved option has an empty column, rows
+  start in incoming order until a sort is selected.
 - Both widgets share one sticky column strip above the group cards. Column
   names, drag reordering, keyboard reordering, and resize handles live there;
   a lightweight toolbar Columns popover offers visibility switches and drag
