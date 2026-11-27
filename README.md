@@ -144,28 +144,30 @@ shown if its label is unavailable. Edit these links in Transactions and use
 Office work can be logged in Attendance with `start`, `end`, the staff member
 in `t`, and a wage, just like lessons.
 
-The payroll view uses these links:
+In **Weekly**, each payment appears once according to its links in Transactions.
 
-- `Transactions.forWeek`: Reference to `WeekRegistry` for weekly payments.
-- `Transactions.forMonth`: Reference to `MonthRegistry` for monthly payments
-  such as bonuses. Use one period link per payment.
-- `WeekRegistry.forMonth`: editable Reference to `MonthRegistry`. Click the
-  small month button under a week heading to assign or clear its parent month.
-  This assignment is shared by everyone using that week, and supports Undo/Redo.
+| Payment links | Where the payment appears |
+| --- | --- |
+| Both `forWeek` and `forMonth` | In the linked week under the payment’s own month, even if the week has a different default month or none. |
+| Only `forWeek` | In the linked week under its `WeekRegistry.forMonth`. A blank week month puts it under **Unassigned month**. |
+| Only `forMonth` | Under **Monthly items** in the linked month. Use this for a monthly salary or bonus. |
+| Neither link, or an invalid period assignment | Under **Needs review**. |
 
-Weeks use `weekStart` / `weekEnd` Date columns (Monday through the next Monday,
-exclusive); months use `monthStart` / `monthEnd` Date columns (first day through
-the next month's first day, exclusive). Attendance work records join their
-VLAT week by `start`. A week crossing months stays together under its manually
-assigned month; no date-based month assignment is assumed. Unassigned weeks
-remain under **Unassigned month**. Monthly payments appear under **Monthly
-items** in their assigned month, even when paid later. Payment rows always
-retain their actual transaction date.
+For example, a July payment linked to `2026-W27` and June appears under
+**June 2026 → 2026-W27** and contributes to June’s **paid** subtotal. The row
+keeps its July transaction date. Other payments for that week can belong to July.
 
-Missing, invalid, or conflicting period links appear in **Needs review**.
-Nothing is silently dropped or counted twice. Correct transaction links in
-Transactions; use **Refresh payments** after external transaction or registry
-changes. A registry read failure is shown as an error, rather than zero pay.
+Attendance work records join their Vladivostok week by `start` and use the
+week’s default month. On weeks with work records or week-only payments, the
+month button under the heading sets or clears `WeekRegistry.forMonth` for
+everyone who uses that default. The picker supports Undo/Redo. To move an
+individually assigned payment, edit its links in Transactions.
+
+Weeks use `weekStart` and `weekEnd` Date columns, from Monday up to the next
+Monday (exclusive). Months use `monthStart` and `monthEnd` Date columns, from
+the first day up to the next month’s first day (exclusive). Use **Refresh
+payments** after editing either registry. A registry read failure displays the
+error and leaves payment totals unavailable.
 
 Grouping is computed in the widget from cached registry reads, without adding
 native summary tables or making a request per week. Weeks start collapsed;

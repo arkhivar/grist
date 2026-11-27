@@ -81,12 +81,20 @@ function salaryPaymentPeriodTarget(field, table, { tables, columns }) {
   return column?.type === `Ref:${table}` || column?.type === `RefList:${table}`;
 }
 
+function salaryPaymentPeriodRegistry(field) {
+  const monthly = field === 'forMonth';
+  const linkedRegistry = monthly ? salaryPaymentMonthRegistry : salaryPaymentWeekRegistry;
+  if (!linkedRegistry || !salaryPayrollActive()) return linkedRegistry;
+  // Assigning a week or replaying history refreshes Weekly's registry maps.
+  return monthly ? salaryPeriodMonths : salaryPeriodWeeks;
+}
+
 function salaryPaymentPeriodCell(row, col) {
   const monthly = col === 'salary_forMonth';
   const ref = salaryPeriodReference(monthly ? row.monthRef : row.weekRef);
   if (ref.empty) return { label: '', sortKey: null };
   if (!ref.valid) return { label: 'Invalid link', sortKey: null };
-  const registry = monthly ? salaryPaymentMonthRegistry : salaryPaymentWeekRegistry;
+  const registry = salaryPaymentPeriodRegistry(salaryPaymentPeriodFields[col]);
   const period = registry?.get(ref.id);
   return period?.valid
     ? { label: monthly ? period.label : period.isoKey, sortKey: period.sortKey }

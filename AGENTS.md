@@ -128,7 +128,7 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.71)
+## Current state (v7.72)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   Calendar months) or `payroll` (Weekly, with manual months containing ISO weeks).
@@ -153,17 +153,20 @@ payments.
   invalidates both. Keep generation guards and await every sibling read.
   Period ends are exclusive. Weeks run Monday to Monday and months run from
   the first day to the first day of the next month.
-  Attendance `start` maps to a VLAT week. Weekly payments use
-  `Transactions.forWeek`; monthly-only payments use `Transactions.forMonth`.
-  A payment with both links, neither, or invalid links goes to Needs review.
-  Every payment is counted once, with its original cash date and signed amount.
-- `WeekRegistry.forMonth` is an editable `Ref:MonthRegistry` (added empty).
-  It is the only authority for a week's parent month, including crossing weeks;
-  never infer or backfill it from a payment date. The assignment is shared for
-  everyone using that week. The picker writes raw IDs to WeekRegistry only,
-  fresh-reads metadata/value, rejects stale selections and newer assignments
-  during history replay, and preserves real API errors. Empty links show under
-  Unassigned month; monthly items show under the assigned month's Monthly items.
+  In Weekly, valid `Transactions.forWeek` and `Transactions.forMonth` together
+  place a payment in that week under its explicit month, including when the
+  registry week has a different month or none. The same week can appear under
+  multiple months. Count each payment once and preserve its cash date and
+  signed amount. Month-only payments use Monthly items. Payments with neither
+  link or an invalid period assignment go to Needs review.
+- Attendance `start` maps to a VLAT week. Attendance and week-only payments
+  take their month from `WeekRegistry.forMonth` (editable `Ref:MonthRegistry`).
+  A blank week month places these rows under Unassigned month. Never infer or
+  write this shared default from a transaction's date or explicit month.
+  Show the month picker on week groups with work records or week-only payments.
+  It writes raw IDs to WeekRegistry only, fresh-reads metadata and value,
+  rejects stale selections and newer assignments during history replay, and
+  preserves real API errors.
 - Payroll parents aggregate children without duplicate row tables. Collapsed
   periods render no row DOM; collapse preferences have a separate saved set so
   delayed automatic calendar grouping cannot erase them. Date edits, paste,

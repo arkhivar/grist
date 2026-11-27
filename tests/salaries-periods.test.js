@@ -23,7 +23,7 @@ async function waitFor(condition, label = 'payroll period view') {
 function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
   weekFailure = false, wrongMonthType = false, formulaMonth = false,
   deferMonths = false, monthFailure = '', monthRefs = [0, 201, 0, 0, 0, 201, 201],
-  transactionMonthType = 'Ref:MonthRegistry',
+  transactionMonthType = 'Ref:MonthRegistry', transactionWeekType = 'Ref:WeekRegistry',
   commonStudent = false, savedCollapsed, savedLayout = {}, deferTransactions = false,
   attendanceWeek = false } = {}) {
   const html = read('salaries.html');
@@ -49,7 +49,7 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
       '2026-07-05T01:00:00Z'].map(sec),
     amount: [300, 50, 100, 40, 5, 6, 75],
     notes: ['June week paid in July', 'June monthly bonus', 'October week',
-      'Week has no assigned month', 'No period', 'Conflicting period links', 'Payment before any office hours'],
+      'Week has no assigned month', 'No period', 'Week payment assigned to June', 'Payment before any office hours'],
     forWeek: [101, 0, 102, 104, 0, 102, 0],
     forMonth: monthRefs?.slice(),
   };
@@ -86,7 +86,7 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
     col === 'count', col === 't' ? teacherLabelRef : col === 'student' ? studentLabelRef : 0));
   Object.keys(transactions).filter(col => col !== 'id').forEach(col =>
     column(3, col, col === 'per' ? 'RefList:PERFORMANCE' : col === 'datetime' ? 'DateTime:Asia/Vladivostok'
-      : col === 'amount' ? 'Numeric' : col === 'forWeek' ? 'Ref:WeekRegistry'
+      : col === 'amount' ? 'Numeric' : col === 'forWeek' ? transactionWeekType
         : col === 'forMonth' ? transactionMonthType : 'Text', false, col === 'per' ? teacherLabelRef : 0));
   Object.keys(weeks).filter(col => col !== 'id').forEach(col =>
     column(4, col, ['weekStart', 'weekEnd'].includes(col) ? 'Date'
@@ -376,7 +376,7 @@ async function main() {
       assert.deepEqual(h.calls.writes, []);
     });
 
-  await test('manual month owns crossing weeks; bonus uses assigned month; totals count each row once',
+  await test('crossing weeks honor explicit payment months and registry defaults, counting each row once',
     { view: 'payroll' }, async h => {
       await h.loaded();
       const june = h.parent('payroll-month:201');
@@ -392,11 +392,12 @@ async function main() {
       const monthly = [...june.querySelectorAll('.group')]
         .find(card => card.dataset.groupLabel === 'Monthly items');
       assert(monthly, 'monthly bonus was not kept separate from weekly items');
-      assert.equal(june.querySelector('.group-sum[data-column="salary_received"]').textContent, '350');
+      assert.equal(june.querySelector('.group-sum[data-column="salary_received"]').textContent, '356');
       assert.equal(june.querySelector('.group-sum[data-column="wage"]').textContent, '200');
       assert.equal(october.querySelector('.group-sum[data-column="wage"]').textContent, '75');
       assert.equal(october.querySelector('.group-sum[data-column="count"]').textContent, '-1250');
-      assert.equal(unassigned.querySelector('.group-sum[data-column="salary_received"]').textContent, '51');
+      assert.equal(october.querySelector('.group-sum[data-column="salary_received"]').textContent, '100');
+      assert.equal(unassigned.querySelector('.group-sum[data-column="salary_received"]').textContent, '45');
       assert.equal(h.doc.querySelectorAll('tr[data-record-id]').length, 0,
         'collapsed payroll weeks rendered every class row eagerly');
       h.expandAll();
@@ -409,8 +410,17 @@ async function main() {
       const visibleMonthly = [...h.parent('payroll-month:201').querySelectorAll('.group')]
         .find(card => card.dataset.groupLabel === 'Monthly items');
       assert(visibleMonthly.querySelector('[data-expense-id="1002"]'), 'June bonus paid in July moved to July');
-      assert(h.leaf('payroll-review').querySelector('[data-expense-id="1006"]'),
-        'conflicting week/month links were silently resolved');
+      const explicitWeek = h.payment(1006).closest('.group');
+      assert.equal(explicitWeek.closest('.salary-month'), h.parent('payroll-month:201'));
+      assert.match(explicitWeek.dataset.groupLabel, /^2026-W40\b/);
+      assert(!explicitWeek.querySelector('.salary-week-month'), 'the registry picker cannot move an explicit payment');
+      assert.equal(h.payment(1003).closest('.group'), h.leaf('payroll-week:102'));
+      assert.equal(h.doc.querySelector('tr[data-record-id="11"]').closest('.group'), h.leaf('payroll-week:102'));
+      explicitWeek.querySelector('.group-header').click();
+      assert(!h.payment(1006), 'collapsed June week still renders its payment');
+      assert(h.payment(1003), 'collapsing the June copy also collapsed the October week');
+      h.expandAll();
+      assert.equal(h.payment(1005).closest('.group'), h.leaf('payroll-review'));
       const sortColumn = col => h.doc.querySelector(
         `#column-strip th[data-column="${col}"] .column-sort-button`).click();
       const leafRowIds = key => [...h.leaf(key).querySelectorAll('tbody tr')]
@@ -421,13 +431,83 @@ async function main() {
       assert.deepEqual(leafRowIds('payroll-week:101'), [13, 1001], 'start asc should place the earlier class first');
       sortColumn('salary_received');
       assert.deepEqual(leafRowIds('payroll-week:101'), [1001, 13]);
-      assert.deepEqual(leafRowIds('payroll-review'), [1005, 1006]);
-      sortColumn('salary_received');
-      assert.deepEqual(leafRowIds('payroll-review'), [1006, 1005], 'Paid should sort a payment-only payroll period');
-      assert.equal(h.parent('payroll-unassigned').querySelector('.group-sum[data-column="salary_received"]').textContent, '51');
+      assert.equal(h.parent('payroll-unassigned').querySelector('.group-sum[data-column="salary_received"]').textContent, '45');
       assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
       assert.deepEqual(h.calls.writes, []);
     });
+
+  await test('explicit weeks and months group signed payments without assigning the shared week',
+    { view: 'payroll', transactionWeekType: 'RefList:WeekRegistry',
+      monthRefs: [['R', 'MonthRegistry', 201], 201, 0, 0, 0, 201, 201] }, async h => {
+      h.weeks.forMonth[0] = 0;
+      h.transactions.forWeek[0] = ['r', 'WeekRegistry', [101]];
+      h.transactions.forWeek[3] = 101;
+      h.transactions.forWeek[5] = 101;
+      h.transactions.amount[0] = -300;
+      await h.loaded();
+      h.expandAll();
+      const assignedWeek = () => h.payment(1001).closest('.group');
+      assert.equal(assignedWeek().closest('.salary-month'), h.parent('payroll-month:201'));
+      assert.match(assignedWeek().dataset.groupLabel, /^2026-W27\b/);
+      assert.equal(h.payment(1006).closest('.group'), assignedWeek());
+      assert.equal(h.payment(1004).closest('.salary-month'), h.parent('payroll-unassigned'));
+      assert.equal(h.doc.querySelector('tr[data-record-id="13"]').closest('.group'), h.payment(1004).closest('.group'));
+      assert(!assignedWeek().querySelector('.salary-week-month'));
+      assert(assignedWeek().querySelector('.group-add-row').disabled);
+      assert.match(h.payment(1001).querySelector('.salary-payment-date').textContent, /2026-07-09 11:00/);
+      assert.equal(h.payment(1001).querySelector('.salary-payment-amount').textContent.trim(), '-300');
+      assert.equal(assignedWeek().querySelector('.salary-received-sum').textContent, '-294');
+      assert.equal(h.parent('payroll-month:201').querySelector('.salary-received-sum').textContent, '-244');
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert.equal(h.weeks.forMonth[0], 0);
+      assert.deepEqual(h.calls.writes, []);
+
+      const sort = () => h.doc.querySelector('#column-strip th[data-column="salary_received"] .column-sort-button').click();
+      const ordered = () => [...assignedWeek().querySelectorAll('tr[data-expense-id]')].map(row => Number(row.dataset.expenseId));
+      sort();
+      assert.deepEqual(ordered(), [1001, 1006]);
+      sort();
+      assert.deepEqual(ordered(), [1006, 1001]);
+      await h.assign(101, 201);
+      await waitFor(() => h.payment(1004)?.closest('.salary-month') === h.parent('payroll-month:201'),
+        'week-only payment moved to the shared month');
+      h.expandAll();
+      assert.equal(h.payment(1004).closest('.group'), assignedWeek());
+      assert.equal(h.doc.querySelector('tr[data-record-id="13"]').closest('.group'), assignedWeek());
+      assert.equal(assignedWeek().querySelector('.salary-received-sum').textContent, '-254');
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+    });
+
+  await test('invalid links stay in review; a valid payment month overrides an invalid shared parent',
+    { view: 'payroll', monthRefs: [201, 999, ['L', 201, 204], 201, 201, 0, 201] }, async h => {
+      h.weeks.forMonth[0] = 999;
+      h.weeks.weekEnd[3] = sec('2026-07-14');
+      h.transactions.forWeek[4] = 999;
+      h.transactions.forWeek[5] = 101;
+      await h.loaded();
+      h.expandAll();
+      assert.equal(h.payment(1001).closest('.salary-month'), h.parent('payroll-month:201'));
+      assert.match(h.payment(1001).closest('.group').dataset.groupLabel, /^2026-W27\b/);
+      assert.deepEqual([...h.leaf('payroll-review').querySelectorAll('tr[data-expense-id]')]
+        .map(row => Number(row.dataset.expenseId)).sort(), [1002, 1003, 1004, 1005, 1006]);
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert.deepEqual(h.calls.writes, []);
+    });
+
+  for (const target of ['week', 'month']) {
+    const wrongType = target === 'week' ? { transactionWeekType: 'Ref:MonthRegistry' }
+      : { transactionMonthType: 'Ref:WeekRegistry' };
+    await test(`Weekly rejects a ${target} link targeting another table even when the ID matches`,
+      { view: 'payroll', ...wrongType }, async h => {
+        await h.loaded();
+        h.expandAll();
+        assert.equal(h.payment(1006).closest('.group'), h.leaf('payroll-review'));
+        assert.equal(h.payment(target === 'week' ? 1001 : 1002).closest('.group'), h.leaf('payroll-review'));
+        assert.equal(h.payment(target === 'week' ? 1002 : 1001).closest('.salary-month'), h.parent('payroll-month:201'));
+        assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+        assert.deepEqual(h.calls.writes, []);
+      });
+  }
 
   await test('Weekly offers optional period columns that show the original ledger links',
     { view: 'payroll' }, async h => {
@@ -454,27 +534,27 @@ async function main() {
 
       const monthly = h.payment(1002);
       const weekly = h.payment(1001);
-      const conflict = h.payment(1006);
+      const assigned = h.payment(1006);
       assert.equal(tableCell(h.doc, monthly, 'salary_forMonth').textContent.trim(), 'June 2026');
       assert.match(tableCell(h.doc, monthly, 'salary_forWeek').textContent.trim(), /^(?:—)?$/);
       assert.equal(tableCell(h.doc, weekly, 'salary_forWeek').textContent.trim(), '2026-W27');
       assert.match(tableCell(h.doc, weekly, 'salary_forMonth').textContent.trim(), /^(?:—)?$/,
         'a parent month was displayed as an explicit transaction month link');
-      assert.equal(tableCell(h.doc, conflict, 'salary_forMonth').textContent.trim(), 'June 2026');
-      assert.equal(tableCell(h.doc, conflict, 'salary_forWeek').textContent.trim(), '2026-W40');
-      assert.equal(conflict.closest('.group'), h.leaf('payroll-review'));
+      assert.equal(tableCell(h.doc, assigned, 'salary_forMonth').textContent.trim(), 'June 2026');
+      assert.equal(tableCell(h.doc, assigned, 'salary_forWeek').textContent.trim(), '2026-W40');
+      assert.equal(assigned.closest('.salary-month'), h.parent('payroll-month:201'));
 
       const attendanceRow = h.doc.querySelector('tr[data-record-id="13"]');
       for (const column of ['salary_forMonth', 'salary_forWeek']) {
         assert.match(tableCell(h.doc, attendanceRow, column).textContent.trim(), /^(?:—)?$/,
           'an Attendance row showed an inferred ledger assignment');
-        for (const row of [attendanceRow, monthly, weekly, conflict]) {
+        for (const row of [attendanceRow, monthly, weekly, assigned]) {
           const cell = tableCell(h.doc, row, column);
           assert.notEqual(cell.dataset.cellWritable, 'true');
           assert(!cell.querySelector('button, input, [contenteditable="true"]'), 'ledger assignment can be edited');
         }
       }
-      assert.equal(h.parent('payroll-month:201').querySelector('.salary-received-sum').textContent, '350');
+      assert.equal(h.parent('payroll-month:201').querySelector('.salary-received-sum').textContent, '356');
       assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
       assert.deepEqual(h.calls.writes, []);
     });
@@ -511,10 +591,14 @@ async function main() {
 
   await test('payment-only teacher works; cached registry reads survive teacher changes', { view: 'payroll', paymentOnly: true },
     async h => {
+      h.transactions.forWeek[6] = 101;
       await h.loaded();
       h.expandAll();
       assert.deepEqual(h.classIds(), []);
       assert.deepEqual(h.paymentIds(), [1007]);
+      assert.equal(h.payment(1007).closest('.group'), h.leaf('payroll-week:101'));
+      assert(!h.leaf('payroll-week:101').querySelector('.salary-week-month'),
+        'a shared month picker was offered for a payment with its own matching month');
       assert.equal(h.parent('payroll-month:201').querySelector('.group-sum[data-column="salary_received"]').textContent, '75');
       h.select(7);
       await waitFor(() => h.status() === '6 payments');
@@ -542,6 +626,9 @@ async function main() {
       await waitFor(() => h.calls.writes.length === 4);
       assert.deepEqual(h.calls.writes[3].fields, { forMonth: 0 });
       assert.equal(h.leaf('payroll-week:102').closest('.salary-month'), h.parent('payroll-unassigned'));
+      h.expandAll();
+      assert.equal(h.payment(1006).closest('.salary-month'), h.parent('payroll-month:201'),
+        'clearing the shared week month moved a payment with its own month');
       assert(h.calls.writes.every(write => write.table === 'WeekRegistry'), 'registry Undo targeted Attendance');
       assert(h.calls.fetches.filter(name => name === 'WeekRegistry').length >= 4,
         'month assignment did not freshly read its original registry value');

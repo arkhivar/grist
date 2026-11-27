@@ -1,5 +1,4 @@
-// Both views share month boundaries. A week's parent month always comes from
-// its explicit registry link.
+// Both views share month boundaries. A payment can override its week's default month.
 let salaryPeriodView = 'calendar';
 let salaryPeriodRegistryStatus = 'idle';
 let salaryPeriodRegistryError = '';
@@ -254,16 +253,22 @@ function salaryBuildPayrollGroups(records, payments) {
     return parents.get(key);
   }
 
-  function leafFor(week, month, reviewReason) {
-    const key = reviewReason ? 'payroll-review'
-      : week ? `payroll-week:${week.id}` : `payroll-monthly:${month.id}`;
+  function leafFor(week, monthId) {
+    const review = !week && !monthId;
+    const parent = parentFor(monthId);
+    // Keep the saved collapse key for the registry placement of a week.
+    let key = review ? 'payroll-review' : `payroll-monthly:${monthId}`;
+    if (week) {
+      key = `payroll-week:${week.id}`;
+      if (monthId !== week.monthId) key += `:month:${monthId}`;
+    }
     if (!leaves.has(key)) {
-      const parent = parentFor(reviewReason ? 0 : week ? week.monthId : month.id);
       const leaf = { key,
-        label: reviewReason ? 'Needs review · unassigned or conflicting period'
+        label: review ? 'Needs review · missing or invalid period'
           : week ? week.label : 'Monthly items',
-        sortKey: reviewReason ? null : week ? week.sortKey : month.sortKey,
+        sortKey: week ? week.sortKey : parent.sortKey,
         weekId: week?.id || 0, monthId: parent.monthId,
+        usesWeekMonth: false,
         writeValue: null, records: [], payments: [],
         addRowDisabledReason: 'Add the first work record for this period in Attendance',
       };
@@ -285,26 +290,30 @@ function salaryBuildPayrollGroups(records, payments) {
         wallDate.getUTCDate() - (wallDate.getUTCDay() + 6) % 7) / 1000;
       week = weekByStart.get(monday);
     }
-    const review = !week || !week.monthValid;
-    const leaf = leafFor(review ? null : week, null, review);
+    const leaf = week?.monthValid ? leafFor(week, week.monthId) : leafFor(null, 0);
     leaf.records.push(record);
-    if (!review && leaf.records.length === 1) {
+    if (leaf.weekId && leaf.records.length === 1) {
+      leaf.usesWeekMonth = true;
       leaf.writeValue = record[groupedColumn] ?? null;
       delete leaf.addRowDisabledReason;
     }
   });
 
+  const paymentWeeks = salaryPaymentPeriodRegistry('forWeek');
+  const paymentMonths = salaryPaymentPeriodRegistry('forMonth');
   payments.forEach(payment => {
     const weekRef = salaryPeriodReference(payment.weekRef);
     const monthRef = salaryPeriodReference(payment.monthRef);
-    const week = salaryPeriodWeeks.get(weekRef.id);
-    const month = salaryPeriodMonths.get(monthRef.id);
-    const review = !weekRef.valid || !monthRef.valid
-      || (!weekRef.empty && !monthRef.empty)
-      || (weekRef.empty && monthRef.empty)
-      || (!weekRef.empty && (!week?.valid || !week.monthValid))
-      || (!monthRef.empty && !month?.valid);
-    leafFor(review ? null : week, review ? null : month, review).payments.push(payment);
+    const week = paymentWeeks?.get(weekRef.id);
+    const month = paymentMonths?.get(monthRef.id);
+    if ((!weekRef.empty && !week?.valid) || (!monthRef.empty && !month?.valid)
+        || (week && monthRef.empty && !week.monthValid)) {
+      leafFor(null, 0).payments.push(payment);
+      return;
+    }
+    const leaf = leafFor(week, month?.id ?? week?.monthId ?? 0);
+    if (week && monthRef.empty) leaf.usesWeekMonth = true;
+    leaf.payments.push(payment);
   });
 
   const newestFirst = (a, b) => a.sortKey == null ? (b.sortKey == null ? 0 : 1)

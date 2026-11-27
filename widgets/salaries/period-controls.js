@@ -16,7 +16,7 @@ function salarySyncPeriodControls() {
 }
 
 function salaryPeriodHeading(group, header) {
-  if (!group.weekId) return header;
+  if (!group.usesWeekMonth) return header;
   const week = salaryPeriodWeeks.get(Number(group.weekId));
   const month = salaryPeriodMonths.get(Number(week?.monthId));
   const wrapper = document.createElement('div');
@@ -31,8 +31,8 @@ function salaryPeriodHeading(group, header) {
   button.setAttribute('aria-haspopup', 'dialog');
   button.setAttribute('aria-expanded', 'false');
   button.setAttribute('aria-controls', 'salary-month-picker');
-  button.setAttribute('aria-label', `Assign ${week?.label || group.label} to a month`);
-  button.title = 'Choose the salary month for this whole week';
+  button.setAttribute('aria-label', `Choose the default salary month for ${week?.label || group.label}`);
+  button.title = 'Choose the month for work records and payments without forMonth';
   button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
     + ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
     + ' aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="16" rx="2"/>'
