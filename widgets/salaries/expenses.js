@@ -93,8 +93,10 @@ function salaryTableRowsHtml(cols, group, classRowHtml) {
 }
 
 function salaryPaymentRowHtml(cols, row, dateColumn, teacherColumn) {
+  const source = `Salary payment from ${WIDGET_CONFIG.expensesTableId} #${row.id}`;
+  const title = row.monthAssignmentNote ? `${source} · ${row.monthAssignmentNote}` : source;
   return `<tr class="salary-payment-row${selectedSalaryExpenseIds.has(String(row.id)) ? ' row-selected' : ''}" data-expense-id="${esc(row.id)}"`
-    + ` title="Salary payment from ${esc(WIDGET_CONFIG.expensesTableId)} #${esc(row.id)}">`
+    + ` title="${esc(title)}">`
     + `<td class="row-grip-cell"><button type="button" class="row-grip salary-expense-grip"`
     + ` data-expense-id="${esc(row.id)}" draggable="false"`
     + ` aria-pressed="${String(selectedSalaryExpenseIds.has(String(row.id)))}"`
@@ -325,6 +327,7 @@ async function salaryRefreshPayments(alreadyRendered = false) {
 
   try {
     await getWritableColumnIds();
+    if (request !== salaryPaymentRequest) return;
     const teacherIds = new Set(salarySelectedTeacherIds);
     const payroll = typeof salaryPayrollActive === 'function' && salaryPayrollActive();
     const results = await Promise.allSettled([
@@ -352,16 +355,11 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     }
     if (!teacherIds.size)
       throw new Error(`No Performance reference found in the selected ${selectedTableId} classes`);
-    salarySelectedTeacherIds = teacherIds;
-
-    const months = new Map();
     const payments = [];
     expenses.id.forEach((id, index) => {
       const performanceIds = salaryReferenceIds(expenses[expenseTeacherColumn][index]);
       if (!performanceIds.some(teacherId => teacherIds.has(teacherId))) return;
       const sec = parseDateValueSec(expenses.datetime[index]);
-      const key = sec == null ? '\x00__empty__'
-        : String(bucketStartMs(dateTimeWallDate(sec).getTime() / 1000, 'month'));
       const row = {
         id, sec, performanceIds,
         weekRef: expenses.forWeek?.[index], monthRef: expenses.forMonth?.[index],
@@ -372,21 +370,58 @@ async function salaryRefreshPayments(alreadyRendered = false) {
           ? null : Number(expenses.amount[index]),
       };
       payments.push(row);
+    });
+
+    // Calendar uses the cash month unless a selected payment explicitly names a month.
+    const monthRefs = !payroll && Array.isArray(expenses.forMonth)
+      ? payments.map(row => salaryPeriodReference(row.monthRef)) : [];
+    let assignedMonths = null;
+    if (monthRefs.some(ref => ref.id > 0)) {
+      const { tables, columns } = await salaryLoadPeriodMetadata();
+      if (request !== salaryPaymentRequest) return;
+      const column = salaryPeriodRegistryColumnMeta(WIDGET_CONFIG.expensesTableId, 'forMonth', tables, columns);
+      if (/^(Ref|RefList):MonthRegistry$/.test(column?.type || '')) {
+        const { months } = await salaryLoadMonthRegistry();
+        if (request !== salaryPaymentRequest) return;
+        assignedMonths = months;
+      }
+    }
+
+    let invalidAssignments = 0;
+    const months = new Map();
+    payments.forEach((row, index) => {
+      let key = row.sec == null ? '\x00__empty__'
+        : String(bucketStartMs(dateTimeWallDate(row.sec).getTime() / 1000, 'month'));
+      const monthRef = monthRefs[index];
+      if (monthRef && !monthRef.empty) {
+        const assigned = assignedMonths?.get(monthRef.id);
+        if (assigned?.valid) {
+          const assignedKey = String(assigned.sortKey);
+          if (assignedKey !== key) row.monthAssignmentNote = `Assigned to ${assigned.label} by forMonth`;
+          key = assignedKey;
+        } else {
+          invalidAssignments++;
+          row.monthAssignmentNote = 'Invalid month assignment in forMonth';
+        }
+      }
       if (!months.has(key)) months.set(key, []);
       months.get(key).push(row);
     });
+    salarySelectedTeacherIds = teacherIds;
     months.forEach(rows => rows.sort((a, b) => (b.sec ?? -Infinity) - (a.sec ?? -Infinity)
       || Number(b.id) - Number(a.id)));
     salaryPaymentsByMonth = months;
     salaryAllPayments = payments;
     salaryPaymentsLoaded = true;
-    const presentIds = new Set([...months.values()].flat().map(row => String(row.id)));
+    const presentIds = new Set(payments.map(row => String(row.id)));
     selectedSalaryExpenseIds.forEach(id => {
       if (!presentIds.has(id)) selectedSalaryExpenseIds.delete(id);
     });
     if (!selectedSalaryExpenseIds.size) salaryExpenseAnchorId = null;
-    const count = [...months.values()].reduce((total, rows) => total + rows.length, 0);
-    salaryPaymentStatus.textContent = `${count} ${count === 1 ? 'payment' : 'payments'}`;
+    const count = payments.length;
+    const assignmentStatus = invalidAssignments
+      ? ` · ${invalidAssignments} invalid month assignment${invalidAssignments === 1 ? '' : 's'}` : '';
+    salaryPaymentStatus.textContent = `${count} ${count === 1 ? 'payment' : 'payments'}${assignmentStatus}`;
   } catch (error) {
     if (request !== salaryPaymentRequest) return;
     const message = error && error.message ? error.message : String(error);

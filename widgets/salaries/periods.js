@@ -1,11 +1,13 @@
-// Registry payroll periods are separate from the calendar-month view. A week's
-// parent month is always its explicit registry link, never its payment date.
+// Both views share month boundaries. A week's parent month always comes from
+// its explicit registry link.
 let salaryPeriodView = 'calendar';
 let salaryPeriodRegistryStatus = 'idle';
 let salaryPeriodRegistryError = '';
 let salaryPeriodWeeks = new Map();
 let salaryPeriodMonths = new Map();
 let salaryPeriodRegistryPromise = null;
+let salaryMonthRegistryPromise = null;
+let salaryPeriodMetadataPromise = null;
 let salaryPeriodRegistryGeneration = 0;
 
 function salaryPayrollActive() {
@@ -64,26 +66,24 @@ function salaryPeriodRegistryColumnMeta(tableId, col, tables, columns) {
     isFormula: !!columns.isFormula?.[columnIndex] };
 }
 
-function salaryPeriodRegistriesFromTables(weeks, months, tables, columns) {
-  for (const [tableId, table, required] of [
-    ['WeekRegistry', weeks, ['id', 'weekStart', 'weekEnd', 'forMonth']],
-    ['MonthRegistry', months, ['id', 'monthStart', 'monthEnd']],
-  ]) {
-    for (const col of required) {
-      if (!Array.isArray(table?.[col]) || table[col].length !== table.id?.length)
-        throw new Error(`${tableId} must have ${required.join(', ')} columns`);
-      if (col === 'id') continue;
-      const meta = salaryPeriodRegistryColumnMeta(tableId, col, tables, columns);
-      if (!meta) throw new Error(`Column metadata not found for ${tableId}.${col}`);
-      if (col === 'forMonth') {
-        if (meta.type !== 'Ref:MonthRegistry' || meta.isFormula)
-          throw new Error('WeekRegistry.forMonth must be an editable Reference to MonthRegistry');
-      } else if (meta.type !== 'Date') {
-        throw new Error(`${tableId}.${col} must be a Date column`);
-      }
+function salaryValidatePeriodRegistry(tableId, table, required, tables, columns) {
+  for (const col of required) {
+    if (!Array.isArray(table?.[col]) || table[col].length !== table.id?.length)
+      throw new Error(`${tableId} must have ${required.join(', ')} columns`);
+    if (col === 'id') continue;
+    const meta = salaryPeriodRegistryColumnMeta(tableId, col, tables, columns);
+    if (!meta) throw new Error(`Column metadata not found for ${tableId}.${col}`);
+    if (col === 'forMonth') {
+      if (meta.type !== 'Ref:MonthRegistry' || meta.isFormula)
+        throw new Error('WeekRegistry.forMonth must be an editable Reference to MonthRegistry');
+    } else if (meta.type !== 'Date') {
+      throw new Error(`${tableId}.${col} must be a Date column`);
     }
   }
+}
 
+function salaryPeriodMonthsFromTable(months, tables, columns) {
+  salaryValidatePeriodRegistry('MonthRegistry', months, ['id', 'monthStart', 'monthEnd'], tables, columns);
   const monthMap = new Map();
   months.id.forEach((rawId, index) => {
     const id = Number(rawId);
@@ -104,6 +104,11 @@ function salaryPeriodRegistriesFromTables(weeks, months, tables, columns) {
       valid, invalidReason: valid ? '' : 'Invalid month registry dates' });
   });
 
+  return monthMap;
+}
+
+function salaryPeriodWeeksFromTable(weeks, monthMap, tables, columns) {
+  salaryValidatePeriodRegistry('WeekRegistry', weeks, ['id', 'weekStart', 'weekEnd', 'forMonth'], tables, columns);
   const weekMap = new Map();
   weeks.id.forEach((rawId, index) => {
     const id = Number(rawId);
@@ -127,22 +132,69 @@ function salaryPeriodRegistriesFromTables(weeks, months, tables, columns) {
       invalidReason: !valid ? 'Invalid week registry dates'
         : !monthValid ? 'Invalid month assignment in WeekRegistry' : '' });
   });
-  return { weeks: weekMap, months: monthMap };
+  return weekMap;
 }
 
 function salaryInvalidatePeriodRegistries() {
   ++salaryPeriodRegistryGeneration;
   salaryPeriodRegistryPromise = null;
+  salaryMonthRegistryPromise = null;
+  salaryPeriodMetadataPromise = null;
   salaryPeriodRegistryStatus = 'idle';
   salaryPeriodRegistryError = '';
   salaryPeriodWeeks = new Map();
   salaryPeriodMonths = new Map();
 }
 
+function salaryLoadMonthRegistry() {
+  if (!salaryMonthRegistryPromise) {
+    const request = salaryFetchMonthRegistry();
+    salaryMonthRegistryPromise = request;
+    request.catch(() => {
+      if (salaryMonthRegistryPromise === request) salaryMonthRegistryPromise = null;
+    });
+  }
+  return salaryMonthRegistryPromise;
+}
+
+function salaryLoadPeriodMetadata() {
+  if (!salaryPeriodMetadataPromise) {
+    const request = Promise.allSettled([
+      grist.docApi.fetchTable('_grist_Tables'),
+      grist.docApi.fetchTable('_grist_Tables_column'),
+    ]).then(results => {
+      const failure = results.find(result => result.status === 'rejected');
+      if (failure) throw failure.reason;
+      const [tables, columns] = results.map(result => result.value);
+      return { tables, columns };
+    });
+    salaryPeriodMetadataPromise = request;
+    request.catch(() => {
+      if (salaryPeriodMetadataPromise === request) salaryPeriodMetadataPromise = null;
+    });
+  }
+  return salaryPeriodMetadataPromise;
+}
+
+async function salaryFetchMonthRegistry() {
+  const results = await Promise.allSettled([
+    grist.docApi.fetchTable('MonthRegistry'),
+    salaryLoadPeriodMetadata(),
+  ]);
+  const failure = results.find(result => result.status === 'rejected');
+  if (failure) throw failure.reason;
+  const [records, { tables, columns }] = results.map(result => result.value);
+  return { months: salaryPeriodMonthsFromTable(records, tables, columns), tables, columns };
+}
+
 async function salaryLoadPeriodRegistries(force = false) {
   if (!force && salaryPeriodRegistryStatus === 'ready')
     return { weeks: salaryPeriodWeeks, months: salaryPeriodMonths };
   if (!force && salaryPeriodRegistryPromise) return salaryPeriodRegistryPromise;
+  if (force) {
+    salaryMonthRegistryPromise = null;
+    salaryPeriodMetadataPromise = null;
+  }
   const generation = ++salaryPeriodRegistryGeneration;
   salaryPeriodRegistryStatus = 'loading';
   salaryPeriodRegistryError = '';
@@ -156,13 +208,12 @@ async function salaryFetchPeriodRegistries(generation) {
     // a forgotten registry or metadata request from the preceding load.
     const results = await Promise.allSettled([
       grist.docApi.fetchTable('WeekRegistry'),
-      grist.docApi.fetchTable('MonthRegistry'),
-      grist.docApi.fetchTable('_grist_Tables'),
-      grist.docApi.fetchTable('_grist_Tables_column'),
+      salaryLoadMonthRegistry(),
     ]);
     const failure = results.find(result => result.status === 'rejected');
     if (failure) throw failure.reason;
-    const parsed = salaryPeriodRegistriesFromTables(...results.map(result => result.value));
+    const [weekRecords, { months, tables, columns }] = results.map(result => result.value);
+    const parsed = { weeks: salaryPeriodWeeksFromTable(weekRecords, months, tables, columns), months };
     if (generation === salaryPeriodRegistryGeneration) {
       salaryPeriodWeeks = parsed.weeks;
       salaryPeriodMonths = parsed.months;

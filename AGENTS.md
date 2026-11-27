@@ -115,8 +115,8 @@ displays their fields, and writes class edits to the resolved ID.
 It reads `Transactions` with `fetchTable`,
 matches raw teacher IDs from the selected teacher/summary rows
 against Transactions (`All_att.t` is a RefList), and
-groups payments using `Transactions.datetime` in Vladivostok time; no helper
-`date` column is required. The current
+groups payments by explicit month assignment or by `Transactions.datetime`
+in Vladivostok time. A helper `date` column is unnecessary. The current
 `Transactions.per` column is a RefList to `PERFORMANCE`; single
 Reference and legacy Int IDs also work. Include a transaction when any of its
 teacher IDs matches the selection, counting the row once even when multiple
@@ -128,18 +128,25 @@ rows are read-only and a toolbar button re-fetches Transactions after edits ther
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.69)
+## Current state (v7.70)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
-  actual record months) or `payroll` (manual months containing ISO weeks).
-  Calendar groups classes by `start` (legacy `datetime`) and payments by
-  `Transactions.datetime`. Salaries derives the grouping and ignores saved `groupBy`.
+  month groups) or `payroll` (manual months containing ISO weeks).
+  Calendar groups classes by `start` (legacy `datetime`). A payment’s valid
+  `Transactions.forMonth` link to `MonthRegistry` overrides its cash month, even
+  when `forWeek` is also set. Keep the original cash date, signed amount, and
+  payment count. Blank links use the VLAT cash month. Invalid assignments keep
+  their cash month and show a toolbar warning. Failed registry reads leave
+  payment totals unavailable. Salaries derives grouping and ignores saved
+  `groupBy`.
   `widgets/salaries/periods.js` builds the period model; `payroll.js` handles
   preferences and shared registry writes; `period-controls.js` supplies one
   non-blocking month picker. Sprints does not load these payroll scripts.
-- Payroll reads `WeekRegistry` and `MonthRegistry` once per cache lifetime,
-  with generation guards and all sibling reads awaited. Date boundaries are
-  exclusive: weeks Monday to next Monday, months first to next first.
+- Calendar loads `MonthRegistry` on demand for matching explicit month links.
+  Payroll shares that cache and also loads `WeekRegistry`. Refresh payments
+  invalidates both. Keep generation guards and await every sibling read.
+  Period ends are exclusive. Weeks run Monday to Monday and months run from
+  the first day to the first day of the next month.
   Attendance `start` maps to a VLAT week. Weekly payments use
   `Transactions.forWeek`; monthly-only payments use `Transactions.forMonth`.
   A payment with both links, neither, or invalid links goes to Needs review.
@@ -157,9 +164,9 @@ payments.
   and history reveal the selected row's destination week and month. Footers
   inherit raw selected teacher IDs and the existing week start; payment-only
   weeks require the first work record from Attendance/Calendar. Staff office
-  hours use ordinary Attendance wages. `tests/salaries-periods.test.js` adds
-  16 checks for grouping, links, lazy rows, registry edits/history, failures,
-  races, work editing/creation, and saved settings.
+  hours use ordinary Attendance wages. `tests/salaries-periods.test.js` covers
+  Calendar overrides, grouping, links, lazy rows, registry edits and history,
+  failures, races, work editing and creation, and saved settings.
 
 - Attendance datetime is renamed to start (same column reference). End is an
   editable DateTime:Asia/Vladivostok data column, initialized to start + 1 hour

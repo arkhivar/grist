@@ -22,6 +22,8 @@ async function waitFor(condition, label = 'payroll period view') {
 
 function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
   weekFailure = false, wrongMonthType = false, formulaMonth = false,
+  deferMonths = false, monthFailure = '', monthRefs = [0, 201, 0, 0, 0, 201, 201],
+  transactionMonthType = 'Ref:MonthRegistry',
   commonStudent = false, savedCollapsed } = {}) {
   const html = read('salaries.html');
   const dom = new JSDOM(html, { url: 'https://arkhivar.github.io/grist/salaries.html',
@@ -47,8 +49,9 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
     notes: ['June week paid in July', 'June monthly bonus', 'October week',
       'Week has no assigned month', 'No period', 'Conflicting period links', 'Payment before any office hours'],
     forWeek: [101, 0, 102, 104, 0, 102, 0],
-    forMonth: [0, 201, 0, 0, 0, 201, 201],
+    forMonth: monthRefs?.slice(),
   };
+  if (monthRefs == null) delete transactions.forMonth;
   const weeks = {
     id: [101, 102, 103, 104],
     weekStart: ['2026-06-29', '2026-09-28', '2026-10-05', '2026-07-06'].map(sec),
@@ -82,7 +85,7 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
   Object.keys(transactions).filter(col => col !== 'id').forEach(col =>
     column(3, col, col === 'per' ? 'RefList:PERFORMANCE' : col === 'datetime' ? 'DateTime:Asia/Vladivostok'
       : col === 'amount' ? 'Numeric' : col === 'forWeek' ? 'Ref:WeekRegistry'
-        : col === 'forMonth' ? 'Ref:MonthRegistry' : 'Text', false, col === 'per' ? teacherLabelRef : 0));
+        : col === 'forMonth' ? transactionMonthType : 'Text', false, col === 'per' ? teacherLabelRef : 0));
   Object.keys(weeks).filter(col => col !== 'id').forEach(col =>
     column(4, col, ['weekStart', 'weekEnd'].includes(col) ? 'Date'
       : col === 'forMonth' ? wrongMonthType ? 'Text' : 'Ref:MonthRegistry' : 'Text',
@@ -91,10 +94,13 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
 
   const calls = { fetches: [], writes: [], creates: [], options: [] };
   let writeFailure = null;
+  let monthReadFailure = monthFailure;
   let onRecords;
   let onOptions;
   let releaseWeeks;
   const weekGate = deferWeeks ? new Promise(resolve => { releaseWeeks = resolve; }) : null;
+  let releaseMonths;
+  const monthGate = deferMonths ? new Promise(resolve => { releaseMonths = resolve; }) : null;
   win.grist = {
     ready(value) { assert.equal(value.requiredAccess, 'full'); },
     onRecords(callback) { onRecords = callback; }, onOptions(callback) { onOptions = callback; },
@@ -114,7 +120,11 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
           if (weekFailure) throw new Error('Registry read denied by document rule');
           return weeks;
         }
-        if (name === 'MonthRegistry') return months;
+        if (name === 'MonthRegistry') {
+          if (monthGate) await monthGate;
+          if (monthReadFailure) throw new Error(monthReadFailure);
+          return months;
+        }
         throw new Error(`Unexpected table ${name}`);
       },
       async applyUserActions(actions, options) {
@@ -179,7 +189,12 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
   }
   return { win, doc, attendance, transactions, weeks, months, metadata, calls, select,
     leaf, parent, expand, expandAll, changeView,
+    calendarMonth: label => [...doc.querySelectorAll('.group[data-group-label]')]
+      .find(card => card.dataset.groupLabel === label),
+    payment: id => doc.querySelector(`tr[data-expense-id="${id}"]`),
     releaseWeeks() { releaseWeeks?.(); },
+    releaseMonths() { releaseMonths?.(); },
+    failMonthReads(message) { monthReadFailure = message; },
     failWrites(message) { writeFailure = message ? new Error(message) : null; },
     status: () => doc.getElementById('salary-payment-status').textContent,
     classIds: () => [...doc.querySelectorAll('tr[data-record-id]')].map(row => Number(row.dataset.recordId)).sort((a, b) => a - b),
@@ -213,25 +228,128 @@ async function test(name, config, check) {
 }
 
 async function main() {
-  await test('calendar view makes no registry requests and changing view persists', {}, async h => {
-    await h.loaded();
-    assert.equal(h.doc.getElementById('salary-view-select').value, 'calendar');
-    assert.equal(h.calls.fetches.filter(name => /Registry$/.test(name)).length, 0);
-    assert(!h.doc.querySelector('.salary-month'));
-    h.changeView('payroll');
-    await waitFor(() => h.parent('payroll-month:201'));
-    assert(h.calls.options.some(([key, value]) => key === 'salaryPeriodView' && value === 'payroll'));
-    assert.equal(h.calls.fetches.filter(name => name === 'WeekRegistry').length, 1);
-    assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 1);
-    h.changeView('calendar');
-    await waitFor(() => !h.doc.querySelector('.salary-month'));
-    assert.deepEqual(h.classIds(), [11, 12, 13]);
-    assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
-    h.changeView('payroll');
-    await waitFor(() => h.parent('payroll-month:201'));
-    assert.equal(h.calls.fetches.filter(name => /Registry$/.test(name)).length, 2,
-      'changing view repeatedly reloaded registry tables');
-  });
+  await test('explicit month links take precedence in Calendar months and the registry is shared across views',
+    {}, async h => {
+      await h.loaded();
+      assert.equal(h.doc.getElementById('salary-view-select').value, 'calendar');
+      assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 1);
+      assert(!h.calls.fetches.includes('WeekRegistry'));
+      assert(!h.doc.querySelector('.salary-month'));
+      assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'June 2026');
+      assert.equal(h.payment(1006)?.closest('.group').dataset.groupLabel, 'June 2026',
+        'Calendar months should honor forMonth even when the payment also has a forWeek link');
+      assert.equal(h.payment(1001)?.closest('.group').dataset.groupLabel, 'July 2026',
+        'a week-only payment should still use its cash month');
+      assert.equal(h.payment(1005)?.closest('.group').dataset.groupLabel, 'August 2026',
+        'an unassigned payment should still use its cash month');
+      assert.match(h.payment(1002).querySelector('.salary-payment-date').textContent, /2026-07-10 11:00/);
+      assert.equal(h.payment(1002).querySelector('.salary-payment-amount').textContent, '50');
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      const june = h.calendarMonth('June 2026');
+      assert.equal(june.querySelector('.group-sum[data-column="salary_received"]').textContent, '56');
+      assert.equal(june.querySelector('.group-sum[data-column="wage"]').textContent, '200');
+      assert.equal(h.calendarMonth('July 2026').querySelector('.salary-received-sum').textContent, '340');
+      assert.deepEqual(h.calls.writes, []);
+
+      h.changeView('payroll');
+      await waitFor(() => h.parent('payroll-month:201'));
+      assert(h.calls.options.some(([key, value]) => key === 'salaryPeriodView' && value === 'payroll'));
+      assert.equal(h.calls.fetches.filter(name => name === 'WeekRegistry').length, 1);
+      assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 1);
+      h.changeView('calendar');
+      await waitFor(() => !h.doc.querySelector('.salary-month') && h.paymentIds().length === 6);
+      assert.deepEqual(h.classIds(), [11, 12, 13]);
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      h.changeView('payroll');
+      await waitFor(() => h.parent('payroll-month:201'));
+      assert.equal(h.calls.fetches.filter(name => /Registry$/.test(name)).length, 2,
+        'changing view repeatedly reloaded registry tables');
+    });
+
+  for (const [kind, monthRefs] of [
+    ['blank', [0, null, '', 0, null, '', 201]],
+    ['absent', null],
+  ]) {
+    await test(`Calendar months groups by cash date with ${kind} forMonth values`, { monthRefs }, async h => {
+      await h.loaded();
+      assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'July 2026');
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert(!h.calls.fetches.some(name => /Registry$/.test(name)),
+        'a month registry read was started without a matching payment with an explicit month');
+    });
+  }
+
+  await test('invalid Calendar month links keep their cash months and report the problem',
+    { monthRefs: [0, 999, 204, 0, 0, 0, 201] }, async h => {
+      h.months.monthEnd[3] = sec('2026-11-02');
+      await h.loaded();
+      assert.match(h.status(), /invalid month assignment/i);
+      assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'July 2026',
+        'a missing registry row removed the payment from its cash month');
+      assert.equal(h.payment(1003)?.closest('.group').dataset.groupLabel, 'October 2026',
+        'an invalid registry row removed the payment from its cash month');
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert.equal(h.calendarMonth('July 2026').querySelector('.salary-received-sum').textContent, '390');
+      assert.deepEqual(h.calls.writes, []);
+    });
+
+  await test('Calendar months accepts one typed month link in a Reference List',
+    { transactionMonthType: 'RefList:MonthRegistry',
+      monthRefs: [['L', 201, 204], ['r', 'MonthRegistry', [201]], 0, 0, 0, 0, 201] }, async h => {
+      await h.loaded();
+      assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'June 2026');
+      assert.equal(h.payment(1001)?.closest('.group').dataset.groupLabel, 'July 2026',
+        'a multi-month list selected an arbitrary month');
+      assert.match(h.status(), /\b1 invalid month assignment\b/i);
+    });
+
+  await test('Calendar months rejects references to another table even when the IDs match',
+    { transactionMonthType: 'Ref:WeekRegistry', monthFailure: 'MonthRegistry is unavailable' }, async h => {
+      await h.loaded();
+      assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'July 2026');
+      assert.equal(h.payment(1006)?.closest('.group').dataset.groupLabel, 'October 2026');
+      assert.match(h.status(), /\b2 invalid month assignments\b/i);
+      assert(!h.calls.fetches.includes('MonthRegistry'), 'a wrong-target Reference triggered a registry read');
+    });
+
+  await test('Calendar months reports a registry read failure and retries on refresh',
+    { monthFailure: 'Month registry read denied by document rule' }, async h => {
+      await waitFor(() => h.status().includes('Payments unavailable'), 'missing month registry warning');
+      assert.match(h.status(), /Month registry read denied by document rule/);
+      assert.deepEqual(h.classIds(), [11, 12, 13]);
+      assert.deepEqual(h.paymentIds(), []);
+      assert.equal(h.calendarMonth('June 2026').querySelector('.salary-received-sum').textContent, '—');
+      h.failMonthReads('');
+      h.doc.getElementById('btn-refresh-payments').click();
+      await h.loaded();
+      assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'June 2026');
+      assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 2);
+      assert(!h.calls.fetches.includes('WeekRegistry'));
+    });
+
+  await test('Calendar month registry shares pending reads across teachers and reloads on refresh',
+    { deferMonths: true }, async h => {
+      await waitFor(() => h.calls.fetches.includes('MonthRegistry'), 'pending Calendar month load');
+      h.select(8);
+      await waitFor(() => h.calls.fetches.filter(name => name === 'Transactions').length === 2,
+        'new teacher payments request');
+      h.releaseMonths();
+      await waitFor(() => h.status() === '1 payment' && h.payment(1007), 'second teacher payments');
+      assert.deepEqual(h.classIds(), []);
+      assert.deepEqual(h.paymentIds(), [1007]);
+      assert.equal(h.payment(1007).closest('.group').dataset.groupLabel, 'June 2026');
+      assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 1);
+
+      h.months.monthStart[0] = sec('2026-11-01');
+      h.months.monthEnd[0] = sec('2026-12-01');
+      h.doc.getElementById('btn-refresh-payments').click();
+      await waitFor(() => h.payment(1007)?.closest('.group').dataset.groupLabel === 'November 2026',
+        'payment regrouped after registry refresh');
+      assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 2);
+      assert(!h.calls.fetches.includes('WeekRegistry'));
+      assert.deepEqual(h.paymentIds(), [1007]);
+      assert.deepEqual(h.calls.writes, []);
+    });
 
   await test('manual month owns crossing weeks; bonus uses assigned month; totals count each row once',
     { view: 'payroll' }, async h => {

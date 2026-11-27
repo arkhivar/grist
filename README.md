@@ -122,10 +122,20 @@ monthly groups are derived from `start` (legacy `datetime`), so no helper `date`
 
 ### Weekly payroll and monthly bonuses
 
-Salaries starts in **View → Calendar months**, grouping classes by `start`
-and payments by `Transactions.datetime`. Choose **Months & weeks** for payroll
-periods. Both views use the same class/office-hour `wage`, `count`, and read-only
-transaction `paid` columns.
+Salaries starts in **View → Calendar months**. Classes use their `start`
+month. Payments use their Vladivostok transaction month unless a valid
+`Transactions.forMonth` link assigns them to a month in `MonthRegistry`.
+
+A payment made in November with `forMonth` set to October appears once in
+October and contributes to October’s **paid** subtotal. The row still shows
+its November transaction date. A blank `forMonth` uses the transaction date,
+including for payments that only have `forWeek`. An invalid assignment uses
+the transaction date and is flagged in the toolbar. If the month registry
+cannot be loaded, the widget shows the error and leaves payment totals
+unavailable. **Refresh payments** reloads both payments and needed registry data.
+
+Choose **Months & weeks** for payroll periods. Both views use the same
+class and office-hour `wage` and `count` columns and the read-only `paid` column.
 Office work can be logged in Attendance with `start`, `end`, the staff member
 in `t`, and a wage, just like lessons.
 

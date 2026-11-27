@@ -108,8 +108,9 @@ changes beyond this widget session.
   grouping cell moves the row to its destination. Dragging a row grip between
   groups is available for those field types. Sprints enables writable `notes`
   or legacy `C` for new sections and lets users configure other Text fields.
-- **Salaries** offers **Calendar months** for actual class and transaction dates
-  and **Months & weeks** for assigned payroll periods. Classes and payments
+- **Salaries** offers **Calendar months** for class dates and payment dates or
+  their explicitly assigned months. **Months & weeks** shows assigned payroll
+  periods. The payment row always displays the actual date. Classes and payments
   use the same grid and sort within each group. Earned wages, received payments,
   and class counts each have their own aligned subtotal. Payment grips select
   ledger rows. Edit payments in Transactions and use **Refresh payments** to
