@@ -2,6 +2,10 @@
 .salary-received-sum.salary-matched { color: #15803d; }
 .rec-table .salary-payment-row td { background: var(--surface); }
 .rec-table .salary-payment-row:hover td { background: var(--hover-row); }
+.salary-payment-row .cell-edit-btn:focus,
+.salary-payment-row .cell-edit-btn[aria-expanded="true"] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
 .rec-table .salary-payment-row.row-selected td {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }

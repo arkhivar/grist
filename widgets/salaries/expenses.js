@@ -5,11 +5,14 @@ let salaryAllPayments = [];
 let salaryPaymentsLoaded = false;
 const salaryPaymentPeriodFields = { salary_forMonth: 'forMonth', salary_forWeek: 'forWeek' };
 let salaryAvailablePaymentColumns = [WIDGET_CONFIG.receivedColumn];
+let salaryWritablePaymentPeriodColumns = new Set();
 let salaryPaymentMonthRegistry = null;
 let salaryPaymentWeekRegistry = null;
 let salaryWeekLabelsRequest = -1;
 let salaryPaymentRequest = 0;
+let salaryPendingPaymentReveal = null;
 let salaryClassColumnsRequest = 0;
+let salaryClassRowsLoading = false;
 let salaryClassSelectionKey = null;
 let salarySelectedTeacherIds = new Set();
 const selectedSalaryExpenseIds = new Set();
@@ -76,9 +79,10 @@ function salaryIsPaymentPeriodColumn(col) {
   return Object.hasOwn(salaryPaymentPeriodFields, col);
 }
 
-function salaryPaymentPeriodTarget(field, table, { tables, columns }) {
+function salaryPaymentPeriodMeta(field, { tables, columns }) {
+  const target = field === 'forMonth' ? 'MonthRegistry' : 'WeekRegistry';
   const column = salaryPeriodRegistryColumnMeta(WIDGET_CONFIG.expensesTableId, field, tables, columns);
-  return column?.type === `Ref:${table}` || column?.type === `RefList:${table}`;
+  return column?.type === `Ref:${target}` || column?.type === `RefList:${target}` ? column : null;
 }
 
 function salaryPaymentPeriodRegistry(field) {
@@ -108,7 +112,7 @@ async function salaryLoadVisibleWeekLabels(cols) {
   salaryWeekLabelsRequest = request;
   try {
     const metadata = await salaryLoadPeriodMetadata();
-    if (request !== salaryPaymentRequest || !salaryPaymentPeriodTarget('forWeek', 'WeekRegistry', metadata)) return;
+    if (request !== salaryPaymentRequest || !salaryPaymentPeriodMeta('forWeek', metadata)) return;
     const { weeks } = await salaryLoadPeriodRegistries();
     if (request !== salaryPaymentRequest) return;
     salaryPaymentWeekRegistry = weeks;
@@ -167,8 +171,17 @@ function salaryPaymentRowHtml(cols, row, dateColumn, teacherColumn) {
         return `<td>${renderReferencePills(row.performanceIds.map(id => referenceDisplayLabel(col, id)))}</td>`;
       if (col === WIDGET_CONFIG.receivedColumn)
         return `<td class="cell-number salary-payment-amount"><span class="cell-display-value cell-num">${Number.isFinite(row.amount) ? esc(salaryAmount(row.amount)) : '—'}</span></td>`;
-      if (salaryIsPaymentPeriodColumn(col))
-        return `<td data-payment-period="${salaryPaymentPeriodFields[col]}">${renderReferencePills([salaryPaymentPeriodCell(row, col).label])}</td>`;
+      if (salaryIsPaymentPeriodColumn(col)) {
+        const field = salaryPaymentPeriodFields[col];
+        const value = renderReferencePills([salaryPaymentPeriodCell(row, col).label]);
+        if (!salaryWritablePaymentPeriodColumns.has(col))
+          return `<td data-payment-period="${field}">${value}</td>`;
+        return `<td class="cell-editable" data-payment-period="${field}">`
+          + `<button type="button" class="cell-edit-btn" data-edit-kind="payment-period"`
+          + ` data-edit-id="${esc(row.id)}" data-edit-col="${col}" aria-label="Edit ${field} for payment ${esc(row.id)}"`
+          + ` aria-haspopup="dialog" aria-controls="salary-ref-editor" aria-expanded="false">`
+          + `<span class="cell-edit-value">${value}</span></button></td>`;
+      }
       if (col === 'notes')
         return `<td class="salary-payment-notes"><span class="cell-display-value" title="${esc(row.notes)}">${esc(row.notes)}</span></td>`;
       return '<td></td>';
@@ -190,6 +203,43 @@ function salaryClearExpenseSelection() {
   salaryExpenseAnchorId = null;
   salaryRefreshExpenseSelection();
 }
+
+// Keep payment cells out of Attendance ranges and bulk row actions. Their native
+// buttons own focus, so a second ordinary click or Enter/F2 can open the picker.
+content.addEventListener('pointerdown', event => {
+  if (event.button === 0 && event.target.closest('button[data-edit-kind="payment-period"]'))
+    event.preventDefault();
+});
+content.addEventListener('focusin', event => {
+  if (!event.target.closest('button[data-edit-kind="payment-period"]')) return;
+  if (selectedCell) clearSelectedCell();
+  if (selectedIds.size) {
+    selectedIds.clear();
+    selectionAnchorId = null;
+    finishSelectionChange();
+  }
+  salaryClearExpenseSelection();
+});
+content.addEventListener('keydown', event => {
+  const button = event.target.closest('button[data-edit-kind="payment-period"]');
+  if (!button || (event.key !== 'F2' && event.key !== 'Enter')) return;
+  event.preventDefault();
+  button.click();
+});
+content.addEventListener('click', event => {
+  const button = event.target.closest('button[data-edit-kind="payment-period"]');
+  if (!button || !button.isConnected || cellHistoryBusy || inlineEditorInput()) return;
+  const open = !event.detail || document.activeElement === button;
+  button.focus({ preventScroll: true });
+  if (!open) return;
+  const selection = salaryClassSelectionKey, view = salaryPeriodView;
+  const col = button.dataset.editCol;
+  openReferenceEditor(button.dataset.editId, col, button, {
+    load: salaryPaymentPeriodEditInfo, save: salarySavePaymentPeriod,
+    isCurrent: () => selection === salaryClassSelectionKey && view === salaryPeriodView && isColumnVisible(col),
+    isLoading: () => salaryClassRowsLoading || salaryRefreshButton.disabled,
+  });
+});
 
 content.addEventListener('click', event => {
   const grip = event.target.closest('.salary-expense-grip[data-expense-id]');
@@ -272,17 +322,21 @@ function salaryIsSameClassSelection(selectedRecords) {
   const key = JSON.stringify(selectedRecords.map(row => [row.id, row.group,
     ...salaryTeacherColumnIds.map(col => row[col])]));
   const same = selectedRecords.length > 0 && key === salaryClassSelectionKey;
+  if (!same) {
+    salarySelectedTeacherIds = new Set();
+    salaryPendingPaymentReveal = null;
+  }
   salaryClassSelectionKey = key;
   return same;
 }
 
 async function salaryLoadClassColumns(selectedRecords, apply) {
   const request = ++salaryClassColumnsRequest;
+  salaryClassRowsLoading = selectedRecords.length > 0;
   ++salaryPaymentRequest;
   salaryPaymentsByMonth = new Map();
   salaryAllPayments = [];
   salaryPaymentsLoaded = false;
-  salarySelectedTeacherIds = new Set();
   salaryPaymentStatus.textContent = selectedRecords.length ? 'Loading classes…' : 'No teacher selected';
   if (!selectedRecords.length) { apply([]); return; }
   try {
@@ -362,10 +416,14 @@ async function salaryLoadClassColumns(selectedRecords, apply) {
     apply(records);
   } catch (error) {
     if (request !== salaryClassColumnsRequest) return;
+    salaryClassRowsLoading = false;
+    salarySelectedTeacherIds = new Set();
     apply([]);
     const message = error.message || String(error);
     salaryPaymentStatus.textContent = `Classes unavailable: ${message}`;
     showToast(`Load Attendance classes failed: ${message}`);
+  } finally {
+    if (request === salaryClassColumnsRequest) salaryClassRowsLoading = false;
   }
 }
 
@@ -439,15 +497,26 @@ async function salaryRefreshPayments(alreadyRendered = false) {
       ? payments.map(row => salaryPeriodReference(row.monthRef)) : [];
     let assignedMonths = null;
     let displayedWeeks = null;
-    if (payroll || monthRefs.some(ref => ref.id > 0)) {
-      const metadata = await salaryLoadPeriodMetadata();
+    const writablePeriods = new Set();
+    const needsMonths = payroll || monthRefs.some(ref => ref.id > 0);
+    if (needsMonths || (payments.length && salaryAvailablePaymentColumns.some(salaryIsPaymentPeriodColumn))) {
+      const metadata = await salaryLoadPeriodMetadata().catch(error => {
+        if (needsMonths) throw error;
+        // Cash-month grouping remains available when optional edit metadata cannot be read.
+        recordActionDiagnostic('Payment period metadata', 'error', error.message || String(error));
+        return null;
+      });
       if (request !== salaryPaymentRequest) return;
-      if (salaryPaymentPeriodTarget('forMonth', 'MonthRegistry', metadata)) {
+      for (const [col, field] of Object.entries(salaryPaymentPeriodFields)) {
+        const meta = metadata && salaryPaymentPeriodMeta(field, metadata);
+        if (meta && !meta.isFormula && Array.isArray(expenses[field])) writablePeriods.add(col);
+      }
+      if (needsMonths && salaryPaymentPeriodMeta('forMonth', metadata)) {
         const { months } = payrollPeriods || await salaryLoadMonthRegistry();
         if (request !== salaryPaymentRequest) return;
         assignedMonths = months;
       }
-      if (payrollPeriods && salaryPaymentPeriodTarget('forWeek', 'WeekRegistry', metadata))
+      if (payrollPeriods && salaryPaymentPeriodMeta('forWeek', metadata))
         displayedWeeks = payrollPeriods.weeks;
     }
 
@@ -477,6 +546,7 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     salaryPaymentsByMonth = months;
     salaryPaymentMonthRegistry = assignedMonths;
     salaryPaymentWeekRegistry = displayedWeeks;
+    salaryWritablePaymentPeriodColumns = writablePeriods;
     salaryAllPayments = payments;
     salaryPaymentsLoaded = true;
     const presentIds = new Set(payments.map(row => String(row.id)));
@@ -488,6 +558,11 @@ async function salaryRefreshPayments(alreadyRendered = false) {
     const assignmentStatus = invalidAssignments
       ? ` · ${invalidAssignments} invalid month assignment${invalidAssignments === 1 ? '' : 's'}` : '';
     salaryPaymentStatus.textContent = `${count} ${count === 1 ? 'payment' : 'payments'}${assignmentStatus}`;
+    if (salaryPendingPaymentReveal) {
+      if (salaryPendingPaymentReveal.view === salaryPeriodView)
+        salaryRevealPaymentPeriod(salaryPendingPaymentReveal.paymentId);
+      salaryPendingPaymentReveal = null;
+    }
   } catch (error) {
     if (request !== salaryPaymentRequest) return;
     const message = error && error.message ? error.message : String(error);

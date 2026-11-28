@@ -80,7 +80,8 @@ standard. Preserve it when extending editing or adding another widget:
   Enter/click-away saves, Tab/Shift+Tab saves and moves, and Escape cancels.
   Text supports Shift+Enter for a newline and native selection/copy/paste.
 - Keep the UI compact, preserve drafts and caret through refreshes, and retain
-  cell ranges, copy/paste, and Undo/Redo. Formula and payment cells stay read-only.
+  cell ranges, copy/paste, and Undo/Redo. On payment rows, only writable period
+  references have editors. Formula cells are read-only.
   DateTime and Reference pickers remain compact, non-blocking popovers.
 - View settings persist per section. Grouping columns are visible by default;
   an explicitly saved visibility choice wins. Feedback stays in the fixed
@@ -124,11 +125,11 @@ selected teachers match. Every transaction with
 a teacher reference counts as salary received. Month headers show the signed
 `wage` and `count` subtotals and `amount` payment subtotal over their columns;
 class and payment rows share one table grid with wage and paid columns. Payment
-rows are read-only and a toolbar button re-fetches Transactions after edits there. Keep
+rows support edits to their period references. A toolbar button re-fetches Transactions after external edits. Keep
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.72)
+## Current state (v7.73)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   Calendar months) or `payroll` (Weekly, with manual months containing ISO weeks).
@@ -142,12 +143,14 @@ payments.
   `widgets/salaries/periods.js` builds the period model; `payroll.js` handles
   preferences and shared registry writes; `period-controls.js` supplies one
   non-blocking month picker. Sprints does not load these payroll scripts.
-- Salaries offers optional read-only `forMonth` and `forWeek` columns for
-  payment rows when the ledger exposes those fields. Their saved layout IDs
-  are `salary_forMonth` and `salary_forWeek`. Preserve their positions before
-  the ledger schema is available. The columns show the actual assigned links
-  and default to hidden. Calendar reads week labels on demand when the column
-  is visible. Label failures preserve payment grouping and fall back to raw IDs.
+- Salaries shows `forMonth` and `forWeek` after `count` by default when the
+  ledger exposes them. Keep explicit visibility and saved order, including
+  their slots before the ledger schema is available. The layout IDs are
+  `salary_forMonth` and `salary_forWeek`. Their pickers edit the writable
+  links on the original Transactions row. A save, clear, Undo or Redo regroups
+  the payment using its original cash date and amount. Calendar reads week labels
+  on demand when the column is visible. Label failures preserve payment grouping
+  and fall back to raw IDs.
 - Calendar loads `MonthRegistry` on demand for matching explicit month links.
   Payroll shares that cache and also loads `WeekRegistry`. Refresh payments
   invalidates both. Keep generation guards and await every sibling read.
@@ -220,7 +223,7 @@ payments.
 
 - Salaries' canonical order is start (or legacy datetime), t (label per; legacy per/performance), student (or legacy
   students), notes, wage, salary_received (label paid), count,
-  sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
+  forMonth, forWeek, sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
   Per defaults to 48px; wage, paid, and count default to 64px;
   saved widths win. Month headers also show the signed class count sum.
@@ -243,7 +246,7 @@ payments.
   keep comma-containing labels separate, and reject ambiguous names or links
   to a different target table. Read original raw IDs for Undo/Redo, share reads
   within a range, and cancel pending pastes after selection changes. Formula
-  and payment fields remain protected. `tests/linked-cells.test.js` covers both
+  and payment fields are excluded from range writes. `tests/linked-cells.test.js` covers both
   widgets and the current uppercase PERFORMANCE/ALL_ATT ledger schema.
 
 - Salaries resolves its configured `All_att` class table ID from metadata:
@@ -377,12 +380,12 @@ payments.
   scroll/resize, saving to the original class, click-away saves, neutral OK,
   Cancel/Escape, duplicate pending writes, failed saves, and removed/hidden targets.
 - Payment rows have selector grips with single, additive, and range selection;
-  they stay read-only and cannot be dragged or acted on as Attendance records.
+  keep them out of Attendance drag, edit, duplicate, and delete operations.
   Clicking the sole selected grip again clears selection in both widgets.
 - Reference and Reference List cells share the light linked-record pill style
   from `shared/base.css`. Keep list labels as distinct items, including labels
   containing commas, and apply the same style to the linked teacher on each
-  read-only payment row. A payment row displays its own teacher reference.
+  payment row. A payment row displays its own teacher reference.
 - Both widgets load `shared/references.js` before the grouped app. Writable
   Reference and Reference List fields use the same picker, table adapters,
   raw IDs, and session history. New Sprints sections enable writable `notes`

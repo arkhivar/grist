@@ -530,7 +530,6 @@
     if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
     // Options and records arrive independently. Keep saved order until columns exist.
     if (!allColumns.length) return;
-    const received = typeof WIDGET_CONFIG !== 'undefined' ? WIDGET_CONFIG.receivedColumn : null;
     const extraColumns = typeof salaryPaymentColumns === 'function' ? salaryPaymentColumns() : [];
     const known = new Set([...allColumns, ...extraColumns]);
     const preferred = typeof WIDGET_CONFIG !== 'undefined'
@@ -547,11 +546,15 @@
     const pendingStartAlias = !metadataLoaded && !saved.includes(startColumn)
       && saved.some(col => ['datetime', 'start'].includes(col.toLowerCase()))
       ? startColumn : null;
-    const missing = [...known].filter(col => col !== received && !saved.includes(col) && col !== pendingStartAlias);
+    const missing = allColumns.filter(col => !saved.includes(col) && col !== pendingStartAlias);
     columnOrder = [...saved, ...missing];
-    if (received && !columnOrder.includes(received)) {
-      const wageIndex = columnOrder.indexOf('wage');
-      columnOrder.splice(wageIndex < 0 ? columnOrder.length : wageIndex + 1, 0, received);
+    // Older layouts can predate ledger fields. Insert each new field after
+    // its available default neighbor while keeping all saved fields in order.
+    for (const col of extraColumns) {
+      if (columnOrder.includes(col)) continue;
+      const previous = defaults[defaults.indexOf(col) - 1];
+      const anchor = columnOrder.indexOf(previous);
+      columnOrder.splice(anchor < 0 ? columnOrder.length : anchor + 1, 0, col);
     }
   }
 
@@ -573,8 +576,7 @@
     if (!isDisplayColumn(col)) return false;
     if (Object.prototype.hasOwnProperty.call(columnVisibility, col)
         && typeof columnVisibility[col] === 'boolean') return columnVisibility[col];
-    return !(config?.hiddenDisplayColumns || []).includes(col)
-      && (config?.showGroupingColumn !== false || col !== groupCol);
+    return config?.showGroupingColumn !== false || col !== groupCol;
   }
 
   function defaultColumnWidth(col) {
@@ -1502,6 +1504,7 @@
     if (typeof closeRowContextMenu === 'function') closeRowContextMenu(false);
     const restoreCellFocus = content.contains(document.activeElement)
       && document.activeElement.closest('td.data-cell');
+    const focusedPayment = document.activeElement.closest('button[data-edit-kind="payment-period"]');
     const focusedHeader = columnStrip.contains(document.activeElement)
       ? { col: document.activeElement.closest('th[data-column]')?.dataset.column,
         resize: document.activeElement.classList.contains('column-resize-handle'),
@@ -1526,6 +1529,7 @@
       columnStrip.hidden = true;
       columnStrip.replaceChildren();
       columnScrollbar.hidden = true;
+      if (typeof reanchorReferenceEditor === 'function') reanchorReferenceEditor();
       if (typeof salaryReanchorPeriodEditor === 'function') salaryReanchorPeriodEditor();
       return;
     }
@@ -1597,6 +1601,11 @@
         [inlineInput.scrollLeft, inlineInput.scrollTop] = inlineScroll;
       } else if (!btnEditorSave.disabled) closeFieldEditor();
     } else if (restoreCellFocus) focusSelectedCell();
+    if (focusedPayment) {
+      const { editId, editCol } = focusedPayment.dataset;
+      content.querySelector(`button[data-edit-kind="payment-period"][data-edit-id="${editId}"][data-edit-col="${editCol}"]`)
+        ?.focus({ preventScroll: true });
+    }
     if (focusedHeader?.toggle) {
       columnStrip.querySelector('#btn-toggle-groups')?.focus({ preventScroll: true });
     } else if (focusedHeader?.col) {
@@ -1993,16 +2002,22 @@
     const destination = isUndo ? cellRedoStack : cellUndoStack;
     const entry = source[source.length - 1];
     if (!entry) return;
-    if (entry.kind === 'salary-week-month' && typeof salaryWriteWeekMonth === 'function') {
+    if (entry.kind === 'salary-week-month' || entry.kind === 'salary-payment-period') {
       cellHistoryBusy = true;
       updateCellHistoryControls();
       try {
-        await salaryWriteWeekMonth(entry.weekId, isUndo ? entry.before : entry.after,
-          isUndo ? entry.after : entry.before, salaryClassSelectionKey);
+        const value = isUndo ? entry.before : entry.after;
+        const expected = isUndo ? entry.after : entry.before;
+        if (entry.kind === 'salary-payment-period') {
+          await salaryWritePaymentPeriod(entry.paymentId, entry.col,
+            { type: entry.type, value: expected }, value, null, isUndo);
+        } else {
+          await salaryWriteWeekMonth(entry.weekId, value, expected, salaryClassSelectionKey);
+          salarySavePayrollCollapse();
+          render();
+        }
         source.pop();
         destination.push(entry);
-        salarySavePayrollCollapse();
-        render();
       } catch (error) { showToast(actionErrorMessage(isUndo ? T.undo : T.redo, error)); }
       finally { cellHistoryBusy = false; updateCellHistoryControls(); }
       return;

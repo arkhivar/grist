@@ -115,7 +115,7 @@ function closeReferenceEditor() {
 function positionReferenceEditor() {
   if (!referenceEditorContext) return;
   const anchor = referenceEditorContext.anchor;
-  if (!anchor?.isConnected) { closeReferenceEditor(); return; }
+  if (!anchor?.isConnected) { reanchorReferenceEditor(); return; }
   const rect = anchor.getBoundingClientRect();
   const width = Math.min(360, window.innerWidth - 16);
   referenceEditor.style.width = `${width}px`;
@@ -127,10 +127,15 @@ function positionReferenceEditor() {
 
 function reanchorReferenceEditor() {
   if (!referenceEditorContext) return;
-  const { recordId, col } = referenceEditorContext;
-  const anchor = [...content.querySelectorAll('button[data-edit-kind="reference"]')]
+  const { recordId, col, source } = referenceEditorContext;
+  if (source && !source.isCurrent()) { closeReferenceEditor(); return; }
+  const kind = source ? 'payment-period' : 'reference';
+  const anchor = [...content.querySelectorAll(`button[data-edit-kind="${kind}"]`)]
     .find(button => button.dataset.editId === String(recordId) && button.dataset.editCol === col);
-  if (!anchor) { closeReferenceEditor(); return; }
+  if (!anchor || anchor.closest('.collapsed')) {
+    if (!source || (!referenceEditorSaving && !source.isLoading())) closeReferenceEditor();
+    return;
+  }
   referenceEditorContext.anchor = anchor;
   anchor.setAttribute('aria-expanded', 'true');
   positionReferenceEditor();
@@ -207,12 +212,13 @@ async function preloadReferenceChoices(cols, isCurrent) {
   }));
 }
 
-async function openReferenceEditor(idStr, col, anchor) {
+async function openReferenceEditor(idStr, col, anchor, source = null) {
+  if (referenceEditorSaving || cellHistoryBusy) return;
   closeReferenceEditor();
   const request = referenceEditorRequest;
   referenceEditorContext = {
-    recordId: validRecordId(idStr), col, anchor, choices: [], currentId: 0,
-    isList: columnTypes[col]?.startsWith('RefList:'), currentIds: [], draftIds: new Set(),
+    recordId: validRecordId(idStr), col, anchor, source, choices: [], currentId: 0,
+    isList: !source && columnTypes[col]?.startsWith('RefList:'), currentIds: [], draftIds: new Set(),
     loaded: false,
   };
   referenceEditor.hidden = false;
@@ -224,17 +230,23 @@ async function openReferenceEditor(idStr, col, anchor) {
   positionReferenceEditor();
   referenceSearch.focus();
   try {
-    const [choices, raw] = await Promise.all([
-      referenceChoices(col, { isCurrent: () => request === referenceEditorRequest }),
-      fetchReferenceSourceRecord(Number(idStr)),
-    ]);
-    if (request !== referenceEditorRequest || !referenceEditorContext) return;
-    referenceEditorContext.choices = choices;
-    if (referenceEditorContext.isList) {
-      referenceEditorContext.currentIds = referenceIds(raw[col]);
-      referenceEditorContext.draftIds = new Set(referenceEditorContext.currentIds);
+    if (source) {
+      const { choices, currentId, before } = await source.load(Number(idStr), col);
+      if (request !== referenceEditorRequest || !source.isCurrent()) return;
+      Object.assign(referenceEditorContext, { choices, currentId, before });
     } else {
-      referenceEditorContext.currentId = referenceIds(raw[col])[0] || 0;
+      const [choices, raw] = await Promise.all([
+        referenceChoices(col, { isCurrent: () => request === referenceEditorRequest }),
+        fetchReferenceSourceRecord(Number(idStr)),
+      ]);
+      if (request !== referenceEditorRequest) return;
+      referenceEditorContext.choices = choices;
+      if (referenceEditorContext.isList) {
+        referenceEditorContext.currentIds = referenceIds(raw[col]);
+        referenceEditorContext.draftIds = new Set(referenceEditorContext.currentIds);
+      } else {
+        referenceEditorContext.currentId = referenceIds(raw[col])[0] || 0;
+      }
     }
     referenceEditorContext.loaded = true;
     referenceClear.disabled = referenceEditorSaving;
@@ -251,12 +263,30 @@ async function saveReference(id, label) {
   const context = referenceEditorContext;
   const sourceRecords = allRecords;
   const { recordId, col, currentId } = context;
-  if (id === currentId) { closeReferenceEditor(); return; }
+  if (id === currentId) {
+    closeReferenceEditor();
+    if (context.source) context.anchor.focus({ preventScroll: true });
+    return;
+  }
   referenceSearch.disabled = true;
   referenceClear.disabled = true;
   referenceEditorSaving = true;
   referenceStatus.textContent = 'Saving…';
   try {
+    if (context.source) {
+      const isCurrent = () => referenceEditorContext === context && context.source.isCurrent();
+      await context.source.save(recordId, col, context.before, id, isCurrent);
+      if (isCurrent()) {
+        const anchor = context.anchor;
+        const returnFocus = referenceEditor.contains(document.activeElement) || document.activeElement === document.body;
+        closeReferenceEditor();
+        if (returnFocus && anchor.isConnected) {
+          anchor.focus({ preventScroll: true });
+          anchor.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        }
+      }
+      return;
+    }
     await activeTableOps().update({ id: recordId, fields: { [col]: id } },
       { parseStrings: false });
     const record = sourceRecords === allRecords
@@ -342,7 +372,10 @@ document.addEventListener('pointerdown', event => {
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !referenceEditor.hidden) {
     event.preventDefault();
+    const anchor = referenceEditorContext?.source && referenceEditorContext.anchor;
     closeReferenceEditor();
+    if (anchor?.isConnected) anchor.focus({ preventScroll: true });
   }
 });
 window.addEventListener('resize', positionReferenceEditor);
+document.addEventListener('scroll', positionReferenceEditor, true);

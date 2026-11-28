@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Payroll registries organize the same editable classes and read-only payments.
+// Payroll registries organize editable classes and payment period assignments.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -150,7 +150,7 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
             continue;
           }
           assert.equal(kind, 'UpdateRecord');
-          const source = table === 'ALL_ATT' ? attendance : table === 'WeekRegistry' ? weeks : null;
+          const source = { ALL_ATT: attendance, WeekRegistry: weeks, Transactions: transactions }[table];
           assert(source, `unexpected write target ${table}`);
           const index = source.id.indexOf(id);
           assert(index >= 0, `write used a teacher ID instead of a ${table} row`);
@@ -238,6 +238,22 @@ function tableCell(doc, row, column) {
   return row.cells[index];
 }
 
+async function openPaymentPeriod(h, paymentId, field) {
+  const anchor = h.payment(paymentId)?.querySelector(`[data-payment-period="${field}"] button`);
+  assert(anchor, `missing ${field} picker on payment ${paymentId}`);
+  anchor.click();
+  await waitFor(() => !h.doc.getElementById('salary-ref-editor').hidden
+    && !h.doc.getElementById('salary-ref-clear').disabled
+    && h.doc.querySelector('#salary-ref-options [role="option"]'), `loaded ${field} choices`);
+}
+
+function choosePaymentPeriod(h, label) {
+  const choice = [...h.doc.querySelectorAll('#salary-ref-options [role="option"]')]
+    .find(option => option.textContent.includes(label));
+  assert(choice, `no registry choice matching ${label}`);
+  choice.click();
+}
+
 let passed = 0;
 let failed = 0;
 async function test(name, config, check) {
@@ -249,7 +265,7 @@ async function test(name, config, check) {
 
 async function main() {
   await test('explicit month links take precedence in Calendar months and the registry is shared across views',
-    {}, async h => {
+    { savedLayout: { columnVisibility: { salary_forWeek: false } } }, async h => {
       await h.loaded();
       assert.equal(h.doc.getElementById('salary-view-select').value, 'calendar');
       assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 1);
@@ -290,7 +306,8 @@ async function main() {
     ['blank', [0, null, '', 0, null, '', 201]],
     ['absent', null],
   ]) {
-    await test(`Calendar months groups by cash date with ${kind} forMonth values`, { monthRefs }, async h => {
+    await test(`Calendar months groups by cash date with ${kind} forMonth values`,
+      { monthRefs, savedLayout: { columnVisibility: { salary_forWeek: false } } }, async h => {
       await h.loaded();
       assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'July 2026');
       assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
@@ -329,7 +346,8 @@ async function main() {
     });
 
   await test('Calendar months rejects references to another table even when the IDs match',
-    { transactionMonthType: 'Ref:WeekRegistry', monthFailure: 'MonthRegistry is unavailable' }, async h => {
+    { transactionMonthType: 'Ref:WeekRegistry', monthFailure: 'MonthRegistry is unavailable',
+      savedLayout: { columnVisibility: { salary_forWeek: false } } }, async h => {
       await h.loaded();
       assert.equal(h.payment(1002)?.closest('.group').dataset.groupLabel, 'July 2026');
       assert.equal(h.payment(1006)?.closest('.group').dataset.groupLabel, 'October 2026');
@@ -338,7 +356,8 @@ async function main() {
     });
 
   await test('Calendar months reports a registry read failure and retries on refresh',
-    { monthFailure: 'Month registry read denied by document rule' }, async h => {
+    { monthFailure: 'Month registry read denied by document rule',
+      savedLayout: { columnVisibility: { salary_forWeek: false } } }, async h => {
       await waitFor(() => h.status().includes('Payments unavailable'), 'missing month registry warning');
       assert.match(h.status(), /Month registry read denied by document rule/);
       assert.deepEqual(h.classIds(), [11, 12, 13]);
@@ -509,28 +528,27 @@ async function main() {
       });
   }
 
-  await test('Weekly offers optional period columns that show the original ledger links',
+  await test('Weekly shows the original ledger links after count by default',
     { view: 'payroll' }, async h => {
       await h.loaded();
       const select = h.doc.getElementById('salary-view-select');
       assert.equal(select.value, 'payroll', 'renaming the view changed its saved value');
       assert.equal(select.selectedOptions[0].textContent.trim(), 'Weekly');
       h.expandAll();
+      const columns = columnStripHeaders(h.doc).map(header => header.dataset.column);
+      const count = columns.indexOf('count');
+      assert(count >= 0);
+      assert.deepEqual(columns.slice(count + 1, count + 3), ['salary_forMonth', 'salary_forWeek']);
       h.doc.getElementById('btn-columns').click();
       for (const [column, label] of [['salary_forMonth', 'forMonth'], ['salary_forWeek', 'forWeek']]) {
-        assert(!columnStripHeaders(h.doc).some(header => header.dataset.column === column),
-          `${column} was visible by default`);
         const control = h.doc.querySelector(`.column-control-row[data-column="${column}"]`);
         assert(control, `missing Columns control for ${label}`);
         assert.equal(control.querySelector('.column-control-name').textContent.trim(), label);
         const toggle = control.querySelector('.column-control-toggle');
-        assert.equal(toggle.checked, false);
-        toggle.click();
+        assert.equal(toggle.checked, true);
         const header = columnStripHeaders(h.doc).find(cell => cell.dataset.column === column);
         assert.equal(header?.querySelector('.column-name').textContent.trim(), label);
       }
-      await waitFor(() => h.calls.options.some(([key, value]) => key === 'columnVisibility'
-        && value.salary_forMonth === true && value.salary_forWeek === true), 'saved period visibility');
 
       const monthly = h.payment(1002);
       const weekly = h.payment(1001);
@@ -548,15 +566,32 @@ async function main() {
       for (const column of ['salary_forMonth', 'salary_forWeek']) {
         assert.match(tableCell(h.doc, attendanceRow, column).textContent.trim(), /^(?:—)?$/,
           'an Attendance row showed an inferred ledger assignment');
-        for (const row of [attendanceRow, monthly, weekly, assigned]) {
-          const cell = tableCell(h.doc, row, column);
-          assert.notEqual(cell.dataset.cellWritable, 'true');
-          assert(!cell.querySelector('button, input, [contenteditable="true"]'), 'ledger assignment can be edited');
-        }
+        const cell = tableCell(h.doc, attendanceRow, column);
+        assert.notEqual(cell.dataset.cellWritable, 'true');
+        assert(!cell.querySelector('button, input, [contenteditable="true"]'), 'Attendance offered a payment period editor');
       }
       assert.equal(h.parent('payroll-month:201').querySelector('.salary-received-sum').textContent, '356');
       assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
       assert.deepEqual(h.calls.writes, []);
+    });
+
+  await test('older saved layouts insert new period fields after count and preserve explicit visibility',
+    { deferTransactions: true, savedLayout: { columnOrder: ['notes', 'count', 'sprint', 'start'],
+      columnVisibility: { salary_forMonth: false } } }, async h => {
+      await waitFor(() => h.calls.fetches.includes('Transactions'));
+      h.releaseTransactions();
+      await h.loaded();
+      const columns = () => columnStripHeaders(h.doc).map(header => header.dataset.column).filter(Boolean);
+      assert.deepEqual(columns().slice(0, 5), ['notes', 'count', 'salary_forWeek', 'sprint', 'start']);
+      assert(!columns().includes('salary_forMonth'));
+      h.doc.getElementById('btn-columns').click();
+      h.doc.querySelector('.column-control-row[data-column="salary_forMonth"] .column-control-toggle').click();
+      assert.deepEqual(columns().slice(0, 6), ['notes', 'count', 'salary_forMonth', 'salary_forWeek', 'sprint', 'start']);
+      h.doc.getElementById('btn-reset-columns').click();
+      const restored = columns();
+      assert.equal(restored[0], 'start');
+      assert.deepEqual(restored.slice(restored.indexOf('count'), restored.indexOf('sprint') + 1),
+        ['count', 'salary_forMonth', 'salary_forWeek', 'sprint']);
     });
 
   await test('saved period columns survive options arriving before Transactions',
@@ -607,6 +642,198 @@ async function main() {
       assert.equal(h.calls.fetches.filter(name => name === 'WeekRegistry').length, 1);
       assert.equal(h.calls.fetches.filter(name => name === 'MonthRegistry').length, 1);
     });
+
+  await test('Calendar month picker moves a payment once and updates signed totals through Clear, Undo and Redo',
+    { monthRefs: [0, 0, 0, 0, 0, 0, 0] }, async h => {
+      h.transactions.amount[0] = -300;
+      await h.loaded();
+      const group = () => h.payment(1001)?.closest('.group').dataset.groupLabel;
+      const total = month => h.calendarMonth(month).querySelector('.salary-received-sum').textContent;
+      assert.equal(group(), 'July 2026');
+      const cashDate = h.payment(1001).querySelector('.salary-payment-date').textContent;
+      h.calendarMonth('June 2026').querySelector('.group-header').click();
+      await openPaymentPeriod(h, 1001, 'forMonth');
+      choosePaymentPeriod(h, 'June 2026');
+      await waitFor(() => group() === 'June 2026', 'moved payment in June');
+      assert(!h.calendarMonth('June 2026').classList.contains('collapsed'));
+      assert.equal(total('June 2026'), '-300');
+      assert.equal(total('July 2026'), '90');
+      assert.equal(h.payment(1001).querySelector('.salary-payment-date').textContent, cashDate);
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+      assert.deepEqual(h.calls.writes[0], { table: 'Transactions', id: 1001,
+        fields: { forMonth: 201 }, options: { parseStrings: false } });
+
+      await openPaymentPeriod(h, 1001, 'forMonth');
+      assert.match(h.doc.querySelector('#salary-ref-options [aria-selected="true"]').textContent, /June 2026/);
+      h.doc.getElementById('salary-ref-clear').click();
+      await waitFor(() => group() === 'July 2026', 'cleared payment back in its cash month');
+      assert.equal(total('July 2026'), '-210');
+      h.doc.getElementById('btn-undo').click();
+      await waitFor(() => group() === 'June 2026', 'undone Clear restored June assignment');
+      h.doc.getElementById('btn-redo').click();
+      await waitFor(() => group() === 'July 2026', 'redone Clear restored cash month');
+      assert.deepEqual(h.calls.writes.map(write => write.fields), [201, 0, 201, 0].map(forMonth => ({ forMonth })));
+      assert(h.calls.writes.every(write => write.table === 'Transactions' && write.id === 1001));
+      assert.equal(h.transactions.forWeek[0], 101);
+    });
+
+  await test('Weekly payment picker changes a RefList week, revealing its collapsed destination',
+    { view: 'payroll', transactionWeekType: 'RefList:WeekRegistry' }, async h => {
+      h.transactions.forWeek[0] = ['r', 'WeekRegistry', [101]];
+      const originalDefaults = plain(h.weeks.forMonth);
+      await h.loaded();
+      h.expandAll();
+      h.leaf('payroll-week:102').querySelector('.group-header').click();
+      h.parent('payroll-month:204').querySelector('.group-header').click();
+      await openPaymentPeriod(h, 1001, 'forWeek');
+      choosePaymentPeriod(h, '2026-W40');
+      const week = () => h.payment(1001)?.closest('.group').dataset.groupLabel;
+      await waitFor(() => week()?.includes('2026-W40'), 'payment in expanded W40');
+      assert.equal(h.payment(1001).closest('.salary-month'), h.parent('payroll-month:204'));
+      assert.deepEqual(h.calls.writes[0], { table: 'Transactions', id: 1001,
+        fields: { forWeek: ['L', 102] }, options: { parseStrings: false } });
+      assert.equal(h.leaf('payroll-week:102').querySelector('.salary-received-sum').textContent, '400');
+      assert.equal(h.parent('payroll-month:201').querySelector('.salary-received-sum').textContent, '56');
+      assert.equal(h.parent('payroll-month:204').querySelector('.salary-received-sum').textContent, '400');
+
+      h.doc.getElementById('btn-undo').click();
+      await waitFor(() => week()?.includes('2026-W27'), 'Undo restoring original week');
+      assert.deepEqual(h.calls.writes[1].fields, { forWeek: ['L', 101] });
+      await openPaymentPeriod(h, 1001, 'forWeek');
+      h.doc.getElementById('salary-ref-clear').click();
+      await waitFor(() => h.payment(1001)?.closest('.group').dataset.groupKey === 'payroll-review',
+        'payment with cleared week in Needs review');
+      assert.deepEqual(h.calls.writes[2].fields, { forWeek: ['L'] });
+      assert.equal(h.transactions.forMonth[0], 0);
+      assert.deepEqual(h.weeks.forMonth, originalDefaults);
+      h.expandAll();
+      assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+    });
+
+  await test('Clear can repair a multi-month payment and Undo restores every original ID',
+    { transactionMonthType: 'RefList:MonthRegistry', monthRefs: [0, ['L', 201, 203], 0, 0, 0, 0, 0] }, async h => {
+      await h.loaded();
+      assert.match(h.status(), /invalid month assignment/);
+      await openPaymentPeriod(h, 1002, 'forMonth');
+      h.doc.getElementById('salary-ref-clear').click();
+      await waitFor(() => h.status() === '6 payments' && h.calls.writes.length === 1, 'invalid month cleared');
+      assert.deepEqual(h.calls.writes[0].fields, { forMonth: ['L'] });
+      h.doc.getElementById('btn-undo').click();
+      await waitFor(() => h.calls.writes.length === 2 && /invalid month assignment/.test(h.status()),
+        'restored original multi-month assignment');
+      assert.deepEqual(h.calls.writes[1].fields, { forMonth: ['L', 201, 203] });
+      assert.equal(h.payment(1002).closest('.group'), h.calendarMonth('July 2026'));
+    });
+
+  await test('a refused payment edit reports the ledger error and preserves the row and totals', {}, async h => {
+    await h.loaded();
+    await openPaymentPeriod(h, 1002, 'forMonth');
+    h.failWrites('Salary assignment denied by ledger permission');
+    choosePaymentPeriod(h, 'October 2026');
+    await waitFor(() => h.doc.body.textContent.includes('Salary assignment denied by ledger permission'), 'ledger write error');
+    assert.equal(h.transactions.forMonth[1], 201);
+    assert.equal(h.payment(1002).closest('.group'), h.calendarMonth('June 2026'));
+    assert.equal(h.calendarMonth('June 2026').querySelector('.salary-received-sum').textContent, '56');
+    assert.deepEqual(h.calls.writes, []);
+    assert(h.doc.getElementById('btn-undo').disabled);
+  });
+
+  await test('payment fields with formulas or incorrect registry targets cannot be edited',
+    { transactionWeekType: 'Ref:MonthRegistry' }, async h => {
+      const sourceIndex = h.metadata.colId.findIndex((col, index) => col === 'forMonth' && h.metadata.parentId[index] === 3);
+      h.metadata.isFormula[sourceIndex] = true;
+      await h.loaded();
+      const row = h.payment(1002);
+      assert.equal(tableCell(h.doc, row, 'salary_forMonth').textContent.trim(), 'June 2026');
+      for (const field of ['forMonth', 'forWeek']) {
+        const cell = tableCell(h.doc, row, 'salary_' + field);
+        assert(!cell.querySelector('button:not(:disabled)'));
+        cell.click(); cell.click();
+        assert(h.doc.getElementById('salary-ref-editor').hidden);
+      }
+      assert.deepEqual(h.calls.writes, []);
+    });
+
+  await test('pending payment edit cannot write after the selected teacher changes', {}, async h => {
+    await h.loaded();
+    await openPaymentPeriod(h, 1002, 'forMonth');
+    const fetch = h.win.grist.docApi.fetchTable;
+    let release;
+    h.win.grist.docApi.fetchTable = table => {
+      if (table !== 'Transactions') return fetch(table);
+      h.win.grist.docApi.fetchTable = fetch;
+      return new Promise(resolve => { release = () => resolve(h.transactions); });
+    };
+    choosePaymentPeriod(h, 'October 2026');
+    await waitFor(() => release, 'save rechecks the source transaction');
+    h.select(8);
+    await waitFor(() => h.status() === '1 payment', 'next teacher loaded during save');
+    release();
+    await tick(); await tick();
+    assert.deepEqual(h.calls.writes, []);
+    assert.deepEqual(h.paymentIds(), [1007]);
+    assert.equal(h.transactions.forMonth[1], 201);
+    assert(h.doc.getElementById('salary-ref-editor').hidden);
+  });
+
+  await test('a same-teacher refresh reveals a moved payment after overlapping ledger and class reads', {}, async h => {
+    await h.loaded();
+    h.calendarMonth('October 2026').querySelector('.group-header').click();
+    await openPaymentPeriod(h, 1002, 'forMonth');
+    const fetch = h.win.grist.docApi.fetchTable;
+    let releaseLedger, releaseClasses;
+    h.win.grist.docApi.fetchTable = table => {
+      if (table === 'Transactions' && !releaseLedger)
+        return new Promise(resolve => { releaseLedger = () => resolve(h.transactions); });
+      if (table === 'ALL_ATT' && !releaseClasses)
+        return new Promise(resolve => { releaseClasses = () => resolve(h.attendance); });
+      return fetch(table);
+    };
+    choosePaymentPeriod(h, 'October 2026');
+    await waitFor(() => releaseLedger, 'save waiting on the ledger');
+    h.select(7);
+    await waitFor(() => releaseClasses, 'refresh waiting on classes for the same teacher');
+    releaseLedger();
+    await waitFor(() => h.calls.writes.length === 1, 'same-teacher save completes during the class refresh');
+    releaseClasses();
+    await waitFor(() => h.status() === '6 payments'
+      && h.payment(1002)?.closest('.group').dataset.groupLabel === 'October 2026', 'pending destination revealed');
+    assert(!h.calendarMonth('October 2026').classList.contains('collapsed'));
+    assert.equal(h.calendarMonth('October 2026').querySelector('.salary-received-sum').textContent, '150');
+    assert.deepEqual(h.paymentIds(), [1001, 1002, 1003, 1004, 1005, 1006]);
+    assert.deepEqual(h.calls.writes.map(write => write.fields), [{ forMonth: 204 }]);
+  });
+
+  await test('Undo keeps a newer transaction assignment from another editor', {}, async h => {
+    await h.loaded();
+    await openPaymentPeriod(h, 1002, 'forMonth');
+    choosePaymentPeriod(h, 'October 2026');
+    await waitFor(() => h.payment(1002)?.closest('.group').dataset.groupLabel === 'October 2026');
+    h.transactions.forMonth[1] = 203;
+    h.doc.getElementById('btn-undo').click();
+    await waitFor(() => /changed|stale/i.test(h.doc.getElementById('toast').textContent),
+      'Undo reports the external transaction edit');
+    assert.equal(h.transactions.forMonth[1], 203);
+    assert.equal(h.calls.writes.length, 1);
+  });
+
+  await test('Redo reports a deleted registry choice and preserves the current payment assignment', {}, async h => {
+    await h.loaded();
+    const month = () => h.payment(1002)?.closest('.group').dataset.groupLabel;
+    await openPaymentPeriod(h, 1002, 'forMonth');
+    choosePaymentPeriod(h, 'September 2026');
+    await waitFor(() => month() === 'September 2026');
+    h.doc.getElementById('btn-undo').click();
+    await waitFor(() => month() === 'June 2026');
+    const deletedIndex = h.months.id.indexOf(203);
+    for (const values of Object.values(h.months)) values.splice(deletedIndex, 1);
+    h.doc.getElementById('btn-redo').click();
+    await waitFor(() => /period.*no longer available/i.test(h.doc.getElementById('toast').textContent),
+      'Redo reports the deleted target');
+    assert.equal(month(), 'June 2026');
+    assert.equal(h.transactions.forMonth[1], 201);
+    assert.deepEqual(h.calls.writes.map(write => write.fields), [{ forMonth: 203 }, { forMonth: 201 }]);
+  });
 
   await test('month assignment uses registry IDs; Undo/Redo preserve shared global assignment', { view: 'payroll' },
     async h => {
@@ -811,8 +1038,6 @@ async function main() {
       assert(h.calls.fetches.includes('MonthRegistry'), 'a failed sibling skipped the remaining registry read');
       h.changeView('calendar');
       await waitFor(() => h.classIds().length === 3 && h.paymentIds().length === 6);
-      h.doc.getElementById('btn-columns').click();
-      h.doc.querySelector('.column-control-row[data-column="salary_forWeek"] .column-control-toggle').click();
       await waitFor(() => tableCell(h.doc, h.payment(1001), 'salary_forWeek').textContent.includes('#101'),
         'raw week reference when registry labels are unavailable');
       assert.equal(h.status(), '6 payments');

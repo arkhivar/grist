@@ -73,7 +73,8 @@ it. Display and edit DateTime in Vladivostok time (VLAT), including the local
 weekday on the grid and clipboard. Grist stores UTC values. Date-only fields
 use their UTC calendar date. A single Reference choice saves on selection.
 Reference Lists collect the selected pills and commit with **Save**. Formula
-cells and Salaries payment rows are read-only.
+cells are read-only. On Salaries payment rows, the two period pickers each
+assign one month or week.
 
 Session Undo and Redo cover cell edits, paste, fill, and rows added from a group
 footer. A range operation is one history step. Grist’s document history handles
@@ -114,9 +115,9 @@ changes beyond this widget session.
   and week. Payment rows display the actual cash date. Classes and payments use
   the same grid and sort within each group. Earned wages, received payments,
   and class counts each have their own aligned subtotal. Payment grips select
-  ledger rows. Show `forMonth` and `forWeek` in **Columns** to inspect each
-  payment’s original assignment. Edit payments in Transactions and use
-  **Refresh payments** to update Salaries.
+  ledger rows. The `forMonth` and `forWeek` columns appear after `count` by
+  default. Choose or clear a period on a payment row to update its assignment
+  and totals. **Refresh payments** picks up external changes to Transactions.
 - **Filters** uses the same typography, colors, and compact controls for
   live name search, typed conditions, and recent-student chips. It links
   matching rows into Grist’s selection chain. Recent students are personal to

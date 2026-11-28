@@ -100,13 +100,13 @@ legacy Int IDs also work. A transaction is included when any of its teacher
 IDs matches the selection, and counted once even if several selected teachers
 match it. Every teacher-tagged transaction counts as salary received, including
 `transfer_out` records in the combined ledger.
-Payments stay read-only; use **Refresh payments** after editing Transactions.
+Use **Refresh payments** after editing the ledger in Grist.
 Payment rows show `Transactions.notes` in the shared notes column even when
 Attendance notes use checkboxes. Long notes are clipped to the column width;
 hover to read the complete text. The visible `start` (legacy `datetime`) column
 shows the transaction date on payment rows.
 The default column order is `start` (legacy `datetime`), `per`, `student`, `notes`, `wage`,
-`paid`, `count`, `sprint`, `attach_payment`, followed by other available fields. Older documents
+`paid`, `count`, `forMonth`, `forWeek`, `sprint`, `attach_payment`, followed by other available fields. Older documents
 with `students` use the same position. `per` labels the current `t` or legacy
 `per` / `performance` field; `paid`
 displays Transactions' `amount`. Month headers sum class `wage` and `count`
@@ -137,10 +137,14 @@ unavailable. **Refresh payments** reloads both payments and needed registry data
 Choose **Weekly** for payroll periods grouped into months and weeks. Both
 views show `wage` and `count` for classes and office hours and the read-only
 `paid` column for payments.
-Use **Columns** to show the optional `forMonth` and `forWeek` fields from
-Transactions. Payment rows show the linked month or ISO week. A linked ID is
-shown if its label is unavailable. Edit these links in Transactions and use
-**Refresh payments** to update the widget.
+Salaries shows `forMonth` and `forWeek` after `count` when Transactions exposes
+these fields. Use **Columns** to hide or reorder them. On a payment row,
+click a period cell to select it, then click again or press **Enter** or **F2**
+to search for a month or week. Choose a period
+to assign it, or use **Clear** to remove the link. The widget saves the
+assignment to that transaction and updates its group and the payment totals.
+Use **Undo** or **Redo** to reverse or reapply the change. If a registry label
+is unavailable, the cell shows the linked ID.
 Office work can be logged in Attendance with `start`, `end`, the staff member
 in `t`, and a wage, just like lessons.
 
@@ -160,8 +164,8 @@ keeps its July transaction date. Other payments for that week can belong to July
 Attendance work records join their Vladivostok week by `start` and use the
 week’s default month. On weeks with work records or week-only payments, the
 month button under the heading sets or clears `WeekRegistry.forMonth` for
-everyone who uses that default. The picker supports Undo/Redo. To move an
-individually assigned payment, edit its links in Transactions.
+everyone who uses that default. The picker supports Undo/Redo. To move one
+payment, edit its `forMonth` or `forWeek` cell on the payment row.
 
 Weeks use `weekStart` and `weekEnd` Date columns, from Monday up to the next
 Monday (exclusive). Months use `monthStart` and `monthEnd` Date columns, from
@@ -461,7 +465,8 @@ to the destination type. Linked names resolve to existing records; ambiguous
 names require `#ID` or the picker. Reference Lists also accept comma-separated
 names (quote a name containing commas) or a JSON array of names. Copied links
 cannot be pasted into a Reference to a different table. Link paste and fill
-write raw IDs and support Undo/Redo; formula and payment fields stay read-only.
+write raw IDs and support Undo/Redo. Formula and payment cells are excluded
+from range paste and fill.
 Drag the small blue handle at the selected cell's
 bottom-right corner vertically to copy its value through the visible range;
 the fill is sent to Grist as one batched update.

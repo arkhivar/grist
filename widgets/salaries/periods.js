@@ -61,7 +61,7 @@ function salaryPeriodRegistryColumnMeta(tableId, col, tables, columns) {
   const columnIndex = (columns?.colId || []).findIndex((name, index) =>
     name === col && Number(columns.parentId?.[index]) === Number(tableRef));
   if (columnIndex < 0) return null;
-  return { type: columns.type?.[columnIndex] || '',
+  return { tableId: names[tableIndex], type: columns.type?.[columnIndex] || '',
     isFormula: !!columns.isFormula?.[columnIndex] };
 }
 
@@ -156,17 +156,20 @@ function salaryLoadMonthRegistry() {
   return salaryMonthRegistryPromise;
 }
 
+async function salaryFetchPeriodMetadata() {
+  const results = await Promise.allSettled([
+    grist.docApi.fetchTable('_grist_Tables'),
+    grist.docApi.fetchTable('_grist_Tables_column'),
+  ]);
+  const failure = results.find(result => result.status === 'rejected');
+  if (failure) throw failure.reason;
+  const [tables, columns] = results.map(result => result.value);
+  return { tables, columns };
+}
+
 function salaryLoadPeriodMetadata() {
   if (!salaryPeriodMetadataPromise) {
-    const request = Promise.allSettled([
-      grist.docApi.fetchTable('_grist_Tables'),
-      grist.docApi.fetchTable('_grist_Tables_column'),
-    ]).then(results => {
-      const failure = results.find(result => result.status === 'rejected');
-      if (failure) throw failure.reason;
-      const [tables, columns] = results.map(result => result.value);
-      return { tables, columns };
-    });
+    const request = salaryFetchPeriodMetadata();
     salaryPeriodMetadataPromise = request;
     request.catch(() => {
       if (salaryPeriodMetadataPromise === request) salaryPeriodMetadataPromise = null;
@@ -175,10 +178,10 @@ function salaryLoadPeriodMetadata() {
   return salaryPeriodMetadataPromise;
 }
 
-async function salaryFetchMonthRegistry() {
+async function salaryFetchMonthRegistry(metadata = salaryLoadPeriodMetadata()) {
   const results = await Promise.allSettled([
     grist.docApi.fetchTable('MonthRegistry'),
-    salaryLoadPeriodMetadata(),
+    metadata,
   ]);
   const failure = results.find(result => result.status === 'rejected');
   if (failure) throw failure.reason;

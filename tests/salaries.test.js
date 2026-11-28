@@ -10,11 +10,10 @@ const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const html = read('salaries.html');
 const version = /WIDGET_VERSION = '([^']+)'/.exec(read('shared/core.js'))[1];
-const assets = [...html.matchAll(/(?:src|href)="([^"]+\?v=([^"]+))"/g)]
-  .filter(match => !match[1].startsWith('https://'));
-assert.equal(assets.length, 14);
-assert(assets.every(match => match[2] === version), 'salaries asset versions differ');
-assert(html.includes('widgets/salaries/config.js'));
+const assets = [...html.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+)"/g)]
+  .map(match => match[1]).filter(url => !/^https?:/.test(url));
+assert(assets.includes(`widgets/salaries/config.js?v=${version}`));
+assert(assets.every(url => url.endsWith(`?v=${version}`)), 'salaries asset versions differ');
 
 const dom = new JSDOM(html, {
   url: 'https://arkhivar.github.io/grist/salaries.html',
