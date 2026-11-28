@@ -3,6 +3,7 @@ let salaryClassTableIdPromise = null;
 let salaryClassTableId = null;
 const salaryTeacherColumnIds = ['performance', 'per', 't'];
 const salaryPeriodTargets = { forMonth: 'MonthRegistry', forWeek: 'WeekRegistry' };
+const salaryEmptyClassPeriodColumns = new Set();
 const salaryClassPeriodValues = Symbol('classPeriodValues');
 let salaryClassMonthRegistry = null;
 
@@ -10,10 +11,19 @@ function salaryIsPeriodField(col) {
   return Object.hasOwn(salaryPeriodTargets, col);
 }
 
-function salaryClassPeriodField(col) {
+function salaryIsPeriodReference(col, type) {
   if (!salaryIsPeriodField(col)) return false;
   const target = salaryPeriodTargets[col];
-  return columnTypes[col] === `Ref:${target}` || columnTypes[col] === `RefList:${target}`;
+  return type === `Ref:${target}` || type === `RefList:${target}`;
+}
+
+function salaryClassPeriodField(col) {
+  return salaryIsPeriodReference(col, columnTypes[col]);
+}
+
+function salaryIsEmptyClassPeriodFormula(tableId, col, type, formula) {
+  // Grist turns a typed, empty formula column into data on the first ordinary write.
+  return tableId === salaryClassTableId && formula === '' && salaryIsPeriodReference(col, type);
 }
 
 function salaryClassPeriodReference(record, field) {

@@ -148,6 +148,8 @@ click a period cell to select it, then click again or press **Enter** or **F2**
 to search for a month or week. Choose a period
 to assign it, or use **Clear** to remove the link. The widget saves the
 assignment to that record and updates its group and subtotals.
+Newly created Attendance period references can receive their first assignment
+directly in the widget, including by pasting a month or week into a lesson cell.
 Use **Undo** or **Redo** to reverse or reapply the change. If a registry label
 is unavailable, the cell shows the linked ID.
 Office work can be logged in Attendance with `start`, `end`, the staff member

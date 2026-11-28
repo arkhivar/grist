@@ -129,7 +129,7 @@ rows support edits to their period references. A toolbar button re-fetches Trans
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.75)
+## Current state (v7.76)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   Calendar months) or `payroll` (Weekly, with manual months containing ISO weeks).
@@ -152,6 +152,11 @@ payments.
   the old payment IDs `salary_forMonth` and `salary_forWeek` to the shared
   field names. Keep the first saved position of each pair. When both sources
   have explicit width or visibility settings, use the class field's setting.
+  Grist can mark fresh, typed Attendance period references as formula columns
+  with an empty formula string. Allow the first explicit assignment through
+  the picker, paste or fill. Grist promotes the column to data on that write.
+  Keep populated formulas read-only and omit untouched empty period fields
+  when duplicating a class or replaying its creation.
   A save, clear, Undo or Redo regroups the edited row.
   Calendar reads payment week labels
   on demand when the column is visible. Label failures preserve payment grouping

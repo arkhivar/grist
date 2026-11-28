@@ -163,7 +163,15 @@ function fixture({ view = 'calendar', paymentOnly = false, deferWeeks = false,
           assert(source, `unexpected write target ${table}`);
           const index = source.id.indexOf(id);
           assert(index >= 0, `write used a teacher ID instead of a ${table} row`);
-          for (const [col, value] of Object.entries(fields)) source[col][index] = plain(value);
+          for (const [col, value] of Object.entries(fields)) {
+            const columnIndex = metadata.colId.findIndex((name, i) =>
+              name === col && metadata.parentId[i] === tables.id[tables.tableId.indexOf(table)]);
+            if (metadata.isFormula[columnIndex]) {
+              assert.equal(metadata.formula?.[columnIndex], '', 'Grist rejects writes to a calculated column');
+              metadata.isFormula[columnIndex] = false; // Grist converts an empty formula on the first write.
+            }
+            source[col][index] = plain(value);
+          }
           calls.writes.push({ table, id, fields: plain(fields), options: plain(options) });
           retValues.push(null);
         }
@@ -276,6 +284,23 @@ async function openClassPeriod(h, id, field) {
   await waitFor(() => !h.doc.getElementById('salary-ref-editor').hidden
     && !h.doc.getElementById('salary-ref-clear').disabled
     && h.doc.querySelector('#salary-ref-options [role="option"]'), `Attendance ${field} choices`);
+}
+
+function setFixtureFormula(h, tableRef, field, body) {
+  const i = h.metadata.colId.findIndex((col, index) => col === field && h.metadata.parentId[index] === tableRef);
+  assert(i >= 0);
+  h.metadata.isFormula[i] = true;
+  h.metadata.formula ??= [];
+  h.metadata.formula[i] = body;
+  return i;
+}
+
+function pasteClassText(h, id, field, text) {
+  const cell = tableCell(h.doc, h.work(id), field);
+  if (!cell.classList.contains('cell-selected')) cell.click();
+  const event = new h.win.Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', { value: { getData: type => type === 'text/plain' ? text : '' } });
+  cell.dispatchEvent(event);
 }
 
 let passed = 0;
@@ -824,6 +849,7 @@ async function main() {
 
   await test('Weekly class picker writes one raw week, reveals its destination and clears back to the scheduled week',
     { view: 'payroll', classPeriodTypes: classPeriods }, async h => {
+      setFixtureFormula(h, 1, 'forWeek', '');
       await h.loaded();
       h.expandAll();
       const start = h.attendance.start[0];
@@ -869,15 +895,12 @@ async function main() {
   await test('pasting a class month updates grouping from the raw registry ID and Undo restores its date group',
     { classPeriodTypes: classPeriods, monthRefs: null, savedLayout: { columnVisibility: { salary_forWeek: false } } },
     async h => {
+      setFixtureFormula(h, 1, 'forMonth', '');
       await h.loaded();
       const paymentCell = tableCell(h.doc, h.payment(1001), 'forMonth');
       assert.match(paymentCell.textContent.trim(), /^(?:—)?$/);
       assert(!paymentCell.querySelector('button'), 'a missing Transactions field offered a payment editor');
-      const cell = h.work(11).querySelector('td[data-cell-col="forMonth"]');
-      cell.click();
-      const event = new h.win.Event('paste', { bubbles: true, cancelable: true });
-      Object.defineProperty(event, 'clipboardData', { value: { getData: type => type === 'text/plain' ? '#201' : '' } });
-      cell.dispatchEvent(event);
+      pasteClassText(h, 11, 'forMonth', '#201');
       const month = () => h.work(11)?.closest('.group').dataset.groupLabel;
       await waitFor(() => month() === 'June 2026' && !h.doc.getElementById('btn-undo').disabled,
         'pasted class month assignment');
@@ -885,6 +908,59 @@ async function main() {
       h.doc.getElementById('btn-undo').click();
       await waitFor(() => month() === 'September 2026' && !h.doc.getElementById('btn-redo').disabled);
       assert.deepEqual(h.calls.writes[1].fields, { forMonth: 0 });
+    });
+
+  await test('first assignments on blank-formula Attendance references support picking, pasting and Undo',
+    { view: 'payroll', classPeriodTypes: { forMonth: 'Ref:MonthRegistry', forWeek: 'Ref:WeekRegistry' } }, async h => {
+      const monthIndex = setFixtureFormula(h, 1, 'forMonth', '');
+      const weekIndex = setFixtureFormula(h, 1, 'forWeek', '');
+      const payments = plain(h.transactions);
+      await h.loaded();
+      h.expandAll();
+      const lessonWeek = () => h.work(11)?.closest('.group');
+      const undo = h.doc.getElementById('btn-undo');
+      h.work(11).querySelector('[data-act="dup"]').click();
+      await waitFor(() => h.calls.creates.length === 1);
+      assert(!Object.hasOwn(h.calls.creates[0].fields, 'forWeek'));
+      assert(!Object.hasOwn(h.calls.creates[0].fields, 'forMonth'));
+      await openClassPeriod(h, 11, 'forMonth');
+      chooseRegistryPeriod(h, 'June 2026');
+      await waitFor(() => lessonWeek() === h.leaf('payroll-week:102:month:201') && !undo.disabled,
+        'first lesson month assignment');
+      assert.equal(h.metadata.isFormula[monthIndex], false);
+      assert.equal(h.metadata.isFormula[weekIndex], true);
+      h.work(11).querySelector('[data-act="dup"]').click();
+      await waitFor(() => h.calls.creates.length === 2);
+      assert.equal(h.calls.creates[1].fields.forMonth, 201);
+      assert(!Object.hasOwn(h.calls.creates[1].fields, 'forWeek'));
+      pasteClassText(h, 11, 'forWeek', '2026-W27');
+      await waitFor(() => lessonWeek() === h.leaf('payroll-week:101') && !undo.disabled, 'first lesson week paste');
+      assert.equal(h.metadata.isFormula[weekIndex], false);
+      undo.click();
+      await waitFor(() => lessonWeek() === h.leaf('payroll-week:102:month:201') && !undo.disabled);
+      undo.click();
+      await waitFor(() => lessonWeek() === h.leaf('payroll-week:102') && !h.doc.getElementById('btn-redo').disabled);
+      assert.deepEqual(h.calls.writes.map(write => [write.table, write.id, write.fields]), [
+        ['ALL_ATT', 11, { forMonth: 201 }], ['ALL_ATT', 11, { forWeek: 101 }],
+        ['ALL_ATT', 11, { forWeek: 0 }], ['ALL_ATT', 11, { forMonth: 0 }],
+      ]);
+      assert.deepEqual(h.transactions, payments);
+    });
+
+  await test('calculated lesson periods and unrelated blank formula fields remain read-only',
+    { classPeriodTypes: classPeriods, commonStudent: true }, async h => {
+      setFixtureFormula(h, 1, 'forMonth', '$dateRegistry.month');
+      setFixtureFormula(h, 1, 'forWeek', ' ');
+      setFixtureFormula(h, 1, 'student', '');
+      await h.loaded();
+      for (const col of ['forMonth', 'forWeek', 'student']) {
+        const cell = tableCell(h.doc, h.work(11), col);
+        assert(!cell.querySelector('button[data-edit-id]'), col + ' incorrectly has an editor');
+        pasteClassText(h, 11, col, '#201');
+        await waitFor(() => h.doc.getElementById('toast').textContent.includes('"' + col + '" is read-only'));
+      }
+      assert(tableCell(h.doc, h.payment(1001), 'forMonth').querySelector('button'));
+      assert.deepEqual(h.calls.writes, []);
     });
 
   await test('pending class period save cancels when the teacher changes', { classPeriodTypes: classPeriods }, async h => {
@@ -1017,8 +1093,7 @@ async function main() {
 
   await test('payment fields with formulas or incorrect registry targets cannot be edited',
     { transactionWeekType: 'Ref:MonthRegistry' }, async h => {
-      const sourceIndex = h.metadata.colId.findIndex((col, index) => col === 'forMonth' && h.metadata.parentId[index] === 3);
-      h.metadata.isFormula[sourceIndex] = true;
+      setFixtureFormula(h, 3, 'forMonth', '');
       await h.loaded();
       const row = h.payment(1002);
       assert.equal(tableCell(h.doc, row, 'forMonth').textContent.trim(), 'June 2026');

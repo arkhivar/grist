@@ -20,7 +20,7 @@ async function salaryReadPeriodChoices(tableId, field, reads = {}) {
   if (failure) throw failure.reason;
   const [periods, weeks] = results.map(result => result.value);
   const meta = salaryRecordPeriodMeta(tableId, field, periods);
-  if (!meta || meta.isFormula)
+  if (!meta || (meta.isFormula && !salaryIsEmptyClassPeriodFormula(meta.tableId, field, meta.type, meta.formula)))
     throw new Error(`${tableId}.${field} must be a writable link to ${weekly ? 'WeekRegistry' : 'MonthRegistry'}`);
   const registry = weekly ? salaryPeriodWeeksFromTable(weeks, periods.months, periods.tables, periods.columns)
     : periods.months;

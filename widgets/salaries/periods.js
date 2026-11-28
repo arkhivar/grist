@@ -62,7 +62,7 @@ function salaryPeriodRegistryColumnMeta(tableId, col, tables, columns) {
     name === col && Number(columns.parentId?.[index]) === Number(tableRef));
   if (columnIndex < 0) return null;
   return { tableId: names[tableIndex], type: columns.type?.[columnIndex] || '',
-    isFormula: !!columns.isFormula?.[columnIndex] };
+    isFormula: !!columns.isFormula?.[columnIndex], formula: columns.formula?.[columnIndex] };
 }
 
 function salaryValidatePeriodRegistry(tableId, table, required, tables, columns) {

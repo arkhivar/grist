@@ -97,9 +97,8 @@ function salaryMigratePeriodColumnOptions() {
 }
 
 function salaryRecordPeriodMeta(tableId, field, { tables, columns }) {
-  const target = salaryPeriodTargets[field];
   const column = salaryPeriodRegistryColumnMeta(tableId, field, tables, columns);
-  return column?.type === `Ref:${target}` || column?.type === `RefList:${target}` ? column : null;
+  return column && salaryIsPeriodReference(field, column.type) ? column : null;
 }
 
 function salaryPaymentPeriodRegistry(field) {

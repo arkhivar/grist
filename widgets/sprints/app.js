@@ -2073,6 +2073,7 @@
           if (index < 0) throw new Error('The added record no longer exists');
           entry.fields = Object.fromEntries(writableColumnIds
             .filter(col => Object.prototype.hasOwnProperty.call(table, col))
+            .filter(col => shouldCopyRecordField(col, table[col][index]))
             .map(col => [col, table[col][index]]));
           if (table.manualSort) entry.fields.manualSort = table.manualSort[index];
           await grist.docApi.applyUserActions([
@@ -3230,7 +3231,11 @@
         if (!colId || colId === 'manualSort' || colId.startsWith('gristHelper_')) continue;
         const type = columns.type && columns.type[i] ? columns.type[i] : '';
         allTypeMap[colId] = type;
-        if (columns.isFormula[i]) continue;
+        if (columns.isFormula[i]) {
+          if (typeof salaryIsEmptyClassPeriodFormula !== 'function'
+              || !salaryIsEmptyClassPeriodFormula(tableId, colId, type, columns.formula?.[i])) continue;
+          salaryEmptyClassPeriodColumns.add(colId);
+        }
         result.add(colId);
         typeMap[colId] = type;
       }
@@ -3410,6 +3415,13 @@
     }
   }
 
+  // Writing even an empty reference can turn a fresh Grist formula column into data.
+  // Only first assignments should do that, including a copied, populated period.
+  function shouldCopyRecordField(col, value) {
+    return typeof salaryEmptyClassPeriodColumns === 'undefined' || !salaryEmptyClassPeriodColumns.has(col)
+      || !salaryPeriodReference(value).empty;
+  }
+
   async function duplicateRecordById(idStr) {
     const recordId = validRecordId(idStr);
     recordActionDiagnostic('Duplicate', 'start', `record=${recordId}`);
@@ -3423,7 +3435,7 @@
     const typedFields = {};
     const fields = {};
     for (const colId of writable) {
-      if (Object.prototype.hasOwnProperty.call(raw, colId)) {
+      if (Object.prototype.hasOwnProperty.call(raw, colId) && shouldCopyRecordField(colId, raw[colId])) {
         typedFields[colId] = raw[colId];
         fields[colId] = normalizeTypedCell(raw[colId]);
       }
