@@ -1,9 +1,10 @@
-// Native Attendance fields and synthetic payment columns resolve to separate source rows.
+// A single period column has separate Attendance and Transactions edit targets.
 function salaryOpenRecordPeriod(id, col, anchor) {
   const selection = salaryClassSelectionKey, view = salaryPeriodView;
+  const field = salaryIsPaymentPeriodColumn(col) ? salaryPaymentPeriodFields[col] : col;
   return openReferenceEditor(id, col, anchor, {
     load: salaryRecordPeriodEditInfo, save: salarySaveRecordPeriod,
-    isCurrent: () => selection === salaryClassSelectionKey && view === salaryPeriodView && isColumnVisible(col),
+    isCurrent: () => selection === salaryClassSelectionKey && view === salaryPeriodView && isColumnVisible(field),
     isLoading: () => salaryClassRowsLoading || salaryRefreshButton.disabled,
   });
 }
@@ -103,8 +104,10 @@ function salaryRevealPaymentPeriod(paymentId) {
   }
 }
 
-async function salaryReloadClassPeriods() {
+async function salaryReloadClassPeriods(revealClassId = null) {
   // A completed write supersedes class snapshots requested before Grist acknowledged it.
+  if (revealClassId != null)
+    salaryPendingPeriodReveal = { recordId: revealClassId, source: 'class', view: salaryPeriodView };
   salaryRefreshButton.disabled = true;
   let payments;
   await salaryLoadClassColumns(salaryLastSelectedRecords, records => {
@@ -136,10 +139,11 @@ async function salaryWriteRecordPeriod(recordId, col, expected, value, isCurrent
 
 async function salaryRefreshAfterPeriodWrite(recordId, col, selection, view) {
   // The teacher or view can change while the write is in flight.
+  const payment = salaryIsPaymentPeriodColumn(col);
   if (selection === salaryClassSelectionKey && view === salaryPeriodView)
-    salaryPendingPeriodReveal = { recordId, col, view };
+    salaryPendingPeriodReveal = { recordId, source: payment ? 'payment' : 'class', view };
   salaryInvalidatePeriodRegistries();
-  if (!salaryIsPaymentPeriodColumn(col)) await salaryReloadClassPeriods();
+  if (!payment) await salaryReloadClassPeriods();
   else if (!salaryClassRowsLoading && (salarySelectedTeacherIds.size || allRecords.length))
     await salaryRefreshPayments(true);
 }

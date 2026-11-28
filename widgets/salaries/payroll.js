@@ -118,31 +118,45 @@ async function salaryCheckClassPeriodHistory(changes, defaultCol, isUndo) {
   }
 }
 
-function salaryPayrollAddContext(group) {
+function salaryLessonAddContext(group) {
   const weekly = salaryPayrollActive();
-  if (!weekly && !group?.classPeriodFields) return null;
   const col = weekly ? dateTimeStartColumn(allColumns) : parseGroupBy(groupBy).col;
   const type = columnBaseType(writableColumnTypes[col]);
-  let reason = group?.addRowDisabledReason || '';
-  if (!reason && (!metadataLoaded || !writableColumnIds.includes(col)
-      || (type !== 'DateTime' && (weekly || type !== 'Date'))))
-    reason = 'A writable class date is required to add work records';
+  const monthStart = weekly ? salaryPeriodMonths.get(group.monthId)?.sortKey : group.sortKey;
   const teacherColumn = salaryTeacherColumn(columnTypes);
-  if (!reason && (salarySelectedTeacherIds.size !== 1 || !writableColumnIds.includes(teacherColumn)))
-    reason = 'Select one teacher or staff member before adding a work record';
-  const sample = group?.records[0];
-  const value = sample && salaryPeriodDateSec(sample[col]);
-  if (!reason && value == null && (!group?.classPeriodFields || (sample[col] != null && sample[col] !== '')))
-    reason = 'Add the first work record in Attendance or Calendar';
-  return { enabled: !reason, col, type, value: value ?? null, reason };
-}
+  let reason = '';
+  if (monthStart == null) reason = 'Choose a month before adding a lesson';
+  else if (!metadataLoaded || !['DateTime', 'Date'].includes(type))
+    reason = 'A writable class date is required to add a lesson';
+  else if (salarySelectedTeacherIds.size !== 1)
+    reason = 'Select one teacher or staff member before adding a lesson';
+  else if (!writableColumnIds.includes(teacherColumn))
+    reason = 'A writable class teacher field is required to add a lesson';
+  if (reason) return { enabled: false, reason };
 
-function salaryPayrollNewRowFields(group) {
-  if (!salaryPayrollActive() && !group?.classPeriodFields) return {};
-  if (salarySelectedTeacherIds.size !== 1) throw new Error('Select one teacher or staff member first');
-  const col = salaryTeacherColumn(columnTypes);
-  const id = [...salarySelectedTeacherIds][0];
-  return { [col]: columnTypes[col]?.startsWith('RefList:') ? ['L', id] : id };
+  const first = new Date(monthStart);
+  const lastDay = Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0) / 1000;
+  const value = type === 'DateTime' ? parseDateTimeWallSec(formatUtcDateSec(lastDay)) : lastDay;
+  if (value == null) return { enabled: false, reason: 'The last day of this month is outside the supported date range' };
+  const fields = { [col]: value };
+  function assignReference(field, id) {
+    fields[field] = columnTypes[field]?.startsWith('RefList:') ? ['L', id] : id;
+  }
+  assignReference(teacherColumn, [...salarySelectedTeacherIds][0]);
+  if (weekly) {
+    let week = group.monthEndWeek;
+    if (group.weekId && group.weekId !== week?.id
+        && salaryClassPeriodField('forWeek') && writableColumnIds.includes('forWeek')) {
+      assignReference('forWeek', group.weekId);
+      week = salaryPeriodWeeks.get(group.weekId);
+    }
+    if (!week?.monthValid || week.monthId !== group.monthId) {
+      if (!salaryClassPeriodField('forMonth') || !writableColumnIds.includes('forMonth'))
+        return { enabled: false, reason: 'A writable class forMonth link is required to add a lesson to this payroll month' };
+      assignReference('forMonth', group.monthId);
+    }
+  }
+  return { enabled: true, col, type, fields };
 }
 
 async function salaryWriteWeekMonth(weekId, monthId, expected = null, selection = null) {

@@ -73,8 +73,12 @@ it. Display and edit DateTime in Vladivostok time (VLAT), including the local
 weekday on the grid and clipboard. Grist stores UTC values. Date-only fields
 use their UTC calendar date. A single Reference choice saves on selection.
 Reference Lists collect the selected pills and commit with **Save**. Formula
-cells are read-only. On Salaries class and payment rows, the two period pickers each
-assign one month or week.
+cells are read-only. Salaries shares two period columns across the grid.
+Picking a month or week edits the lesson or payment on that row.
+
+In Salaries, **+** creates a blank lesson for the selected teacher on the
+last day of the displayed month. A month containing only payments offers
+the same control as a month with lessons.
 
 Session Undo and Redo cover cell edits, paste, fill, and rows added from a group
 footer. A range operation is one history step. Grist’s document history handles

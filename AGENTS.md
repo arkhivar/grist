@@ -129,7 +129,7 @@ rows support edits to their period references. A toolbar button re-fetches Trans
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.74)
+## Current state (v7.75)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   Calendar months) or `payroll` (Weekly, with manual months containing ISO weeks).
@@ -146,12 +146,14 @@ payments.
   preferences and shared registry writes; `period-controls.js` supplies one
   non-blocking month picker. `payment-periods.js` provides the per-record
   period editor for both ALL_ATT and Transactions. Sprints does not load these payroll scripts.
-- Salaries shows `forMonth` and `forWeek` after `count` by default when the
-  ledger exposes them. Keep explicit visibility and saved order, including
-  their slots before the ledger schema is available. The layout IDs are
-  `salary_forMonth` and `salary_forWeek`. Their pickers edit the writable
-  links on the original Transactions row. A save, clear, Undo or Redo regroups
-  the payment using its original cash date and amount. Calendar reads week labels
+- Salaries uses one `forMonth` and one `forWeek` after `count` for both row
+  types. Each appears when either source provides it. The row determines the
+  table for picker writes and history. Migrate saved layout and sorting from
+  the old payment IDs `salary_forMonth` and `salary_forWeek` to the shared
+  field names. Keep the first saved position of each pair. When both sources
+  have explicit width or visibility settings, use the class field's setting.
+  A save, clear, Undo or Redo regroups the edited row.
+  Calendar reads payment week labels
   on demand when the column is visible. Label failures preserve payment grouping
   and fall back to raw IDs.
 - Calendar loads `MonthRegistry` on demand for matching explicit month links.
@@ -165,8 +167,7 @@ payments.
   multiple months. Count each payment once and preserve its cash date and
   signed amount. Month-only payments use Monthly items. Payments with neither
   link or an invalid period assignment go to Needs review.
-- Class period columns retain their native field IDs, independently of the
-  payment layout IDs. Keep raw IDs alongside rendered labels. In Weekly, a valid
+- Keep raw class period IDs alongside rendered labels. In Weekly, a valid
   `ALL_ATT.forWeek` overrides the scheduled VLAT week and `ALL_ATT.forMonth`
   overrides its parent month for that class. With a month assignment and no
   scheduled or assigned week, use Monthly items. Invalid supplied registry links
@@ -183,9 +184,12 @@ payments.
 - Payroll parents aggregate children without duplicate row tables. Collapsed
   periods render no row DOM; collapse preferences have a separate saved set so
   delayed automatic calendar grouping cannot erase them. Date edits, paste,
-  and history reveal the selected row's destination week and month. Footers
-  inherit raw selected teacher IDs and the existing week start; payment-only
-  weeks require the first work record from Attendance/Calendar. Staff office
+  and history reveal the selected row's destination week and month. In both
+  Salaries views, the footer adds a blank lesson for a single selected teacher
+  using that teacher's raw ID and the last date of the displayed month. DateTime
+  starts at midnight in VLAT. Payment-only groups in a dated month support
+  the same action. Use class period links to preserve the Weekly placement.
+  Reload linked Attendance after creation and history replay. Staff office
   hours use ordinary Attendance wages. `tests/salaries-periods.test.js` covers
   Calendar overrides, grouping, links, lazy rows, registry edits and history,
   failures, races, work editing and creation, and saved settings.
@@ -233,7 +237,7 @@ payments.
 
 - Salaries' canonical order is start (or legacy datetime), t (label per; legacy per/performance), student (or legacy
   students), notes, wage, salary_received (label paid), count,
-  payment forMonth/forWeek, class forMonth/forWeek, sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
+  forMonth, forWeek, sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
   Per defaults to 48px; wage, paid, and count default to 64px;
   saved widths win. Month headers also show the signed class count sum.
@@ -304,7 +308,7 @@ payments.
   then case-insensitive), including plain Text. Only if absent does it fall
   back to the first single-value Choice column. Valid saved groupings win;
   Salaries keeps its monthly Date/DateTime default.
-- Footer creation inherits the common visible student via a typed, unexpanded
+- Sprints footer creation inherits the common visible student via a typed, unexpanded
   source record, as well as the clicked sprint. Grist's outer Select By filter
   does not automatically supply fields for custom-widget AddRecord actions.
 - Cell ranges support Shift-click, Shift+arrows, drag selection, and rectangular
@@ -383,7 +387,7 @@ payments.
   expense-only months, refresh, and failed expense fetches.
 - `tests/salaries-selection.test.js` covers direct teacher selection, shared
   class references, payment-only teachers, original class edit IDs, and stale
-  selection loads. Payment-only months disable adding an unassigned class.
+  selection loads and adding the first class for a payment-only teacher.
 - `tests/row-sort-default.test.js` covers default DateTime sorting, startup
   ordering, saved/manual choices, empty selections, and reloads in both widgets.
 - `tests/date-picker-refresh.test.js` covers DateTime drafts through refreshes,

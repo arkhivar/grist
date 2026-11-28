@@ -28,6 +28,7 @@ async function fixture(mode, tableId = 'ALL_ATT', tableIds = [tableId, 'Performa
     id: [11, 12, 13], datetime: [1790812800, 1790899200, 1790985600],
     performance: [['L', 7], ['L', 7, 8], ['L', 8]],
     wage: [100, 200, 300], notes: ['First class', 'Shared class', 'Other teacher'],
+    group: [['L'], ['L'], ['L']], // An ordinary empty list on a direct class is not a summary link.
   };
   const summary = { id: [91], group: [['L', 11, 12]], performance: [['L', 7]] };
   const sourceId = mode === 'teacher' ? 'Performance'
@@ -50,12 +51,12 @@ async function fixture(mode, tableId = 'ALL_ATT', tableIds = [tableId, 'Performa
         if (name === '_grist_Tables')
           return { id: tableIds.map((_, index) => index + 1), tableId: tableIds };
         if (name === '_grist_Tables_column')
-          return { id: [11, 12, 13, 14, 21, 41, 42], parentId: [1, 1, 1, 1, 2, 4, 4],
-            colId: ['datetime', 'performance', 'wage', 'notes', 'A', 'group', 'performance'],
+          return { id: [11, 12, 13, 14, 21, 41, 42, 15], parentId: [1, 1, 1, 1, 2, 4, 4, 1],
+            colId: ['datetime', 'performance', 'wage', 'notes', 'A', 'group', 'performance', 'group'],
             type: ['DateTime:Asia/Vladivostok', 'RefList:Performance', 'Numeric', 'Text', 'Text',
-              `RefList:${tableId}`, 'RefList:Performance'],
-            isFormula: [false, false, false, false, false, true, true],
-            visibleCol: [0, 21, 0, 0, 0, 0, 21] };
+              `RefList:${tableId}`, 'RefList:Performance', 'RefList:Performance'],
+            isFormula: [false, false, false, false, false, true, true, false],
+            visibleCol: [0, 21, 0, 0, 0, 0, 21, 21] };
         if (name === tableId) return attendance;
         if (name === 'Performance') return { id: [7, 8], A: ['vp', 'tr'] };
         if (name === 'Transactions') return {

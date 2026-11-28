@@ -2,13 +2,17 @@
 let salaryClassTableIdPromise = null;
 let salaryClassTableId = null;
 const salaryTeacherColumnIds = ['performance', 'per', 't'];
-const salaryClassPeriodTargets = { forMonth: 'MonthRegistry', forWeek: 'WeekRegistry' };
+const salaryPeriodTargets = { forMonth: 'MonthRegistry', forWeek: 'WeekRegistry' };
 const salaryClassPeriodValues = Symbol('classPeriodValues');
 let salaryClassMonthRegistry = null;
 
+function salaryIsPeriodField(col) {
+  return Object.hasOwn(salaryPeriodTargets, col);
+}
+
 function salaryClassPeriodField(col) {
-  if (!Object.hasOwn(salaryClassPeriodTargets, col)) return false;
-  const target = salaryClassPeriodTargets[col];
+  if (!salaryIsPeriodField(col)) return false;
+  const target = salaryPeriodTargets[col];
   return columnTypes[col] === `Ref:${target}` || columnTypes[col] === `RefList:${target}`;
 }
 

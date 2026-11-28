@@ -106,7 +106,7 @@ Attendance notes use checkboxes. Long notes are clipped to the column width;
 hover to read the complete text. The visible `start` (legacy `datetime`) column
 shows the transaction date on payment rows.
 The default column order is `start` (legacy `datetime`), `per`, `student`, `notes`, `wage`,
-`paid`, `count`, the payment and class period fields, `sprint`, `attach_payment`,
+`paid`, `count`, `forMonth`, `forWeek`, `sprint`, `attach_payment`,
 followed by other available fields. Older documents
 with `students` use the same position. `per` labels the current `t` or legacy
 `per` / `performance` field; `paid`
@@ -139,9 +139,9 @@ unavailable. **Refresh payments** reloads both payments and needed registry data
 Choose **Weekly** for payroll periods grouped into months and weeks. Both
 views show `wage` and `count` for classes and office hours and the read-only
 `paid` column for payments.
-Salaries shows the period fields after `count` by default. Use
-`forMonth (class)` and `forWeek (class)` on Attendance rows. The corresponding
-`(payment)` columns edit Transactions. Configure `forMonth` as a Reference
+Classes and payments share the same two period columns, `forMonth` and
+`forWeek`. Editing a class updates Attendance. Editing a payment updates
+Transactions. Configure `forMonth` as a Reference
 to `MonthRegistry` and `forWeek` as a Reference to `WeekRegistry` in each
 source table. Use **Columns** to hide or reorder them. On the row you want to edit,
 click a period cell to select it, then click again or press **Enter** or **F2**
@@ -167,8 +167,8 @@ For example, a July payment linked to `2026-W27` and June appears under
 keeps its July transaction date. Other payments for that week can belong to July.
 
 In **Weekly**, classes use their scheduled Vladivostok week unless you choose
-another `forWeek (class)`. They use that week’s default payroll month unless
-you choose a `forMonth (class)`. For example, a July 1 lesson assigned to
+another `forWeek`. They use that week’s default payroll month unless
+you choose a `forMonth` for the lesson. For example, a July 1 lesson assigned to
 `2026-W27` and June appears under **June 2026 → 2026-W27**, with July 1
 still shown in `start`. With only a month assignment and no matching scheduled
 week, the class appears under **Monthly items**. Invalid class links appear
@@ -188,8 +188,16 @@ error and leaves payment totals unavailable.
 Grouping is computed in the widget from cached registry reads, without adding
 native summary tables or making a request per week. Weeks start collapsed;
 closed periods do not build their row DOM. View and collapse settings persist
-per widget section. Add-row controls work in weeks with existing work records;
-add the first office-hour record through Attendance or Calendar.
+per widget section.
+
+With one teacher selected, click **+** in a dated month to add a blank
+Attendance lesson, even if the month contains only payments. The teacher is
+prefilled and `start` defaults to midnight Vladivostok time on the month's
+last day. Student, notes and wage are left to the document's normal defaults.
+In Weekly, adding from a week uses its displayed payroll month and keeps the
+lesson in that week when the class period fields are writable. Adding from
+**Monthly items** uses the same month-end date, so the lesson can appear in
+that date's week under the month.
 
 ### Calendar start and end fields
 
@@ -309,7 +317,7 @@ Every record row has a trailing actions cell with always-visible buttons
   groupings show the button disabled with the reason in its tooltip.
   Creation sends the grouping value with an explicit Grist `AddRecord` action
   and checks the stored assignment before reporting success.
-  When Grist's outer selection shows records for one student, creation also
+  In Sprints, when Grist's outer selection shows records for one student, creation also
   inherits that student. This recognizes `student`, `students`, `student_name`,
   or `students_name` (case-insensitive) when exactly one is visible and writable.
   Reference values are copied as stored IDs. Mixed-student views do not infer

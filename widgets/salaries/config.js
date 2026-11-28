@@ -10,7 +10,7 @@ const WIDGET_CONFIG = {
   expensesTableId: 'Transactions',
   receivedColumn: 'salary_received',
   defaultColumnOrder: ['datetime', 'start', 'performance', 'per', 't', 'student', 'students', 'notes',
-    'wage', 'salary_received', 'count', 'salary_forMonth', 'salary_forWeek', 'forMonth', 'forWeek',
+    'wage', 'salary_received', 'count', 'forMonth', 'forWeek',
     'sprint', 'attach_payment'],
   compactColumns: ['performance', 'per', 't', 'wage', 'salary_received', 'count'],
   minimumColumnWidths: { performance: 48, per: 48, t: 48 },

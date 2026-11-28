@@ -241,16 +241,9 @@ function salaryClassCalendarMonth(record) {
   return month?.valid ? month : null;
 }
 
-// An add-row footer copies its sample's start. Carry the sample's explicit
-// assignments too, so that the new class appears in the group that created it.
-function salaryInheritClassPeriod(group, field, id) {
-  if (!id) return;
-  if (!writableColumnIds.includes(field)) {
-    group.addRowDisabledReason = `The class assignment ${field} is read-only`;
-    return;
-  }
-  group.classPeriodFields ??= {};
-  group.classPeriodFields[field] = columnTypes[field]?.startsWith('RefList:') ? ['L', id] : id;
+function salaryWeekStartSec(wallDate) {
+  return Date.UTC(wallDate.getUTCFullYear(), wallDate.getUTCMonth(),
+    wallDate.getUTCDate() - (wallDate.getUTCDay() + 6) % 7) / 1000;
 }
 
 function salaryBuildPayrollGroups(records, payments) {
@@ -270,6 +263,8 @@ function salaryBuildPayrollGroups(records, payments) {
       label: month?.valid ? month.label : 'Unassigned month',
       monthId: month?.valid ? month.id : 0,
       sortKey: month?.valid ? month.sortKey : null,
+      monthEndWeek: month?.valid
+        ? weekByStart.get(salaryWeekStartSec(new Date((month.endSec - 86400) * 1000))) : null,
       records: [], payments: [], children: [] });
     return parents.get(key);
   }
@@ -290,8 +285,8 @@ function salaryBuildPayrollGroups(records, payments) {
         sortKey: week ? week.sortKey : parent.sortKey,
         weekId: week?.id || 0, monthId: parent.monthId,
         usesWeekMonth: false,
-        writeValue: null, records: [], payments: [],
-        addRowDisabledReason: 'Add the first work record for this period in Attendance',
+        monthEndWeek: parent.monthEndWeek,
+        records: [], payments: [],
       };
       leaves.set(key, leaf);
       parent.children.push(leaf);
@@ -310,7 +305,6 @@ function salaryBuildPayrollGroups(records, payments) {
 
   const startColumn = dateTimeStartColumn(allColumns)
     || dateTimeStartColumn(columnTypes);
-  const groupedColumn = parseGroupBy(groupBy).col;
   records.forEach(record => {
     const weekRef = salaryClassPeriodReference(record, 'forWeek');
     const monthRef = salaryClassPeriodReference(record, 'forMonth');
@@ -318,19 +312,10 @@ function salaryBuildPayrollGroups(records, payments) {
     let week = salaryPeriodWeeks.get(weekRef.id);
     const sec = weekRef.empty && startColumn ? salaryPeriodDateSec(record[startColumn]) : null;
     if (sec != null) {
-      const wallDate = dateTimeWallDate(sec);
-      const monday = Date.UTC(wallDate.getUTCFullYear(), wallDate.getUTCMonth(),
-        wallDate.getUTCDate() - (wallDate.getUTCDay() + 6) % 7) / 1000;
-      week = weekByStart.get(monday);
+      week = weekByStart.get(salaryWeekStartSec(dateTimeWallDate(sec)));
     }
     const leaf = assignmentLeaf(weekRef, week, monthRef, month);
     leaf.records.push(record);
-    if ((leaf.weekId || leaf.monthId) && leaf.records.length === 1) {
-      leaf.writeValue = record[groupedColumn] ?? null;
-      delete leaf.addRowDisabledReason;
-      salaryInheritClassPeriod(leaf, 'forWeek', weekRef.id);
-      salaryInheritClassPeriod(leaf, 'forMonth', monthRef.id);
-    }
   });
 
   const paymentWeeks = salaryPaymentPeriodRegistry('forWeek');

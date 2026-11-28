@@ -100,16 +100,9 @@ win.grist = {
   } },
 };
 
-win.eval([
-  'widgets/salaries/config.js',
-  'shared/dates.js',
-  'shared/core.js',
-  'widgets/salaries/attendance.js',
-  'shared/references.js',
-  'widgets/salaries/expenses.js',
-  'widgets/sprints/app.js',
-  'widgets/sprints/actions.js',
-].map(read).join('\n;\n'));
+const localScripts = [...doc.querySelectorAll('script[src]')].map(tag => tag.getAttribute('src'))
+  .filter(src => !/^https?:/.test(src)).map(src => src.split('?')[0]);
+win.eval(localScripts.map(read).join('\n;\n'));
 
 const records = [{ id: 91, group: ['L', 1, 2, 3], performance: 'VP' }];
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -654,8 +647,10 @@ async function main() {
 
   summary.group[3] = ['L'];
   onRecords([{ id: 94, group: ['L'], performance: 'VP' }]);
-  await waitFor(() => doc.getElementById('salary-payment-status').textContent.includes('has no Attendance rows'));
-  assert.equal(cards().length, 0);
+  await waitFor(() => doc.getElementById('salary-payment-status').textContent === '3 payments');
+  assert.equal(doc.querySelectorAll('tr[data-record-id]').length, 0);
+  assert.equal(month('August 2026').querySelector('.group-add-row').disabled, false,
+    'a summary with a teacher reference can add its first lesson');
   // A summary widget may report its source table ID while onRecords carries group links.
   selectedSourceId = 'All_att';
   onRecords([{ id: 92, group: ['L', 6], performance: 'TR' }]);

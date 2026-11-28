@@ -311,7 +311,7 @@ async function main() {
       assert.equal(paymentOnly.width(teacherColumn), '48px');
       assert.equal(paymentOnly.doc.querySelector('.salary-received-sum').textContent, '75');
       assert.equal(paymentOnly.doc.querySelector('.salary-payment-row .cell-ref-pill').textContent, 'zz');
-      assert(paymentOnly.doc.querySelector('.group-add-row').disabled);
+      assert.equal(paymentOnly.doc.querySelector('.group-add-row').disabled, false);
       console.log(`PASS Salaries teacher rename: payment-only ${teacherColumn} teacher retains dates, labels and compact layout`);
     } finally { paymentOnly.win.close(); }
   }

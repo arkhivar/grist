@@ -251,7 +251,7 @@
   function editKindForColumn(col) {
     // Called for every rendered cell: check this column directly rather than
     // rebuilding candidate lists across all columns for each cell.
-    if (!writableColumnIds.includes(col) || isPaymentDisplayColumn(col)) return null;
+    if (!writableColumnIds.includes(col) || isPaymentOnlyColumn(col)) return null;
     const type = writableColumnTypes[col];
     if (isNumericColumnType(type)) return 'number';
     // Group values already support drag, paste, and fill. Use the same text
@@ -539,15 +539,15 @@
     const order = columnOrderConfigured ? columnOrder : defaults;
     const saved = order.filter((col, i) =>
       (known.has(col) || !metadataLoaded
-        || (typeof salaryIsPaymentPeriodColumn === 'function' && salaryIsPaymentPeriodColumn(col)))
+        || (typeof salaryIsPeriodField === 'function' && salaryIsPeriodField(col)))
       && order.indexOf(col) === i);
     // Do not append a renamed date field before metadata can move its saved slot.
     const startColumn = dateTimeStartColumn(allColumns);
     const pendingStartAlias = !metadataLoaded && !saved.includes(startColumn)
       && saved.some(col => ['datetime', 'start'].includes(col.toLowerCase()))
       ? startColumn : null;
-    const lateColumns = typeof salaryClassPeriodField === 'function'
-      ? [...extraColumns, ...allColumns.filter(salaryClassPeriodField)] : extraColumns;
+    const lateColumns = typeof salaryIsPeriodField === 'function'
+      ? [...extraColumns, ...allColumns.filter(salaryIsPeriodField)] : extraColumns;
     const missing = allColumns.filter(col => !saved.includes(col) && col !== pendingStartAlias && !lateColumns.includes(col));
     columnOrder = [...saved, ...missing];
     // Older layouts can predate payroll fields. Insert each new field after
@@ -565,12 +565,13 @@
     return columnOrder.filter(col => isColumnVisible(col, groupCol));
   }
 
-  function isPaymentDisplayColumn(col) {
-    return typeof salaryPaymentColumns === 'function' && salaryPaymentColumns().includes(col);
+  function isPaymentOnlyColumn(col) {
+    return typeof salaryPaymentColumns === 'function' && salaryPaymentColumns().includes(col)
+      && (col === WIDGET_CONFIG.receivedColumn || !allColumns.includes(col));
   }
 
   function isDisplayColumn(col) {
-    return allColumns.includes(col) || isPaymentDisplayColumn(col);
+    return allColumns.includes(col) || isPaymentOnlyColumn(col);
   }
 
   function isColumnVisible(col, groupCol) {
@@ -604,6 +605,11 @@
         try { text = JSON.stringify(value); } catch (_) { text = String(value); }
       } else text = String(value);
       longest = Math.max(longest, Math.min(38, text.length));
+    }
+    if (typeof salaryIsPeriodField === 'function' && salaryIsPeriodField(col)) {
+      for (const payment of salaryAllPayments.slice(0, 400)) {
+        longest = Math.max(longest, salaryPaymentPeriodCell(payment, col).label.length);
+      }
     }
     return clampColumnWidth(longest * 7.2 + 34, col);
   }
@@ -1128,6 +1134,7 @@
     optionsLoaded = true;
     migrateStartColumnOptions();
     if (typeof salaryMigrateTeacherColumnOptions === 'function') salaryMigrateTeacherColumnOptions();
+    if (typeof salaryMigratePeriodColumnOptions === 'function') salaryMigratePeriodColumnOptions();
     if (!studentNavigationBridgePendingSaves) configureStudentNavigationBridge(opts);
     getWritableColumnIds().then(() => {
       applyStartupGroupDefault();
@@ -1409,7 +1416,6 @@
       if (!group) {
         if (dateMode && sortKey != null) label = bucketLabel(sortKey, granularity);
         group = { key, label, sortKey, writeValue, records: [] };
-        if (assignedMonth) salaryInheritClassPeriod(group, 'forMonth', assignedMonth.id);
         map.set(key, group);
       }
       group.records.push(rec);
@@ -1913,7 +1919,7 @@
   }
 
   function isWritableCellColumn(col) {
-    return !isPaymentDisplayColumn(col) && writableColumnIds.includes(col) && isSupportedCellColumn(col);
+    return !isPaymentOnlyColumn(col) && writableColumnIds.includes(col) && isSupportedCellColumn(col);
   }
 
   function cellHistoryValue(value, type, col) {
@@ -2085,7 +2091,9 @@
         }
         source.pop();
         destination.push(entry);
-        render();
+        if (typeof salaryReloadClassPeriods === 'function')
+          await salaryReloadClassPeriods(isUndo ? null : entry.id);
+        else render();
       } catch (err) {
         showToast(actionErrorMessage(isUndo ? T.undo : T.redo, err));
       } finally {
@@ -2685,7 +2693,7 @@
   }
 
   function renderTableCell(rec, col) {
-    const rendered = isPaymentDisplayColumn(col) ? '' : renderCell(rec[col], col, rec);
+    const rendered = isPaymentOnlyColumn(col) ? '' : renderCell(rec[col], col, rec);
     const editKind = editKindForColumn(col);
     const id = esc(String(rec.id));
     const colAttr = esc(col);
@@ -3297,17 +3305,12 @@
   }
 
   function getAddRowContext(group) {
-    if (typeof salaryPayrollAddContext === 'function') {
-      const payroll = salaryPayrollAddContext(group);
-      if (payroll) return payroll;
-    }
+    if (typeof salaryLessonAddContext === 'function') return salaryLessonAddContext(group);
     const { col } = parseGroupBy(groupBy);
     const type = columnBaseType(writableColumnTypes[col] || columnTypes[col]);
     let reason = '';
     if (!col)
       reason = 'Choose a grouping column first';
-    else if (group?.addRowDisabledReason)
-      reason = group.addRowDisabledReason;
     else if (!metadataLoaded)
       reason = 'Writable columns are still loading';
     else if (!writableColumnIds.includes(col))
@@ -3325,8 +3328,8 @@
   }
 
   async function getNewRowFields(context, group) {
-    const fields = { [context.col]: context.value, ...group.classPeriodFields };
-    if (typeof salaryPayrollNewRowFields === 'function') Object.assign(fields, salaryPayrollNewRowFields(group));
+    if (context.fields) return context.fields;
+    const fields = { [context.col]: context.value };
     // The outer student selection is applied by Grist before onRecords.
     // Inherit only this known parent field, never unrelated common values.
     const studentCols = allColumns.filter(col => /^(students?|students?_name)$/i.test(col));
@@ -3340,14 +3343,10 @@
       return fields;
     if (!writableColumnIds.includes(studentCol))
       throw new Error(`The student field "${studentCol}" is read-only; a new row cannot be assigned to this student.`);
-    const raw = typeof salaryFetchClassRecord === 'function'
-      ? await salaryFetchClassRecord(Number(sample.id))
-      : await grist.viewApi.fetchSelectedRecord(Number(sample.id), {
-        cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
-      });
-    const currentGrouping = typeof salaryPayrollActive === 'function' && salaryPayrollActive()
-      ? dateTimeStartColumn(allColumns) : parseGroupBy(groupBy).col;
-    if (allRecords !== records || currentGrouping !== context.col)
+    const raw = await grist.viewApi.fetchSelectedRecord(Number(sample.id), {
+      cellFormat: 'typed', expandRefs: false, includeColumns: 'all',
+    });
+    if (allRecords !== records || parseGroupBy(groupBy).col !== context.col)
       throw new Error('The selected student or grouping changed. Please click + again.');
     if (!raw || !Object.prototype.hasOwnProperty.call(raw, studentCol))
       throw new Error(`Cannot read the stored student value from "${studentCol}".`);
@@ -3357,6 +3356,8 @@
 
   async function addRecordToGroup(button, groupKey) {
     if (cellHistoryBusy) return;
+    const salarySelection = typeof salaryLessonAddContext === 'function'
+      ? { key: salaryClassSelectionKey, view: salaryPeriodView, teacherId: [...salarySelectedTeacherIds][0] } : null;
     cellHistoryBusy = true;
     updateCellHistoryControls();
     button.disabled = true;
@@ -3373,6 +3374,9 @@
       const fields = await getNewRowFields(context, group);
       recordActionDiagnostic('Add row', 'start', detail);
       const tableId = await activeTableOps().getTableId();
+      if (salarySelection && (salarySelection.key !== salaryClassSelectionKey || salarySelection.view !== salaryPeriodView
+          || salarySelectedTeacherIds.size !== 1 || !salarySelectedTeacherIds.has(salarySelection.teacherId)))
+        throw new Error('The teacher or salary view changed. Click + in the intended month again.');
       const result = await grist.docApi.applyUserActions([
         ['AddRecord', tableId, null, fields],
       ], { parseStrings: false });
@@ -3390,8 +3394,10 @@
         return JSON.stringify(normalize(stored[col][index])) === JSON.stringify(normalize(value));
       });
       if (index < 0 || !matches)
-        throw new Error(`Record ${createdId} was created, but Grist did not retain its student or group assignment. Check column defaults, formulas, or triggers before adding another row.`);
+        throw new Error(`Record ${createdId} was created, but Grist did not retain the assigned field values. Check column defaults, formulas, or triggers before adding another row.`);
       queueRowAnimation(createdId, 'row-enter', 950);
+      // A teacher-linked widget reads Attendance separately from its selected table.
+      if (typeof salaryReloadClassPeriods === 'function') await salaryReloadClassPeriods(createdId);
       recordActionDiagnostic('Add row', 'ok', `${detail} · created=${createdId}`);
       showToast(`${T.addRow}: ${label}`, 'success');
     } finally {

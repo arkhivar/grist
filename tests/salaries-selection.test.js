@@ -72,16 +72,9 @@ win.grist = {
     },
   },
 };
-win.eval([
-  'widgets/salaries/config.js',
-  'shared/dates.js',
-  'shared/core.js',
-  'widgets/salaries/attendance.js',
-  'shared/references.js',
-  'widgets/salaries/expenses.js',
-  'widgets/sprints/app.js',
-  'widgets/sprints/actions.js',
-].map(read).join('\n;\n'));
+const localScripts = [...doc.querySelectorAll('script[src]')].map(tag => tag.getAttribute('src'))
+  .filter(src => !/^https?:/.test(src)).map(src => src.split('?')[0]);
+win.eval(localScripts.map(read).join('\n;\n'));
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 async function waitFor(condition, message) {
@@ -118,10 +111,7 @@ async function main() {
   assert.equal(paymentOnlyMonth.querySelector('.group-badge').textContent, '0');
   assert.equal(paymentOnlyMonth.querySelector('.group-badge').getAttribute('aria-label'), '0\u00a0classes');
   const paymentOnlyAdd = paymentOnlyMonth.querySelector('.group-add-row');
-  assert(paymentOnlyAdd?.disabled,
-    'a payment-only month must not create a class without a date or teacher');
-  paymentOnlyAdd.click();
-  assert.equal(calls.updates.length, 0);
+  assert.equal(paymentOnlyAdd.disabled, false, 'a teacher’s first class can be added in a payment-only month');
   assert.equal(paymentOnlyMonth.querySelector('.group-sum[data-column="salary_received"]').textContent, '75');
   assert.equal(doc.getElementById('stat-records').textContent, '0');
   assert(doc.querySelector('#column-strip th[data-column="datetime"]'),
@@ -136,6 +126,7 @@ async function main() {
   doc.getElementById('btn-refresh-payments').click();
   await waitFor(() => status() === '1 payment' && month('(empty)'));
   assert.equal(month('(empty)').querySelector('.salary-payment-date').textContent, '—');
+  assert(month('(empty)').querySelector('.group-add-row').disabled, 'an undated group has no month end');
   assert.equal(month('(empty)').querySelector('.group-sum[data-column="salary_received"]').textContent, '75');
   assert.deepEqual(paymentIds(), [103], 'an empty datetime discarded the teacher payment');
   transactions.datetime[2] = paymentOnlyDateTime;
