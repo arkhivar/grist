@@ -546,11 +546,13 @@
     const pendingStartAlias = !metadataLoaded && !saved.includes(startColumn)
       && saved.some(col => ['datetime', 'start'].includes(col.toLowerCase()))
       ? startColumn : null;
-    const missing = allColumns.filter(col => !saved.includes(col) && col !== pendingStartAlias);
+    const lateColumns = typeof salaryClassPeriodField === 'function'
+      ? [...extraColumns, ...allColumns.filter(salaryClassPeriodField)] : extraColumns;
+    const missing = allColumns.filter(col => !saved.includes(col) && col !== pendingStartAlias && !lateColumns.includes(col));
     columnOrder = [...saved, ...missing];
-    // Older layouts can predate ledger fields. Insert each new field after
+    // Older layouts can predate payroll fields. Insert each new field after
     // its available default neighbor while keeping all saved fields in order.
-    for (const col of extraColumns) {
+    for (const col of defaults.filter(col => lateColumns.includes(col))) {
       if (columnOrder.includes(col)) continue;
       const previous = defaults[defaults.indexOf(col) - 1];
       const anchor = columnOrder.indexOf(previous);
@@ -1375,8 +1377,14 @@
     const map = new Map();
     allRecords.forEach(rec => {
       const raw = rec[col];
+      const assignedMonth = dateMode && granularity === 'month' && typeof salaryClassCalendarMonth === 'function'
+        ? salaryClassCalendarMonth(rec) : null;
       let key, label, sortKey, writeValue;
-      if (raw == null || raw === '') {
+      if (assignedMonth) {
+        sortKey = assignedMonth.sortKey;
+        key = String(sortKey);
+        writeValue = raw ?? null;
+      } else if (raw == null || raw === '') {
         key = '\x00__empty__'; label = raw; sortKey = null; writeValue = null;
       } else if (dateMode) {
         // raw = epoch (number) or ISO string → epoch seconds
@@ -1401,6 +1409,7 @@
       if (!group) {
         if (dateMode && sortKey != null) label = bucketLabel(sortKey, granularity);
         group = { key, label, sortKey, writeValue, records: [] };
+        if (assignedMonth) salaryInheritClassPeriod(group, 'forMonth', assignedMonth.id);
         map.set(key, group);
       }
       group.records.push(rec);
@@ -1555,6 +1564,10 @@
         emptyState.querySelector('.empty-sub').innerHTML = allRecords.length
           ? `Source: ${table} · ${allRecords.length} records. Choose a class table with a Date/DateTime column and wage in Grist’s Edit data selection.`
           : `Source: ${table}. Check the Select By link and choose a teacher in Grist.`;
+      }
+      if (typeof salaryClassLoadError !== 'undefined' && salaryClassLoadError) {
+        emptyState.querySelector('.empty-title').textContent = 'Classes unavailable';
+        emptyState.querySelector('.empty-sub').textContent = salaryClassLoadError;
       }
       statsbar.classList.remove('visible');
       columnStrip.hidden = true;
@@ -1903,7 +1916,9 @@
     return !isPaymentDisplayColumn(col) && writableColumnIds.includes(col) && isSupportedCellColumn(col);
   }
 
-  function cellHistoryValue(value, type) {
+  function cellHistoryValue(value, type, col) {
+    if (typeof salaryClassPeriodField === 'function' && salaryClassPeriodField(col))
+      return salaryPeriodHistoryValue(value, type);
     if (value == null) return null;
     return normalizeCellValueForWrite(value, type);
   }
@@ -1950,7 +1965,9 @@
       if (byId.has(id)) {
         const value = byId.get(id);
         const type = columnBaseType(columnTypes[col]);
-        if (type === 'Ref' && typeof referenceDisplayLabel === 'function') {
+        if (typeof salaryClassPeriodField === 'function' && salaryClassPeriodField(col)) {
+          salarySetClassPeriodValue(record, col, value);
+        } else if (type === 'Ref' && typeof referenceDisplayLabel === 'function') {
           const refId = referenceIds(value)[0];
           setReferenceDisplay(record, col, refId == null ? [] : [referenceDisplayLabel(col, refId)]);
         } else if (type === 'RefList' && typeof referenceDisplayLabel === 'function') {
@@ -1961,7 +1978,25 @@
     });
   }
 
-  function prepareGroupingCellChanges(changes, defaultCol) {
+  function classPeriodEditContext(changes, defaultCol) {
+    if (typeof salaryClassPeriodField !== 'function') return null;
+    const links = changes.filter(change => salaryClassPeriodField(change.col || defaultCol));
+    if (!links.length) return null;
+    const change = links.find(change => String(change.id) === selectedCell?.recordId) || links[0];
+    return { recordId: change.id, col: change.col || defaultCol, selection: salaryClassSelectionKey, view: salaryPeriodView };
+  }
+
+  function classPeriodViewMatches(context) {
+    return !context || (context.selection === salaryClassSelectionKey && context.view === salaryPeriodView);
+  }
+
+  async function prepareGroupingCellChanges(changes, defaultCol, periodEdit) {
+    if (periodEdit) {
+      const { recordId, col, selection, view } = periodEdit;
+      if (classPeriodViewMatches(periodEdit)) cellRangeEnd = null;
+      await salaryRefreshAfterPeriodWrite(recordId, col, selection, view);
+      return classPeriodViewMatches(periodEdit);
+    }
     if (typeof salaryPayrollActive === 'function' && salaryPayrollActive())
       return salaryRevealChangedPayrollRows(changes, defaultCol);
     const col = parseGroupBy(groupBy).col;
@@ -2002,14 +2037,14 @@
     const destination = isUndo ? cellRedoStack : cellUndoStack;
     const entry = source[source.length - 1];
     if (!entry) return;
-    if (entry.kind === 'salary-week-month' || entry.kind === 'salary-payment-period') {
+    if (entry.kind === 'salary-week-month' || entry.kind === 'salary-record-period') {
       cellHistoryBusy = true;
       updateCellHistoryControls();
       try {
         const value = isUndo ? entry.before : entry.after;
         const expected = isUndo ? entry.after : entry.before;
-        if (entry.kind === 'salary-payment-period') {
-          await salaryWritePaymentPeriod(entry.paymentId, entry.col,
+        if (entry.kind === 'salary-record-period') {
+          await salaryWriteRecordPeriod(entry.recordId, entry.col,
             { type: entry.type, value: expected }, value, null, isUndo);
         } else {
           await salaryWriteWeekMonth(entry.weekId, value, expected, salaryClassSelectionKey);
@@ -2060,6 +2095,7 @@
       return;
     }
     const side = isUndo ? 'before' : 'after';
+    const periodEdit = classPeriodEditContext(entry.changes, entry.col);
     const updates = entry.changes.map(change => ({
       id: change.id,
       fields: { [change.col || entry.col]: change[side] },
@@ -2071,6 +2107,11 @@
     updateCellHistoryControls();
     recordActionDiagnostic(action, 'start', detail);
     try {
+      if (periodEdit) {
+        await salaryCheckClassPeriodHistory(entry.changes, entry.col, isUndo);
+        if (!classPeriodViewMatches(periodEdit))
+          throw new Error('The salary selection changed. Try Undo or Redo again.');
+      }
       if (entry.kind === 'range') {
         await grist.docApi.applyUserActions(updates.map(update =>
           ['UpdateRecord', entry.tableId, update.id, update.fields]), { parseStrings: false });
@@ -2082,14 +2123,13 @@
       source.pop();
       destination.push(entry);
       entry.changes.forEach(change => applyCellChangesLocally(change.col || entry.col, [change], side));
-      selectedCell = {
-        recordId: String(entry.changes[0].id),
-        col: entry.changes[0].col || entry.col,
-      };
-      cellRangeEnd = null;
+      if (classPeriodViewMatches(periodEdit)) {
+        selectedCell = { recordId: String(entry.changes[0].id), col: entry.changes[0].col || entry.col };
+        cellRangeEnd = null;
+      }
       recordActionDiagnostic(action, 'ok', detail);
       showToast(`${action} complete: ${entry.label}`, 'success');
-      const regrouped = prepareGroupingCellChanges(entry.changes, entry.col);
+      const regrouped = await prepareGroupingCellChanges(entry.changes, entry.col, periodEdit);
       render();
       if (regrouped) scrollRegroupedCellIntoView();
       requestAnimationFrame(focusSelectedCell);
@@ -2451,7 +2491,7 @@
       const record = allRecords.find(item => Number(item.id) === id);
       return {
         id,
-        before: referenceBefore ? cellHistoryValue(referenceBefore.get(id), type)
+        before: referenceBefore ? cellHistoryValue(referenceBefore.get(id), type, col)
           : record ? cellHistoryValue(record[col], type) : null,
         after,
       };
@@ -2461,6 +2501,7 @@
       return;
     }
     const updates = changes.map(change => ({ id: change.id, fields: { [col]: change.after } }));
+    const periodEdit = classPeriodEditContext(changes, col);
     const changedIds = changes.map(change => change.id);
     const detail = `records=${changedIds.join(',')} · column=${col} · type=${type}`;
     recordActionDiagnostic(action, 'start', detail);
@@ -2475,7 +2516,7 @@
       recordActionDiagnostic(action, 'ok', detail);
       showToast(action === 'Fill' ? `${changes.length} cells filled`
         : action === 'Toggle checkbox' ? 'Checkbox updated' : 'Cell pasted', 'success');
-      const regrouped = prepareGroupingCellChanges(changes, col);
+      const regrouped = await prepareGroupingCellChanges(changes, col, periodEdit);
       render();
       if (regrouped) scrollRegroupedCellIntoView();
       requestAnimationFrame(focusSelectedCell);
@@ -2604,7 +2645,7 @@
         const raw = await referenceWriteRecords([...new Set(referenceChanges.map(change => change.id))]);
         if (!isCurrent()) return;
         referenceChanges.forEach(change => {
-          change.before = cellHistoryValue(raw.get(change.id)[change.col], cellColumnType(change.col));
+          change.before = cellHistoryValue(raw.get(change.id)[change.col], cellColumnType(change.col), change.col);
         });
       }
       // Preserve the existing single-cell path; rectangular writes use one atomic action bundle.
@@ -2615,6 +2656,7 @@
       }
       const meaningful = changes.filter(change => !cellValuesEqual(change.before, change.after));
       if (!meaningful.length) return;
+      const periodEdit = classPeriodEditContext(meaningful);
       cellHistoryBusy = true;
       updateCellHistoryControls();
       try {
@@ -2623,10 +2665,12 @@
           ['UpdateRecord', tableId, change.id, { [change.col]: change.after }]), { parseStrings: false });
         meaningful.forEach(change => applyCellChangesLocally(change.col, [change], 'after'));
         rememberHistoryEntry({ kind: 'range', label: 'Paste range', tableId, changes: meaningful });
-        selectedCell = { recordId: first.dataset.cellId, col: first.dataset.cellCol };
-        const last = rows[rowStart + height - 1][colStart + width - 1];
-        cellRangeEnd = { recordId: last.dataset.cellId, col: last.dataset.cellCol };
-        const regrouped = prepareGroupingCellChanges(meaningful);
+        if (classPeriodViewMatches(periodEdit)) {
+          selectedCell = { recordId: first.dataset.cellId, col: first.dataset.cellCol };
+          const last = rows[rowStart + height - 1][colStart + width - 1];
+          cellRangeEnd = { recordId: last.dataset.cellId, col: last.dataset.cellCol };
+        }
+        const regrouped = await prepareGroupingCellChanges(meaningful, null, periodEdit);
         render();
         focusSelectedCell();
         if (regrouped) scrollRegroupedCellIntoView();
@@ -2941,7 +2985,9 @@
     const kind = editKindForColumn(col);
     if (!kind) return;
     if (kind === 'reference') {
-      if (typeof openReferenceEditor === 'function') openReferenceEditor(idStr, col, anchorEl);
+      if (typeof salaryClassPeriodField === 'function' && salaryClassPeriodField(col))
+        salaryOpenRecordPeriod(idStr, col, anchorEl);
+      else if (typeof openReferenceEditor === 'function') openReferenceEditor(idStr, col, anchorEl);
       return;
     }
     const recordId = validRecordId(idStr);
@@ -3083,7 +3129,7 @@
       rememberCellHistory(action, col, changes);
       setEditorBusy(false);
       closeFieldEditor();
-      const regrouped = prepareGroupingCellChanges(changes, col);
+      const regrouped = await prepareGroupingCellChanges(changes, col);
       render();
       if (regrouped) scrollRegroupedCellIntoView();
       return true;
@@ -3279,8 +3325,8 @@
   }
 
   async function getNewRowFields(context, group) {
-    const fields = { [context.col]: context.value };
-    if (typeof salaryPayrollNewRowFields === 'function') Object.assign(fields, salaryPayrollNewRowFields());
+    const fields = { [context.col]: context.value, ...group.classPeriodFields };
+    if (typeof salaryPayrollNewRowFields === 'function') Object.assign(fields, salaryPayrollNewRowFields(group));
     // The outer student selection is applied by Grist before onRecords.
     // Inherit only this known parent field, never unrelated common values.
     const studentCols = allColumns.filter(col => /^(students?|students?_name)$/i.test(col));
@@ -3493,9 +3539,16 @@
       const sourceRecords = allRecords;
       if (type === 'Ref' || type === 'RefList') {
         const raw = await fetchReferenceSourceRecord(Number(drag.recordId));
-        await referenceChoices(drag.col, { isCurrent: () => sourceRecords === allRecords });
-        if (sourceRecords !== allRecords) return;
         value = raw[drag.col];
+        if (typeof salaryClassPeriodField === 'function' && salaryClassPeriodField(drag.col)) {
+          const ref = salaryPeriodReference(value);
+          if (!ref.valid) throw new Error('Fill requires a single valid payroll period');
+          value = await pastedReferenceValue(ref.id ? `#${ref.id}` : '', drag.col, { choices: new Map() },
+            () => sourceRecords === allRecords);
+        } else {
+          await referenceChoices(drag.col, { isCurrent: () => sourceRecords === allRecords });
+        }
+        if (sourceRecords !== allRecords) return;
       }
       await writeCellValues('Fill', drag.targetCells.map(cell => cell.dataset.cellId), drag.col,
         normalizeCellValueForWrite(value, type));

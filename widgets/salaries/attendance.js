@@ -2,6 +2,52 @@
 let salaryClassTableIdPromise = null;
 let salaryClassTableId = null;
 const salaryTeacherColumnIds = ['performance', 'per', 't'];
+const salaryClassPeriodTargets = { forMonth: 'MonthRegistry', forWeek: 'WeekRegistry' };
+const salaryClassPeriodValues = Symbol('classPeriodValues');
+let salaryClassMonthRegistry = null;
+
+function salaryClassPeriodField(col) {
+  if (!Object.hasOwn(salaryClassPeriodTargets, col)) return false;
+  const target = salaryClassPeriodTargets[col];
+  return columnTypes[col] === `Ref:${target}` || columnTypes[col] === `RefList:${target}`;
+}
+
+function salaryClassPeriodReference(record, field) {
+  if (salaryClassPeriodField(field)) return salaryPeriodReference(record[salaryClassPeriodValues]?.[field]);
+  // An unrelated Text field can share this name. A link to a different table cannot assign a salary period.
+  const wrongTarget = /^(Ref|RefList):/.test(columnTypes[field]) && Boolean(record[field]);
+  return { id: 0, valid: !wrongTarget, empty: !wrongTarget };
+}
+
+function salarySetClassPeriodValue(record, field, raw) {
+  record[salaryClassPeriodValues] ??= Object.create(null);
+  record[salaryClassPeriodValues][field] = raw;
+  const ref = salaryPeriodReference(raw);
+  const ids = referenceIds(raw);
+  const registry = field === 'forMonth' ? salaryClassMonthRegistry : salaryPeriodWeeks;
+  const labels = ids.map(id => {
+    if (!salaryClassPeriodField(field)) return referenceDisplayLabel(field, id);
+    const period = registry?.get(id);
+    return period?.valid ? period.isoKey || period.label : `#${id}`;
+  });
+  if (!labels.length && !ref.empty) labels.push('Invalid link');
+  setReferenceDisplay(record, field, labels);
+  return record[field];
+}
+
+function salaryRevealClassPeriod(recordId) {
+  for (const group of getGroups()) {
+    if (!group.records.some(row => Number(row.id) === Number(recordId))) continue;
+    const parentClosed = collapsed.delete(group.key);
+    if (group.children) {
+      const leaf = group.children.find(child => child.records.some(row => Number(row.id) === Number(recordId)));
+      const leafClosed = leaf && collapsed.delete(leaf.key);
+      if (parentClosed || leafClosed) salarySavePayrollCollapse();
+    }
+    return true;
+  }
+  return false;
+}
 
 function salaryTeacherColumn(fields) {
   // Each table may rename this field independently; keep the legacy ID first.

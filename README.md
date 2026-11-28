@@ -106,7 +106,8 @@ Attendance notes use checkboxes. Long notes are clipped to the column width;
 hover to read the complete text. The visible `start` (legacy `datetime`) column
 shows the transaction date on payment rows.
 The default column order is `start` (legacy `datetime`), `per`, `student`, `notes`, `wage`,
-`paid`, `count`, `forMonth`, `forWeek`, `sprint`, `attach_payment`, followed by other available fields. Older documents
+`paid`, `count`, the payment and class period fields, `sprint`, `attach_payment`,
+followed by other available fields. Older documents
 with `students` use the same position. `per` labels the current `t` or legacy
 `per` / `performance` field; `paid`
 displays Transactions' `amount`. Month headers sum class `wage` and `count`
@@ -122,9 +123,10 @@ monthly groups are derived from `start` (legacy `datetime`), so no helper `date`
 
 ### Weekly payroll and monthly bonuses
 
-Salaries starts in **View → Calendar months**. Classes use their `start`
-month. Payments use their Vladivostok transaction month unless a valid
-`Transactions.forMonth` link assigns them to a month in `MonthRegistry`.
+Salaries starts in **View → Calendar months**. A class uses its Vladivostok
+`start` month unless `ALL_ATT.forMonth` assigns it to another month. The
+class’s wage and count follow that assignment. Payments use their transaction
+month unless `Transactions.forMonth` assigns them to another month.
 
 A payment made in November with `forMonth` set to October appears once in
 October and contributes to October’s **paid** subtotal. The row still shows
@@ -137,12 +139,15 @@ unavailable. **Refresh payments** reloads both payments and needed registry data
 Choose **Weekly** for payroll periods grouped into months and weeks. Both
 views show `wage` and `count` for classes and office hours and the read-only
 `paid` column for payments.
-Salaries shows `forMonth` and `forWeek` after `count` when Transactions exposes
-these fields. Use **Columns** to hide or reorder them. On a payment row,
+Salaries shows the period fields after `count` by default. Use
+`forMonth (class)` and `forWeek (class)` on Attendance rows. The corresponding
+`(payment)` columns edit Transactions. Configure `forMonth` as a Reference
+to `MonthRegistry` and `forWeek` as a Reference to `WeekRegistry` in each
+source table. Use **Columns** to hide or reorder them. On the row you want to edit,
 click a period cell to select it, then click again or press **Enter** or **F2**
 to search for a month or week. Choose a period
 to assign it, or use **Clear** to remove the link. The widget saves the
-assignment to that transaction and updates its group and the payment totals.
+assignment to that record and updates its group and subtotals.
 Use **Undo** or **Redo** to reverse or reapply the change. If a registry label
 is unavailable, the cell shows the linked ID.
 Office work can be logged in Attendance with `start`, `end`, the staff member
@@ -161,11 +166,18 @@ For example, a July payment linked to `2026-W27` and June appears under
 **June 2026 → 2026-W27** and contributes to June’s **paid** subtotal. The row
 keeps its July transaction date. Other payments for that week can belong to July.
 
-Attendance work records join their Vladivostok week by `start` and use the
-week’s default month. On weeks with work records or week-only payments, the
-month button under the heading sets or clears `WeekRegistry.forMonth` for
-everyone who uses that default. The picker supports Undo/Redo. To move one
-payment, edit its `forMonth` or `forWeek` cell on the payment row.
+In **Weekly**, classes use their scheduled Vladivostok week unless you choose
+another `forWeek (class)`. They use that week’s default payroll month unless
+you choose a `forMonth (class)`. For example, a July 1 lesson assigned to
+`2026-W27` and June appears under **June 2026 → 2026-W27**, with July 1
+still shown in `start`. With only a month assignment and no matching scheduled
+week, the class appears under **Monthly items**. Invalid class links appear
+under **Needs review** in Weekly. In Calendar, an invalid month uses the
+scheduled month and shows a toolbar warning.
+
+The month button under a week heading edits `WeekRegistry.forMonth` for
+everyone using that default. To move one class or payment, edit the period
+cell on that row.
 
 Weeks use `weekStart` and `weekEnd` Date columns, from Monday up to the next
 Monday (exclusive). Months use `monthStart` and `monthEnd` Date columns, from

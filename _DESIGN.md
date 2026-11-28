@@ -73,7 +73,7 @@ it. Display and edit DateTime in Vladivostok time (VLAT), including the local
 weekday on the grid and clipboard. Grist stores UTC values. Date-only fields
 use their UTC calendar date. A single Reference choice saves on selection.
 Reference Lists collect the selected pills and commit with **Save**. Formula
-cells are read-only. On Salaries payment rows, the two period pickers each
+cells are read-only. On Salaries class and payment rows, the two period pickers each
 assign one month or week.
 
 Session Undo and Redo cover cell edits, paste, fill, and rows added from a group
@@ -116,8 +116,10 @@ changes beyond this widget session.
   the same grid and sort within each group. Earned wages, received payments,
   and class counts each have their own aligned subtotal. Payment grips select
   ledger rows. The `forMonth` and `forWeek` columns appear after `count` by
-  default. Choose or clear a period on a payment row to update its assignment
-  and totals. **Refresh payments** picks up external changes to Transactions.
+  default. When both tables have period fields, header labels identify the
+  class and payment columns. Choose or clear a period on a row to move its
+  subtotals to the assigned group. The week heading edits the shared default
+  month for everyone using that week.
 - **Filters** uses the same typography, colors, and compact controls for
   live name search, typed conditions, and recent-student chips. It links
   matching rows into Grist’s selection chain. Recent students are personal to

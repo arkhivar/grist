@@ -1,5 +1,6 @@
 // One non-blocking month chooser for WeekRegistry assignments.
 const salaryViewSelect = document.getElementById('salary-view-select');
+const salaryClassPeriodStatus = document.getElementById('salary-class-period-status');
 const salaryMonthPicker = document.getElementById('salary-month-picker');
 const salaryMonthSearch = document.getElementById('salary-month-search');
 const salaryMonthOptions = document.getElementById('salary-month-options');
@@ -12,6 +13,13 @@ let salaryPeriodViewChanging = false;
 function salarySyncPeriodControls() {
   salaryViewSelect.value = salaryPeriodView;
   salaryViewSelect.disabled = salaryPeriodViewChanging;
+  const invalid = !salaryPayrollActive() && allRecords.filter(record => {
+    const ref = salaryClassPeriodReference(record, 'forMonth');
+    return !ref.empty && !salaryClassMonthRegistry?.get(ref.id)?.valid;
+  }).length;
+  salaryClassPeriodStatus.hidden = !invalid;
+  salaryClassPeriodStatus.textContent = invalid
+    ? `· ${invalid} invalid class month assignment${invalid === 1 ? '' : 's'}` : '';
   if (!salaryPayrollActive()) salaryClosePeriodEditor();
 }
 
@@ -32,7 +40,7 @@ function salaryPeriodHeading(group, header) {
   button.setAttribute('aria-expanded', 'false');
   button.setAttribute('aria-controls', 'salary-month-picker');
   button.setAttribute('aria-label', `Choose the default salary month for ${week?.label || group.label}`);
-  button.title = 'Choose the month for work records and payments without forMonth';
+  button.title = 'Choose the default month for rows with an empty forMonth';
   button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
     + ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
     + ' aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="16" rx="2"/>'

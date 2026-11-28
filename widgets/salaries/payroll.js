@@ -89,24 +89,56 @@ function salaryRevealChangedPayrollRows(changes, defaultCol) {
   return false;
 }
 
+async function salaryCheckClassPeriodHistory(changes, defaultCol, isUndo) {
+  const assignments = changes.filter(change => salaryClassPeriodField(change.col || defaultCol));
+  const fields = [...new Set(assignments.map(change => change.col || defaultCol))];
+  const ids = [...new Set(assignments.map(change => change.id))];
+  const reads = {};
+  const results = await Promise.allSettled([
+    referenceWriteRecords(ids),
+    ...fields.map(field => salaryReadPeriodChoices(selectedTableId, field, reads)),
+  ]);
+  const failed = results.find(result => result.status === 'rejected');
+  if (failed) throw failed.reason;
+  const [rows, ...choices] = results.map(result => result.value);
+  for (const change of assignments) {
+    const field = change.col || defaultCol;
+    const { meta, registry } = choices[fields.indexOf(field)];
+    const row = rows.get(change.id);
+    if (!Object.hasOwn(row, field)) throw new Error(`The class field ${field} is unavailable`);
+    const current = salaryPeriodHistoryValue(row[field], meta.type);
+    const expected = isUndo ? change.after : change.before;
+    if (meta.type !== columnTypes[field] || JSON.stringify(current) !== JSON.stringify(expected))
+      throw new Error(`The class ${field} assignment changed. Refresh before using Undo or Redo.`);
+    if (!isUndo) {
+      const next = salaryPeriodReference(change.after);
+      if (!next.empty && !registry.get(next.id)?.valid)
+        throw new Error('The selected period is no longer available');
+    }
+  }
+}
+
 function salaryPayrollAddContext(group) {
-  if (!salaryPayrollActive()) return null;
-  const col = dateTimeStartColumn(allColumns);
+  const weekly = salaryPayrollActive();
+  if (!weekly && !group?.classPeriodFields) return null;
+  const col = weekly ? dateTimeStartColumn(allColumns) : parseGroupBy(groupBy).col;
   const type = columnBaseType(writableColumnTypes[col]);
   let reason = group?.addRowDisabledReason || '';
-  if (!reason && (!metadataLoaded || !writableColumnIds.includes(col) || type !== 'DateTime'))
-    reason = 'A writable start DateTime is required to add work records';
+  if (!reason && (!metadataLoaded || !writableColumnIds.includes(col)
+      || (type !== 'DateTime' && (weekly || type !== 'Date'))))
+    reason = 'A writable class date is required to add work records';
   const teacherColumn = salaryTeacherColumn(columnTypes);
   if (!reason && (salarySelectedTeacherIds.size !== 1 || !writableColumnIds.includes(teacherColumn)))
     reason = 'Select one teacher or staff member before adding a work record';
   const sample = group?.records[0];
   const value = sample && salaryPeriodDateSec(sample[col]);
-  if (!reason && value == null) reason = 'Add the first work record in Attendance or Calendar';
+  if (!reason && value == null && (!group?.classPeriodFields || (sample[col] != null && sample[col] !== '')))
+    reason = 'Add the first work record in Attendance or Calendar';
   return { enabled: !reason, col, type, value: value ?? null, reason };
 }
 
-function salaryPayrollNewRowFields() {
-  if (!salaryPayrollActive()) return {};
+function salaryPayrollNewRowFields(group) {
+  if (!salaryPayrollActive() && !group?.classPeriodFields) return {};
   if (salarySelectedTeacherIds.size !== 1) throw new Error('Select one teacher or staff member first');
   const col = salaryTeacherColumn(columnTypes);
   const id = [...salarySelectedTeacherIds][0];

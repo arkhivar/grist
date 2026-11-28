@@ -1,4 +1,4 @@
-// Both views share month boundaries. A payment can override its week's default month.
+// Both views share month boundaries. Each work record or payment can override its week's month.
 let salaryPeriodView = 'calendar';
 let salaryPeriodRegistryStatus = 'idle';
 let salaryPeriodRegistryError = '';
@@ -235,6 +235,24 @@ async function salaryFetchPeriodRegistries(generation) {
   }
 }
 
+function salaryClassCalendarMonth(record) {
+  const ref = salaryClassPeriodReference(record, 'forMonth');
+  const month = salaryClassMonthRegistry?.get(ref.id);
+  return month?.valid ? month : null;
+}
+
+// An add-row footer copies its sample's start. Carry the sample's explicit
+// assignments too, so that the new class appears in the group that created it.
+function salaryInheritClassPeriod(group, field, id) {
+  if (!id) return;
+  if (!writableColumnIds.includes(field)) {
+    group.addRowDisabledReason = `The class assignment ${field} is read-only`;
+    return;
+  }
+  group.classPeriodFields ??= {};
+  group.classPeriodFields[field] = columnTypes[field]?.startsWith('RefList:') ? ['L', id] : id;
+}
+
 function salaryBuildPayrollGroups(records, payments) {
   const parents = new Map();
   const leaves = new Map();
@@ -281,24 +299,37 @@ function salaryBuildPayrollGroups(records, payments) {
     return leaves.get(key);
   }
 
+  function assignmentLeaf(weekRef, week, monthRef, month) {
+    if ((!weekRef.empty && !week?.valid) || (!monthRef.empty && !month?.valid)
+        || (week && monthRef.empty && !week.monthValid))
+      return leafFor(null, 0);
+    const leaf = leafFor(week, month?.id ?? week?.monthId ?? 0);
+    if (week && monthRef.empty) leaf.usesWeekMonth = true;
+    return leaf;
+  }
+
   const startColumn = dateTimeStartColumn(allColumns)
     || dateTimeStartColumn(columnTypes);
   const groupedColumn = parseGroupBy(groupBy).col;
   records.forEach(record => {
-    const sec = startColumn ? salaryPeriodDateSec(record[startColumn]) : null;
-    let week = null;
+    const weekRef = salaryClassPeriodReference(record, 'forWeek');
+    const monthRef = salaryClassPeriodReference(record, 'forMonth');
+    const month = salaryPeriodMonths.get(monthRef.id);
+    let week = salaryPeriodWeeks.get(weekRef.id);
+    const sec = weekRef.empty && startColumn ? salaryPeriodDateSec(record[startColumn]) : null;
     if (sec != null) {
       const wallDate = dateTimeWallDate(sec);
       const monday = Date.UTC(wallDate.getUTCFullYear(), wallDate.getUTCMonth(),
         wallDate.getUTCDate() - (wallDate.getUTCDay() + 6) % 7) / 1000;
       week = weekByStart.get(monday);
     }
-    const leaf = week?.monthValid ? leafFor(week, week.monthId) : leafFor(null, 0);
+    const leaf = assignmentLeaf(weekRef, week, monthRef, month);
     leaf.records.push(record);
-    if (leaf.weekId && leaf.records.length === 1) {
-      leaf.usesWeekMonth = true;
+    if ((leaf.weekId || leaf.monthId) && leaf.records.length === 1) {
       leaf.writeValue = record[groupedColumn] ?? null;
       delete leaf.addRowDisabledReason;
+      salaryInheritClassPeriod(leaf, 'forWeek', weekRef.id);
+      salaryInheritClassPeriod(leaf, 'forMonth', monthRef.id);
     }
   });
 
@@ -309,14 +340,7 @@ function salaryBuildPayrollGroups(records, payments) {
     const monthRef = salaryPeriodReference(payment.monthRef);
     const week = paymentWeeks?.get(weekRef.id);
     const month = paymentMonths?.get(monthRef.id);
-    if ((!weekRef.empty && !week?.valid) || (!monthRef.empty && !month?.valid)
-        || (week && monthRef.empty && !week.monthValid)) {
-      leafFor(null, 0).payments.push(payment);
-      return;
-    }
-    const leaf = leafFor(week, month?.id ?? week?.monthId ?? 0);
-    if (week && monthRef.empty) leaf.usesWeekMonth = true;
-    leaf.payments.push(payment);
+    assignmentLeaf(weekRef, week, monthRef, month).payments.push(payment);
   });
 
   const newestFirst = (a, b) => a.sortKey == null ? (b.sortKey == null ? 0 : 1)

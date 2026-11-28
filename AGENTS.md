@@ -129,11 +129,13 @@ rows support edits to their period references. A toolbar button re-fetches Trans
 selection changes race-safe and never treat a failed expense fetch as zero
 payments.
 
-## Current state (v7.73)
+## Current state (v7.74)
 
 - Salaries has an optional persisted `salaryPeriodView`: `calendar` (default,
   Calendar months) or `payroll` (Weekly, with manual months containing ISO weeks).
-  Calendar groups classes by `start` (legacy `datetime`). A payment’s valid
+  Calendar groups classes by their explicit `ALL_ATT.forMonth` or their VLAT
+  `start` (legacy `datetime`). Invalid month links fall back to the scheduled
+  month and show a toolbar warning. A payment’s valid
   `Transactions.forMonth` link to `MonthRegistry` overrides its cash month, even
   when `forWeek` is also set. Keep the original cash date, signed amount, and
   payment count. Blank links use the VLAT cash month. Invalid assignments keep
@@ -142,7 +144,8 @@ payments.
   `groupBy`.
   `widgets/salaries/periods.js` builds the period model; `payroll.js` handles
   preferences and shared registry writes; `period-controls.js` supplies one
-  non-blocking month picker. Sprints does not load these payroll scripts.
+  non-blocking month picker. `payment-periods.js` provides the per-record
+  period editor for both ALL_ATT and Transactions. Sprints does not load these payroll scripts.
 - Salaries shows `forMonth` and `forWeek` after `count` by default when the
   ledger exposes them. Keep explicit visibility and saved order, including
   their slots before the ledger schema is available. The layout IDs are
@@ -162,11 +165,18 @@ payments.
   multiple months. Count each payment once and preserve its cash date and
   signed amount. Month-only payments use Monthly items. Payments with neither
   link or an invalid period assignment go to Needs review.
-- Attendance `start` maps to a VLAT week. Attendance and week-only payments
-  take their month from `WeekRegistry.forMonth` (editable `Ref:MonthRegistry`).
+- Class period columns retain their native field IDs, independently of the
+  payment layout IDs. Keep raw IDs alongside rendered labels. In Weekly, a valid
+  `ALL_ATT.forWeek` overrides the scheduled VLAT week and `ALL_ATT.forMonth`
+  overrides its parent month for that class. With a month assignment and no
+  scheduled or assigned week, use Monthly items. Invalid supplied registry links
+  go to Needs review. Preserve start, wage and count. Period edits and history
+  must target the source table even when class and payment row IDs coincide.
+- Classes and payments with a week and an empty month take their month from
+  `WeekRegistry.forMonth` (editable `Ref:MonthRegistry`).
   A blank week month places these rows under Unassigned month. Never infer or
   write this shared default from a transaction's date or explicit month.
-  Show the month picker on week groups with work records or week-only payments.
+  Show the shared month picker on week groups with rows using that default.
   It writes raw IDs to WeekRegistry only, fresh-reads metadata and value,
   rejects stale selections and newer assignments during history replay, and
   preserves real API errors.
@@ -223,7 +233,7 @@ payments.
 
 - Salaries' canonical order is start (or legacy datetime), t (label per; legacy per/performance), student (or legacy
   students), notes, wage, salary_received (label paid), count,
-  forMonth, forWeek, sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
+  payment forMonth/forWeek, class forMonth/forWeek, sprint, attach_payment, then other fields. Saved orders win; Reset column layout restores
   the configured default. Keep source field IDs unchanged for options/writes.
   Per defaults to 48px; wage, paid, and count default to 64px;
   saved widths win. Month headers also show the signed class count sum.

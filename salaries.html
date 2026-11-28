@@ -6,9 +6,9 @@
   <title>Salaries — teacher salary counter (Grist widget)</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shared/base.css?v=7.73">
-  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.73">
-  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.73">
+  <link rel="stylesheet" href="shared/base.css?v=7.74">
+  <link rel="stylesheet" href="widgets/salaries/expenses.css?v=7.74">
+  <link rel="stylesheet" href="widgets/salaries/periods.css?v=7.74">
 </head>
 <body>
 <div id="app">
@@ -38,6 +38,7 @@
       <span><span class="stat-val" id="stat-records">0</span> records</span>
       <span aria-hidden="true">·</span>
       <span id="salary-payment-status">Loading payments…</span>
+      <span id="salary-class-period-status" hidden></span>
     </div>
     <div class="toolbar-right">
       <div class="history-controls" role="group" aria-label="Cell edit history">
@@ -235,7 +236,7 @@
 <section id="salary-month-picker" class="salary-month-picker ref-picker" role="dialog"
          aria-labelledby="salary-month-title" hidden>
   <h2 id="salary-month-title">Assign default month for week</h2>
-  <p class="salary-month-help">For all teachers, this sets the month for work records and payments with an empty forMonth.</p>
+  <p class="salary-month-help">Applies to classes and payments with an empty forMonth, for every teacher.</p>
   <input id="salary-month-search" class="ref-picker-search" type="search" autocomplete="off"
          placeholder="Choose a month…" aria-label="Find a salary month"
          aria-controls="salary-month-options">
@@ -247,17 +248,17 @@
   </footer>
 </section>
 
-<script src="widgets/salaries/config.js?v=7.73"></script>
-<script src="shared/dates.js?v=7.73"></script>
-<script src="shared/core.js?v=7.73"></script>
-<script src="widgets/salaries/attendance.js?v=7.73"></script>
-<script src="shared/references.js?v=7.73"></script>
-<script src="widgets/salaries/expenses.js?v=7.73"></script>
-<script src="widgets/salaries/periods.js?v=7.73"></script>
-<script src="widgets/salaries/payroll.js?v=7.73"></script>
-<script src="widgets/salaries/payment-periods.js?v=7.73"></script>
-<script src="widgets/salaries/period-controls.js?v=7.73"></script>
-  <script src="widgets/sprints/app.js?v=7.73"></script>
-  <script src="widgets/sprints/actions.js?v=7.73"></script>
+<script src="widgets/salaries/config.js?v=7.74"></script>
+<script src="shared/dates.js?v=7.74"></script>
+<script src="shared/core.js?v=7.74"></script>
+<script src="widgets/salaries/attendance.js?v=7.74"></script>
+<script src="shared/references.js?v=7.74"></script>
+<script src="widgets/salaries/expenses.js?v=7.74"></script>
+<script src="widgets/salaries/periods.js?v=7.74"></script>
+<script src="widgets/salaries/payroll.js?v=7.74"></script>
+<script src="widgets/salaries/payment-periods.js?v=7.74"></script>
+<script src="widgets/salaries/period-controls.js?v=7.74"></script>
+  <script src="widgets/sprints/app.js?v=7.74"></script>
+  <script src="widgets/sprints/actions.js?v=7.74"></script>
 </body>
 </html>

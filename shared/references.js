@@ -57,10 +57,17 @@ async function referenceWriteRecords(ids) {
 async function pastedReferenceValue(input, col, reads, isCurrent) {
   const type = cellColumnType(col);
   const refTable = String(columnTypes[col] || '').split(':')[1];
+  const period = typeof salaryClassPeriodField === 'function' && salaryClassPeriodField(col);
   const packet = input && typeof input === 'object';
   if (packet && input.refTable && input.refTable !== refTable)
     throw new Error(`Paste blocked: links to ${input.refTable} cannot be pasted into links to ${refTable}`);
-  if (!reads.choices.has(col)) {
+  if (!reads.choices.has(col) && period) {
+    reads.choices.set(col, salaryReadPeriodChoices(selectedTableId, col, reads).then(result => {
+      if (columnBaseType(result.meta.type) !== type)
+        throw new Error(`The type of ${col} changed. Reload the widget before pasting.`);
+      return result.choices;
+    }));
+  } else if (!reads.choices.has(col)) {
     reads.tables ||= grist.docApi.fetchTable('_grist_Tables');
     reads.columns ||= grist.docApi.fetchTable('_grist_Tables_column');
     if (!reads.targets.has(refTable)) reads.targets.set(refTable, grist.docApi.fetchTable(refTable));
@@ -85,7 +92,7 @@ async function pastedReferenceValue(input, col, reads, isCurrent) {
     }
   }
   const ids = [...new Set(labels.map(label => {
-    const matches = choices.filter(choice => choice.label === label);
+    const matches = choices.filter(choice => choice.label === label || (period && choice.alias === label));
     if (matches.length === 1) return matches[0].id;
     if (matches.length > 1)
       throw new Error(`Multiple linked records named "${label}"; paste #ID or use the picker`);
@@ -93,7 +100,7 @@ async function pastedReferenceValue(input, col, reads, isCurrent) {
     if (id && choices.some(choice => choice.id === id)) return id;
     throw new Error(`Linked record "${label}" not found in ${refTable}`);
   }))];
-  if (type === 'Ref' && ids.length > 1) throw new Error('Paste requires one linked record for this column');
+  if ((type === 'Ref' || period) && ids.length > 1) throw new Error('Paste requires one linked record for this column');
   return type === 'RefList' ? ['L', ...ids] : ids[0] || 0;
 }
 
@@ -129,7 +136,7 @@ function reanchorReferenceEditor() {
   if (!referenceEditorContext) return;
   const { recordId, col, source } = referenceEditorContext;
   if (source && !source.isCurrent()) { closeReferenceEditor(); return; }
-  const kind = source ? 'payment-period' : 'reference';
+  const kind = referenceEditorContext.anchor?.dataset.editKind || 'reference';
   const anchor = [...content.querySelectorAll(`button[data-edit-kind="${kind}"]`)]
     .find(button => button.dataset.editId === String(recordId) && button.dataset.editCol === col);
   if (!anchor || anchor.closest('.collapsed')) {
